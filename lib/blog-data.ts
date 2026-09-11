@@ -22,6 +22,7 @@ export const blogPosts: BlogPost[] = [
     author: "Kruti.io Team",
     category: "Strategy",
     readTime: "8 min read",
+    image: "/blog-images/linkedin-content-strategy-2026.jpeg",
     keywords: ["linkedin content strategy", "linkedin marketing 2026", "linkedin growth", "content strategy"],
     content: `
 ## Why LinkedIn Content Strategy Matters More Than Ever
@@ -70,6 +71,7 @@ The best time to start your LinkedIn content strategy was yesterday. The second 
     author: "Kruti.io Team",
     category: "AI & Technology",
     readTime: "7 min read",
+    image: "/blog-images/ai-content-creation-linkedin.jpeg",
     keywords: ["ai content creation", "linkedin ai tools", "ai marketing", "content automation"],
     content: `
 ## The Rise of AI in LinkedIn Content Creation
@@ -127,6 +129,7 @@ The future of LinkedIn content isn't about choosing between human creativity and
     author: "Kruti.io Team",
     category: "Personal Branding",
     readTime: "10 min read",
+    image: "/blog-images/personal-branding-linkedin-guide.jpeg",
     keywords: ["personal branding linkedin", "linkedin profile optimization", "professional branding", "linkedin personal brand"],
     content: `
 ## Why Personal Branding on LinkedIn is Non-Negotiable
@@ -191,6 +194,7 @@ Start building your personal brand today. Your future self will thank you.
     author: "Kruti.io Team",
     category: "Content Creation",
     readTime: "6 min read",
+    image: "/blog-images/linkedin-post-types-that-go-viral.jpeg",
     keywords: ["linkedin viral posts", "linkedin post types", "linkedin engagement", "viral content linkedin"],
     content: `
 ## The Science Behind Viral LinkedIn Content
@@ -254,6 +258,7 @@ Focus on creating content that serves your audience, and the algorithm will rewa
     author: "Kruti.io Team",
     category: "Strategy",
     readTime: "9 min read",
+    image: "/blog-images/linkedin-algorithm-how-it-works.jpeg",
     keywords: ["linkedin algorithm", "linkedin algorithm 2026", "how linkedin works", "linkedin reach"],
     content: `
 ## Decoding the LinkedIn Algorithm
@@ -312,6 +317,7 @@ Post consistently, engage with your community, and let the algorithm work for yo
     author: "Kruti.io Team",
     category: "Lead Generation",
     readTime: "8 min read",
+    image: "/blog-images/linkedin-for-b2b-lead-generation.jpeg",
     keywords: ["linkedin lead generation", "b2b linkedin", "linkedin for business", "linkedin leads"],
     content: `
 ## LinkedIn: The #1 B2B Lead Generation Platform
@@ -378,6 +384,7 @@ Invest in your LinkedIn presence. It's the highest-ROI marketing channel for B2B
     author: "Kruti.io Team",
     category: "Productivity",
     readTime: "6 min read",
+    image: "/blog-images/schedule-linkedin-posts-effectively.jpeg",
     keywords: ["schedule linkedin posts", "best time to post linkedin", "linkedin scheduling", "content scheduling"],
     content: `
 ## Why Scheduling LinkedIn Posts Changes Everything
@@ -455,6 +462,7 @@ Start scheduling your LinkedIn content today, and watch your consistency - and r
     author: "Kruti.io Team",
     category: "Content Creation",
     readTime: "7 min read",
+    image: "/blog-images/linkedin-newsletter-strategy.jpeg",
     keywords: ["linkedin newsletter", "linkedin newsletter strategy", "linkedin articles", "thought leadership"],
     content: `
 ## The Power of LinkedIn Newsletters
@@ -530,6 +538,7 @@ Start your LinkedIn Newsletter today. It's one of the highest-leverage content a
     author: "Kruti.io Team",
     category: "Profile Optimization",
     readTime: "7 min read",
+    image: "/blog-images/linkedin-profile-optimization-tips.jpeg",
     keywords: ["linkedin profile optimization", "linkedin profile tips", "optimize linkedin", "linkedin seo"],
     content: `
 ## Your LinkedIn Profile is Your Digital Storefront
@@ -611,6 +620,7 @@ An optimized profile works for you 24/7. Invest the time to get it right, and op
     author: "Kruti.io Team",
     category: "Content Creation",
     readTime: "8 min read",
+    image: "/blog-images/linkedin-content-ideas-never-run-out.jpeg",
     keywords: ["linkedin content ideas", "linkedin post ideas", "what to post on linkedin", "linkedin inspiration"],
     content: `
 ## Never Stare at a Blank Screen Again
@@ -697,6 +707,7 @@ With AI tools like Kruti.io, you can turn any of these ideas into polished, read
     author: "Kruti.io Team",
     category: "Content Creation",
     readTime: "7 min read",
+    image: "/blog-images/linkedin-carousel-posts-guide.jpeg",
     keywords: ["linkedin carousel posts", "linkedin document posts", "linkedin slides", "carousel content", "linkedin engagement"],
     content: `
 ## Why Carousel Posts Dominate LinkedIn Engagement
@@ -767,6 +778,7 @@ Carousels are the closest thing to a guaranteed engagement boost on LinkedIn. St
     author: "Kruti.io Team",
     category: "Copywriting",
     readTime: "6 min read",
+    image: "/blog-images/linkedin-hook-formulas.jpeg",
     keywords: ["linkedin hooks", "linkedin opening lines", "linkedin copywriting", "linkedin engagement tips", "scroll stopping content"],
     content: `
 ## The First Line Decides Everything
@@ -865,6 +877,7 @@ The hook is the gateway to your content. Master it, and everything else becomes 
     author: "Kruti.io Team",
     category: "Analytics",
     readTime: "9 min read",
+    image: "/blog-images/linkedin-analytics-guide.jpeg",
     keywords: ["linkedin analytics", "linkedin metrics", "linkedin data", "content performance", "linkedin insights"],
     content: `
 ## Beyond Vanity Metrics: What LinkedIn Analytics Really Tell You
@@ -962,6 +975,7 @@ Data without action is just noise. Use your analytics to make better content dec
     author: "Kruti.io Team",
     category: "Leadership",
     readTime: "8 min read",
+    image: "/blog-images/linkedin-for-founders-and-ceos.jpeg",
     keywords: ["linkedin for founders", "ceo linkedin", "executive branding", "founder content strategy", "linkedin thought leadership"],
     content: `
 ## Why Every Founder Needs a LinkedIn Presence
@@ -1046,6 +1060,7 @@ Your LinkedIn presence is an asset that compounds over time. The best time to st
     author: "Kruti.io Team",
     category: "Tools & Reviews",
     readTime: "10 min read",
+    image: "/blog-images/ai-content-tools-comparison-2026.jpeg",
     keywords: ["ai content tools", "linkedin ai tools", "ai writing tools comparison", "content creation tools 2026", "linkedin automation tools"],
     content: `
 ## The AI Content Tool Landscape in 2026
@@ -1138,6 +1153,7 @@ AI is your content co-pilot, not your replacement. The human element - your expe
     author: "Kruti.io Team",
     category: "Strategy",
     readTime: "6 min read",
+    image: "/blog-images/linkedin-hashtag-strategy.jpeg",
     keywords: ["linkedin hashtags", "linkedin hashtag strategy", "linkedin reach", "hashtag optimization", "linkedin content reach"],
     content: `
 ## Hashtags on LinkedIn: What the Data Actually Shows
@@ -1225,6 +1241,7 @@ Focus on writing great content first, then add strategic hashtags to give it a s
     author: "Kruti.io Team",
     category: "Business",
     readTime: "8 min read",
+    image: "/blog-images/linkedin-company-page-growth.jpeg",
     keywords: ["linkedin company page", "company page growth", "linkedin business page", "linkedin corporate strategy", "company page followers"],
     content: `
 ## Why Most LinkedIn Company Pages Fail
@@ -1333,6 +1350,7 @@ A thriving company page takes time and consistency. Commit to the strategy for 9
     author: "Kruti.io Team",
     category: "Productivity",
     readTime: "7 min read",
+    image: "/blog-images/linkedin-content-repurposing.jpeg",
     keywords: ["content repurposing", "linkedin content ideas", "content recycling", "content efficiency", "linkedin productivity"],
     content: `
 ## The Content Repurposing Mindset
@@ -1425,6 +1443,7 @@ This systematic approach means you never face a blank screen wondering what to p
     author: "Kruti.io Team",
     category: "Sales",
     readTime: "9 min read",
+    image: "/blog-images/linkedin-social-selling-guide.jpeg",
     keywords: ["linkedin social selling", "linkedin lead generation", "social selling tips", "linkedin sales strategy", "linkedin prospecting"],
     content: `
 ## The Death of Cold Outreach (And What Replaced It)
@@ -1543,6 +1562,8 @@ The best social sellers don't sell at all - they help. They provide so much valu
     author: "Kruti.io Team",
     category: "Personal Branding",
     readTime: "7 min read",
+    // image: "/blog-images/linkedin-social-selling-guide.jpeg",
+    image: "/blog-images/linkedin-personal-brand-mistakes.jpeg",
     keywords: ["linkedin personal branding", "personal brand mistakes", "linkedin profile mistakes", "professional branding", "linkedin reputation"],
     content: `
 ## Your Personal Brand Is Already Being Built - With or Without You

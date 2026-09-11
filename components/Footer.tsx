@@ -1,4 +1,5 @@
 import Link from "next/link";
+import SignInButton from "@/components/SignInButton";
 
 const PRODUCT_LINKS = [
   { href: "/#how", label: "How it works" },
@@ -9,7 +10,6 @@ const PRODUCT_LINKS = [
 
 const RESOURCE_LINKS = [
   { href: "/blog", label: "Blog" },
-  { href: "/login", label: "Sign in" },
 ];
 
 const LEGAL_LINKS = [
@@ -60,7 +60,28 @@ export default function Footer() {
           </div>
 
           <FooterColumn title="Product" links={PRODUCT_LINKS} />
-          <FooterColumn title="Resources" links={RESOURCE_LINKS} />
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Resources</h3>
+            <ul className="mt-4 space-y-3">
+              {RESOURCE_LINKS.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <SignInButton
+                  className="text-sm text-gray-600 transition-colors hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                >
+                  Sign in
+                </SignInButton>
+              </li>
+            </ul>
+          </div>
           <FooterColumn title="Legal" links={LEGAL_LINKS} />
         </div>
 
