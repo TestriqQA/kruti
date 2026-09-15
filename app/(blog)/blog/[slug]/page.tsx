@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { blogPosts, getBlogPost } from "@/lib/blog-data";
 import { ArrowLeft, Clock, Tag, Calendar, User, ChevronRight } from "lucide-react";
+import SignInButton from "@/components/SignInButton";
 
 interface Props {
   params: { slug: string };
@@ -168,12 +169,11 @@ export default function BlogPostPage({ params }: Props) {
             >
               Blog
             </Link>
-            <Link
-              href="/login"
+            <SignInButton
               className="text-sm font-medium text-[#0A66C2] hover:text-[#004182] transition-colors"
             >
               Sign In
-            </Link>
+            </SignInButton>
           </div>
         </div>
       </header>
@@ -252,12 +252,11 @@ export default function BlogPostPage({ params }: Props) {
             Stop struggling with what to post. Kruti.io generates a full month of personalized
             LinkedIn content in minutes.
           </p>
-          <Link
-            href="/login"
+          <SignInButton
             className="inline-flex items-center gap-2 bg-white text-[#0A66C2] font-semibold px-6 py-2.5 rounded-full text-sm hover:bg-blue-50 transition-colors"
           >
             Try Kruti.io Free
-          </Link>
+          </SignInButton>
         </div>
       </section>
 

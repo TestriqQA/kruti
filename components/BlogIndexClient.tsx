@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import SignInButton from "@/components/SignInButton";
 import {
   Linkedin,
   Menu,
@@ -88,7 +89,8 @@ function Cover({ post, className = "" }: { post: BlogCard; className?: string })
           <Icon className="absolute -bottom-5 -right-4 h-32 w-32 text-white/25 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-3" />
         </>
       )}
-      <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-inset ring-white/25 backdrop-blur">
+      {/* <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-inset ring-white/25 backdrop-blur"> */}
+      <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-blue-900/70 px-2.5 py-1 text-xs font-medium text-blue-100 ring-1 ring-inset ring-blue-700/70 backdrop-blur">
         <Icon className="h-3.5 w-3.5" />
         {post.category}
       </span>
@@ -119,11 +121,10 @@ function Navbar() {
             <Link
               key={l.label}
               href={l.href}
-              className={`text-[15px] font-medium transition-colors ${
-                l.label === "Blog"
-                  ? "text-blue-600 dark:text-blue-400"
-                  : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
-              }`}
+              className={`text-[15px] font-medium transition-colors ${l.label === "Blog"
+                ? "text-blue-600 dark:text-blue-400"
+                : "text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
+                }`}
             >
               {l.label}
             </Link>
@@ -131,12 +132,11 @@ function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link
-            href="/login"
+          <SignInButton
             className="hidden items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400 sm:inline-flex"
           >
             <Linkedin className="h-4 w-4" /> Start free
-          </Link>
+          </SignInButton>
           <button
             onClick={() => setOpen((v) => !v)}
             aria-label="Toggle menu"
@@ -159,12 +159,11 @@ function Navbar() {
                 {l.label}
               </Link>
             ))}
-            <Link
-              href="/login"
+            <SignInButton
               className="mt-2 inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white dark:bg-blue-500"
             >
               <Linkedin className="h-4 w-4" /> Start free
-            </Link>
+            </SignInButton>
           </div>
         </div>
       )}
@@ -285,11 +284,10 @@ export default function BlogIndexClient({ posts }: { posts: BlogCard[] }) {
             <button
               key={c}
               onClick={() => setActive(c)}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                active === c
-                  ? "bg-blue-600 text-white"
-                  : "border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:border-blue-500/40"
-              }`}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${active === c
+                ? "bg-blue-600 text-white"
+                : "border border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-blue-600 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-300 dark:hover:border-blue-500/40"
+                }`}
             >
               {c}
             </button>
@@ -370,12 +368,11 @@ export default function BlogIndexClient({ posts }: { posts: BlogCard[] }) {
           <p className="relative mx-auto mt-3 max-w-lg text-base text-slate-300 dark:text-blue-50">
             Generate a full month of AI-powered LinkedIn content in minutes. Try Kruti.io free.
           </p>
-          <Link
-            href="/login"
+          <SignInButton
             className="relative mt-8 inline-flex items-center gap-2.5 rounded-lg bg-white px-6 py-3.5 text-base font-semibold text-slate-900 transition-transform hover:-translate-y-0.5"
           >
             <Linkedin className="h-5 w-5" /> Get started free <ArrowRight className="h-4 w-4" />
-          </Link>
+          </SignInButton>
         </div>
       </section>
     </div>
