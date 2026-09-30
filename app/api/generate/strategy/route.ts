@@ -7,6 +7,8 @@ import { buildStrategyPrompt, PreviousWeekSummary, deriveAllowedPostTypes } from
 import { buildProfileContext } from "@/lib/linkedin";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
+import { parsePostingSchedule } from "@/lib/posting-schedule";
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
@@ -29,34 +31,42 @@ export async function POST(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  // Determine the start date: auto-continue from the day after the last scheduled post
+  // Determine the start date: the first day this batch will actually be scheduled
+  // on - the next free day matching the user's posting schedule. Uses the same
+  // helper as /api/generate/posts so the plan's label matches the posts inside it.
   let weekStart: Date;
   if (body.weekStart) {
     weekStart = new Date(body.weekStart);
+    weekStart.setHours(0, 0, 0, 0);
   } else {
-    // Find the user's latest scheduled post
-    const latestPost = await prisma.post.findFirst({
-      where: { plan: { userId: user.id }, scheduledAt: { not: null } },
-      orderBy: { scheduledAt: "desc" },
+    const schedule = parsePostingSchedule(user.postingSchedule);
+    const timezone = user.timezone || "Asia/Kolkata";
+
+    const alreadyScheduled = await prisma.post.findMany({
+      where: {
+        plan: { userId: user.id },
+        scheduledAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      },
       select: { scheduledAt: true },
     });
+    const occupiedDays = new Set(
+      alreadyScheduled.map((p) => toZonedDayKey(p.scheduledAt as Date, timezone))
+    );
 
-    if (latestPost?.scheduledAt) {
-      // Start from the next day after the last scheduled post
-      const nextDay = new Date(latestPost.scheduledAt);
-      nextDay.setDate(nextDay.getDate() + 1);
-      nextDay.setHours(0, 0, 0, 0);
-      // Skip to next weekday if it lands on a weekend
-      while (nextDay.getDay() === 0 || nextDay.getDay() === 6) {
-        nextDay.setDate(nextDay.getDate() + 1);
-      }
-      weekStart = nextDay;
-    } else {
-      // No posts yet - start from today
-      weekStart = new Date();
-    }
+    const [firstSlot] = getNextScheduledSlots(
+      new Date(),
+      schedule.days,
+      schedule.time,
+      timezone,
+      1,
+      occupiedDays
+    );
+
+    // Anchor on the user's calendar day (not the server's) so the label cannot
+    // drift by a day for early-morning posting times.
+    const dayKey = toZonedDayKey(firstSlot ?? new Date(), timezone);
+    weekStart = new Date(`${dayKey}T00:00:00Z`);
   }
-  weekStart.setHours(0, 0, 0, 0);
 
   // Fetch previous plans (up to 4) with their posts for continuity
   const previousPlans = await prisma.contentPlan.findMany({

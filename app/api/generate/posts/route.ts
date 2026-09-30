@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { generateText, parseJSON, generateGroundedText } from "@/lib/gemini";
 import { buildPostsPrompt, buildResearchPrompt, deriveAllowedPostTypes, parseSelectedStyles, assignPostStyles } from "@/lib/prompts";
 import { buildProfileContext } from "@/lib/linkedin";
-import { getNextScheduledSlots } from "@/lib/timezone";
+import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
+import { parsePostingSchedule } from "@/lib/posting-schedule";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
@@ -41,10 +42,10 @@ export async function POST(req: NextRequest) {
   });
   if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
-  // Determine how many posts to generate based on user's posting schedule
-  const schedule = user.postingSchedule
-    ? (JSON.parse(user.postingSchedule) as { days: string[]; time: string })
-    : { days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], time: "09:00" };
+  // Determine how many posts to generate based on user's posting schedule.
+  // The fallback lives in one shared place so Settings and the scheduler can
+  // never disagree about which days an unset schedule means.
+  const schedule = parsePostingSchedule(user.postingSchedule);
   const postCount = schedule.days.length; // one post per scheduled day
 
   // ── Enforce 30-post limit per billing cycle ──
@@ -147,18 +148,39 @@ export async function POST(req: NextRequest) {
       }>
     >(raw);
 
-    // Schedule from NOW on the user's chosen posting days (in their timezone), never
-    // in the past - regardless of when the plan's week originally started.
+    // Schedule on the user's chosen posting days (in their timezone), starting from
+    // now, never in the past, and skipping every day that already holds a post - so a
+    // new batch fills the next FREE matching days and rolls into the following weeks
+    // instead of reusing dates that are already taken.
     const timezone = user.timezone || "Asia/Kolkata";
-    const postingSlots = getNextScheduledSlots(new Date(), schedule.days, schedule.time, timezone);
 
-    // Create posts, cycling through available slots if fewer slots than posts
+    // Days already holding a post. The 48h lookback covers "today" in any timezone
+    // (past days can never be picked anyway, since slots must be in the future).
+    const alreadyScheduled = await prisma.post.findMany({
+      where: {
+        plan: { userId: user.id },
+        scheduledAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
+      },
+      select: { scheduledAt: true },
+    });
+    const occupiedDays = new Set(
+      alreadyScheduled.map((p) => toZonedDayKey(p.scheduledAt as Date, timezone))
+    );
+
+    const postingSlots = getNextScheduledSlots(
+      new Date(),
+      schedule.days,
+      schedule.time,
+      timezone,
+      posts.length, // one slot per post actually written, continuing into later weeks
+      occupiedDays
+    );
+
+    // One slot per post, in order. If slots somehow run out the post is left
+    // unscheduled rather than silently reusing a date that is already taken.
     const createdPosts = await Promise.all(
       posts.map(async (post, idx) => {
-        let scheduledAt: Date | undefined;
-        if (postingSlots.length > 0) {
-          scheduledAt = postingSlots[idx % postingSlots.length];
-        }
+        const scheduledAt: Date | undefined = postingSlots[idx];
 
         return prisma.post.create({
           data: {

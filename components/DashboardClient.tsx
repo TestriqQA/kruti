@@ -38,16 +38,15 @@ interface Props {
   recentPlan: { id: string; strategy: string; weekStart: Date } | null;
   stats: { totalPosts: number; readyPosts: number; draftPosts: number; publishedPosts: number; newsletters: number };
   upcomingPosts: Post[];
-  nextStartDate: string; // ISO date string - where the next batch starts
+  batchDates: string[]; // ISO dates the next batch will be scheduled on (server-computed)
   postsRemaining: number; // posts remaining in billing cycle
   postsLimit: number; // total posts allowed per cycle (30)
   isTrialExpired: boolean; // whether user's trial has ended
   postsPerBatch: number; // number of posts per generation (based on posting schedule)
-  postingDays: string[]; // e.g. ["Monday", "Wednesday", "Friday"]
   cycleResetDate: string | null; // ISO date when post counter resets
 }
 
-export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, nextStartDate, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, postingDays, cycleResetDate }: Props) {
+export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate }: Props) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState<string[]>([]);
@@ -87,25 +86,12 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
     handleGenerate(reuse);
   }
 
-  // Map day names to JS day numbers for schedule-aware date range
-  const dayNameToNum: Record<string, number> = {
-    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-    Thursday: 4, Friday: 5, Saturday: 6,
-  };
-  const targetDayNums = new Set(postingDays.map((d) => dayNameToNum[d]).filter((d) => d !== undefined));
-
-  // Compute next batch date range based on user's posting days
-  const batchStart = new Date(nextStartDate);
-  const batchEnd = (() => {
-    const d = new Date(batchStart);
-    let found = 0;
-    // Find the last posting day in this batch
-    for (let i = 0; i < 30 && found < postsPerBatch; i++) {
-      if (targetDayNums.has(d.getDay())) found++;
-      if (found < postsPerBatch) d.setDate(d.getDate() + 1);
-    }
-    return d;
-  })();
+  // The dates of the next batch, computed on the server with the same helper the
+  // generator uses - so this range is exactly what will be created, including days
+  // skipped because they already hold a post.
+  const batchStart = batchDates.length > 0 ? new Date(batchDates[0]) : null;
+  const batchEnd =
+    batchDates.length > 0 ? new Date(batchDates[batchDates.length - 1]) : null;
 
   function formatShortDate(date: Date): string {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -267,7 +253,9 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           ) : (
             <div className="text-right">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {formatShortDate(batchStart)} - {formatShortDate(batchEnd)}
+                {batchStart && batchEnd
+                  ? `${formatShortDate(batchStart)} - ${formatShortDate(batchEnd)}`
+                  : "No posting days selected"}
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {postsRemaining === Infinity ? "Unlimited posts remaining" : `${postsRemaining} of ${postsLimit} posts remaining`}
