@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useGeneration } from "@/components/GenerationProvider";
 import {
   Sparkles,
   Calendar,
@@ -47,15 +47,19 @@ interface Props {
 }
 
 export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate }: Props) {
-  const router = useRouter();
-  const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState<string[]>([]);
-  const [generationError, setGenerationError] = useState<string | null>(null);
+  // The run itself lives in GenerationProvider, above every page, so navigating
+  // away doesn't kill it. This component only reads and controls it.
+  const {
+    generating,
+    progress,
+    error: generationError,
+    startGeneration,
+    cancelGeneration,
+  } = useGeneration();
   // Avoid SSR/client hydration mismatch for time-of-day-dependent UI: render a
   // stable value on the server + first client render, then the real one after mount.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const [showStrategyConfirm, setShowStrategyConfirm] = useState(false);
 
   const limitReached = postsRemaining < postsPerBatch;
@@ -77,13 +81,13 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
     if (recentPlan) {
       setShowStrategyConfirm(true);
     } else {
-      handleGenerate(false); // first time — nothing to confirm, build a strategy
+      startGeneration(false); // first time — nothing to confirm, build a strategy
     }
   }
 
   function confirmStrategy(reuse: boolean) {
     setShowStrategyConfirm(false);
-    handleGenerate(reuse);
+    startGeneration(reuse);
   }
 
   // The dates of the next batch, computed on the server with the same helper the
@@ -95,88 +99,6 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
 
   function formatShortDate(date: Date): string {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
-  async function handleGenerate(reuse: boolean) {
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    setGenerating(true);
-    setProgress([]);
-    setGenerationError(null);
-
-    try {
-      setProgress([
-        reuse ? "Using your current content strategy..." : "Building a fresh content strategy...",
-      ]);
-
-      // reuseStrategy: true keeps the current strategy (unless it's 30+ days old);
-      // false regenerates it. weekStart is auto-computed by the API.
-      const stratRes = await fetch("/api/generate/strategy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reuseStrategy: reuse }),
-        signal: abortController.signal,
-      });
-      if (!stratRes.ok) {
-        const errData = await stratRes.json().catch(() => null);
-        throw new Error(errData?.error || "Strategy generation failed. Please try again.");
-      }
-      const { plan: newPlan, strategy, reused } = await stratRes.json();
-
-      setProgress((p) => [
-        ...p,
-        `${reused ? "Using your strategy" : "New strategy ready"}: "${strategy.weekTheme ?? "Content theme"}"`,
-      ]);
-
-      setProgress((p) => [...p, `Generating ${postsPerBatch} posts for your scheduled days...`]);
-      const postsRes = await fetch("/api/generate/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: newPlan.id }),
-        signal: abortController.signal,
-      });
-
-      if (!postsRes.ok) {
-        const errorData = await postsRes.json().catch(() => null);
-        if (postsRes.status === 429 && errorData?.error) {
-          setProgress((p) => [...p, errorData.error]);
-          return;
-        }
-        throw new Error("Posts generation failed");
-      }
-
-      const { posts, postsRemaining: remaining } = await postsRes.json();
-
-      setProgress((p) => [
-        ...p,
-        `${posts?.length ?? 5} draft posts created (${remaining} remaining this cycle)`,
-        "Done! Redirecting to your posts...",
-      ]);
-
-      setTimeout(() => router.push("/posts"), 1500);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setProgress((p) => [...p, "Generation cancelled."]);
-        setGenerationError(null);
-      } else {
-        console.error(err);
-        const message = err instanceof Error ? err.message : "Something went wrong";
-        setGenerationError(message);
-        setProgress((p) => [...p, `Error: ${message}`]);
-      }
-    } finally {
-      abortControllerRef.current = null;
-      setTimeout(() => {
-        setGenerating(false);
-        router.refresh();
-      }, 2000);
-    }
-  }
-
-  function handleCancelGeneration() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
   }
 
   const statCards = [
@@ -288,7 +210,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
               Generating your next {postsPerBatch} posts...
             </h3>
             <button
-              onClick={handleCancelGeneration}
+              onClick={cancelGeneration}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
             >
               <XCircle className="w-4 h-4" />
