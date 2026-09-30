@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ToastProvider } from "@/components/Toast";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { GenerationProvider } from "@/components/GenerationProvider";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,7 +24,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <Suspense fallback={null}>
               <NavigationProgress />
             </Suspense>
-            {children}
+            {/* Above every page so a generation run survives navigation. */}
+            <GenerationProvider>{children}</GenerationProvider>
           </ToastProvider>
         </ThemeProvider>
       </QueryClientProvider>

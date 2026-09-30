@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useGeneration } from "@/components/GenerationProvider";
+import StrategyConfirmDialog from "@/components/StrategyConfirmDialog";
 import {
   Sparkles,
   Calendar,
@@ -19,6 +20,7 @@ import {
   Lock,
   RefreshCw,
   XCircle,
+  ListChecks,
 } from "lucide-react";
 import { cn, formatDate, getPostTypeColor } from "@/lib/utils";
 
@@ -38,25 +40,30 @@ interface Props {
   recentPlan: { id: string; strategy: string; weekStart: Date } | null;
   stats: { totalPosts: number; readyPosts: number; draftPosts: number; publishedPosts: number; newsletters: number };
   upcomingPosts: Post[];
-  nextStartDate: string; // ISO date string - where the next batch starts
+  batchDates: string[]; // ISO dates the next batch will be scheduled on (server-computed)
   postsRemaining: number; // posts remaining in billing cycle
   postsLimit: number; // total posts allowed per cycle (30)
   isTrialExpired: boolean; // whether user's trial has ended
-  postsPerBatch: number; // number of posts per generation (based on posting schedule)
-  postingDays: string[]; // e.g. ["Monday", "Wednesday", "Friday"]
+  postsPerBatch: number; // posts per generation (fixed POSTS_PER_BATCH, not schedule-derived)
   cycleResetDate: string | null; // ISO date when post counter resets
 }
 
-export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, nextStartDate, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, postingDays, cycleResetDate }: Props) {
-  const router = useRouter();
-  const [generating, setGenerating] = useState(false);
-  const [progress, setProgress] = useState<string[]>([]);
-  const [generationError, setGenerationError] = useState<string | null>(null);
+export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate }: Props) {
+  // The run itself lives in GenerationProvider, above every page, so navigating
+  // away doesn't kill it. This component only reads and controls it.
+  const {
+    generating,
+    progress,
+    error: generationError,
+    startGeneration,
+    cancelGeneration,
+    postPipeline,
+    showPipeline,
+  } = useGeneration();
   // Avoid SSR/client hydration mismatch for time-of-day-dependent UI: render a
   // stable value on the server + first client render, then the real one after mount.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const [showStrategyConfirm, setShowStrategyConfirm] = useState(false);
 
   const limitReached = postsRemaining < postsPerBatch;
@@ -78,119 +85,24 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
     if (recentPlan) {
       setShowStrategyConfirm(true);
     } else {
-      handleGenerate(false); // first time — nothing to confirm, build a strategy
+      startGeneration(false); // first time — nothing to confirm, build a strategy
     }
   }
 
   function confirmStrategy(reuse: boolean) {
     setShowStrategyConfirm(false);
-    handleGenerate(reuse);
+    startGeneration(reuse);
   }
 
-  // Map day names to JS day numbers for schedule-aware date range
-  const dayNameToNum: Record<string, number> = {
-    Sunday: 0, Monday: 1, Tuesday: 2, Wednesday: 3,
-    Thursday: 4, Friday: 5, Saturday: 6,
-  };
-  const targetDayNums = new Set(postingDays.map((d) => dayNameToNum[d]).filter((d) => d !== undefined));
-
-  // Compute next batch date range based on user's posting days
-  const batchStart = new Date(nextStartDate);
-  const batchEnd = (() => {
-    const d = new Date(batchStart);
-    let found = 0;
-    // Find the last posting day in this batch
-    for (let i = 0; i < 30 && found < postsPerBatch; i++) {
-      if (targetDayNums.has(d.getDay())) found++;
-      if (found < postsPerBatch) d.setDate(d.getDate() + 1);
-    }
-    return d;
-  })();
+  // The dates of the next batch, computed on the server with the same helper the
+  // generator uses - so this range is exactly what will be created, including days
+  // skipped because they already hold a post.
+  const batchStart = batchDates.length > 0 ? new Date(batchDates[0]) : null;
+  const batchEnd =
+    batchDates.length > 0 ? new Date(batchDates[batchDates.length - 1]) : null;
 
   function formatShortDate(date: Date): string {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  }
-
-  async function handleGenerate(reuse: boolean) {
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    setGenerating(true);
-    setProgress([]);
-    setGenerationError(null);
-
-    try {
-      setProgress([
-        reuse ? "Using your current content strategy..." : "Building a fresh content strategy...",
-      ]);
-
-      // reuseStrategy: true keeps the current strategy (unless it's 30+ days old);
-      // false regenerates it. weekStart is auto-computed by the API.
-      const stratRes = await fetch("/api/generate/strategy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reuseStrategy: reuse }),
-        signal: abortController.signal,
-      });
-      if (!stratRes.ok) {
-        const errData = await stratRes.json().catch(() => null);
-        throw new Error(errData?.error || "Strategy generation failed. Please try again.");
-      }
-      const { plan: newPlan, strategy, reused } = await stratRes.json();
-
-      setProgress((p) => [
-        ...p,
-        `${reused ? "Using your strategy" : "New strategy ready"}: "${strategy.weekTheme ?? "Content theme"}"`,
-      ]);
-
-      setProgress((p) => [...p, `Generating ${postsPerBatch} posts for your scheduled days...`]);
-      const postsRes = await fetch("/api/generate/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: newPlan.id }),
-        signal: abortController.signal,
-      });
-
-      if (!postsRes.ok) {
-        const errorData = await postsRes.json().catch(() => null);
-        if (postsRes.status === 429 && errorData?.error) {
-          setProgress((p) => [...p, errorData.error]);
-          return;
-        }
-        throw new Error("Posts generation failed");
-      }
-
-      const { posts, postsRemaining: remaining } = await postsRes.json();
-
-      setProgress((p) => [
-        ...p,
-        `${posts?.length ?? 5} draft posts created (${remaining} remaining this cycle)`,
-        "Done! Redirecting to your posts...",
-      ]);
-
-      setTimeout(() => router.push("/posts"), 1500);
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") {
-        setProgress((p) => [...p, "Generation cancelled."]);
-        setGenerationError(null);
-      } else {
-        console.error(err);
-        const message = err instanceof Error ? err.message : "Something went wrong";
-        setGenerationError(message);
-        setProgress((p) => [...p, `Error: ${message}`]);
-      }
-    } finally {
-      abortControllerRef.current = null;
-      setTimeout(() => {
-        setGenerating(false);
-        router.refresh();
-      }, 2000);
-    }
-  }
-
-  function handleCancelGeneration() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
   }
 
   const statCards = [
@@ -267,7 +179,9 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           ) : (
             <div className="text-right">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                {formatShortDate(batchStart)} - {formatShortDate(batchEnd)}
+                {batchStart && batchEnd
+                  ? `${formatShortDate(batchStart)} - ${formatShortDate(batchEnd)}`
+                  : "No posting days selected"}
               </p>
               <p className="text-xs text-slate-400 dark:text-slate-500">
                 {postsRemaining === Infinity ? "Unlimited posts remaining" : `${postsRemaining} of ${postsLimit} posts remaining`}
@@ -299,8 +213,17 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
             <h3 className="font-semibold text-blue-600 dark:text-blue-400 flex-1">
               Generating your next {postsPerBatch} posts...
             </h3>
+            {postPipeline && (
+              <button
+                onClick={() => showPipeline("posts")}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors"
+              >
+                <ListChecks className="w-4 h-4" />
+                View pipeline
+              </button>
+            )}
             <button
-              onClick={handleCancelGeneration}
+              onClick={cancelGeneration}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
             >
               <XCircle className="w-4 h-4" />
@@ -460,57 +383,12 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
 
       {/* Strategy confirmation dialog — shown when a strategy already exists */}
       {showStrategyConfirm && recentPlan && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm"
-          onClick={() => setShowStrategyConfirm(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl dark:bg-[#0D131F]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400">
-              <Sparkles className="h-5 w-5" />
-            </div>
-            <h2 className="mt-4 text-lg font-bold text-slate-900 dark:text-white">
-              Are you satisfied with the current strategy?
-            </h2>
-            {strategyTheme && (
-              <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-                Current strategy:{" "}
-                <span className="font-medium text-slate-700 dark:text-slate-300">{strategyTheme}</span>
-              </p>
-            )}
-            {Math.floor((Date.now() - new Date(recentPlan.weekStart).getTime()) / 86400000) >= 30 ? (
-              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-                Your strategy is over a month old — we recommend refreshing it.
-              </p>
-            ) : (
-              <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">
-                Keep it to generate more posts from the same plan, or change it for a fresh direction.
-              </p>
-            )}
-            <div className="mt-6 flex flex-col gap-2.5 sm:flex-row">
-              <button
-                onClick={() => confirmStrategy(true)}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-              >
-                <CheckCircle className="h-4 w-4" /> Yes, generate posts
-              </button>
-              <button
-                onClick={() => confirmStrategy(false)}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.06] dark:text-slate-200 dark:hover:bg-white/[0.1]"
-              >
-                <RefreshCw className="h-4 w-4" /> No, change strategy
-              </button>
-            </div>
-            <button
-              onClick={() => setShowStrategyConfirm(false)}
-              className="mt-3 w-full text-center text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <StrategyConfirmDialog
+          strategyTheme={strategyTheme}
+          weekStart={recentPlan.weekStart}
+          onConfirm={confirmStrategy}
+          onClose={() => setShowStrategyConfirm(false)}
+        />
       )}
     </div>
   );

@@ -34,6 +34,17 @@ export function utcToLocalTime(
 }
 
 /**
+ * The calendar day a UTC instant falls on *in the user's timezone*, as
+ * "yyyy-MM-dd" - the key used to mark a day as already holding a post.
+ */
+export function toZonedDayKey(
+  date: Date | string,
+  timezone: string = DEFAULT_TZ
+): string {
+  return formatInTimeZone(new Date(date), timezone, "yyyy-MM-dd");
+}
+
+/**
  * Given a user's posting schedule and timezone, compute posting slots
  * for a given week as proper UTC Dates.
  *
@@ -104,6 +115,9 @@ const DAY_NAME_TO_JS_DAY: Record<string, number> = {
  * @param time - Time string "HH:MM" in user's local timezone
  * @param timezone - IANA timezone string
  * @param maxSlots - Maximum number of slots to return (defaults to days.length)
+ * @param occupiedDayKeys - "yyyy-MM-dd" keys (in `timezone`) that already hold a
+ *   post; those days are skipped so a new batch never doubles up on a day that is
+ *   already taken. Build them with `toZonedDayKey`.
  * @returns Array of UTC Dates for each posting slot
  */
 export function getNextScheduledSlots(
@@ -112,6 +126,7 @@ export function getNextScheduledSlots(
   time: string,
   timezone: string = DEFAULT_TZ,
   maxSlots?: number,
+  occupiedDayKeys?: Iterable<string>,
 ): Date[] {
   let targetDays = new Set<number>(
     days.map((d) => DAY_NAME_TO_JS_DAY[d]).filter((d): d is number => d !== undefined)
@@ -119,8 +134,10 @@ export function getNextScheduledSlots(
   // Fallback: if no valid days were given, schedule on weekdays (Mon-Fri).
   if (targetDays.size === 0) targetDays = new Set<number>([1, 2, 3, 4, 5]);
 
+  // No. of posts
   const limit = maxSlots ?? targetDays.size; // default: one post per selected day
   const nowMs = fromTime.getTime();
+  const taken = new Set(occupiedDayKeys ?? []);
   const slots: Date[] = [];
 
   // Walk calendar days in the USER'S timezone, starting from "today" there, and
@@ -130,11 +147,15 @@ export function getNextScheduledSlots(
   let dayKey = formatInTimeZone(fromTime, timezone, "yyyy-MM-dd"); // today, in the user's tz
   let scanned = 0;
 
-  while (slots.length < limit && scanned < 90) {
+  // Scan up to a year ahead: a 30-post batch on a single weekday spans ~30 weeks,
+  // and days that already hold a post are skipped, pushing the end date further out.
+  while (slots.length < limit && scanned < 366) {
     // Day-of-week of this calendar date (a yyyy-MM-dd date has the same weekday in
     // every timezone, so reading it at UTC midnight is correct).
     const dow = new Date(`${dayKey}T00:00:00Z`).getUTCDay();
-    if (targetDays.has(dow)) {
+    // Skip days that already hold a scheduled post, so a new batch fills the next
+    // FREE matching days instead of doubling up on days that are already taken.
+    if (targetDays.has(dow) && !taken.has(dayKey)) {
       const slot = localTimeToUTC(dayKey, time, timezone);
       if (slot.getTime() > nowMs) slots.push(slot); // never schedule in the past
     }
