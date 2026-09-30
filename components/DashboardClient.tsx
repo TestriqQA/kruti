@@ -20,6 +20,7 @@ import {
   Lock,
   RefreshCw,
   XCircle,
+  ListChecks,
 } from "lucide-react";
 import { cn, formatDate, getPostTypeColor } from "@/lib/utils";
 
@@ -56,6 +57,8 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
     error: generationError,
     startGeneration,
     cancelGeneration,
+    postPipeline,
+    showPipeline,
   } = useGeneration();
   // Avoid SSR/client hydration mismatch for time-of-day-dependent UI: render a
   // stable value on the server + first client render, then the real one after mount.
@@ -210,6 +213,15 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
             <h3 className="font-semibold text-blue-600 dark:text-blue-400 flex-1">
               Generating your next {postsPerBatch} posts...
             </h3>
+            {postPipeline && (
+              <button
+                onClick={() => showPipeline("posts")}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors"
+              >
+                <ListChecks className="w-4 h-4" />
+                View pipeline
+              </button>
+            )}
             <button
               onClick={cancelGeneration}
               className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"

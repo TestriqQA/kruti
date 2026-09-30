@@ -1,141 +1,207 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateText, parseJSON, generateGroundedText } from "@/lib/gemini";
 import { buildPostsPrompt, buildResearchPrompt, deriveAllowedPostTypes, parseSelectedStyles, assignPostStyles } from "@/lib/prompts";
 import { buildProfileContext } from "@/lib/linkedin";
-import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
+import { getNextScheduledSlots, toZonedDayKey, utcToLocalTime } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
 import { IMAGE_CATEGORIES, imageStyleTaxonomyBlock, clampImageStyle } from "@/lib/image-categories";
+import { ndjsonResponse } from "@/lib/ndjson";
+
+// Streaming route: emits step-by-step NDJSON progress so the client can show the
+// whole pipeline (preflight -> research -> writing -> scheduling -> save).
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const POST_LIMIT_PER_CYCLE = 30;
+const SLOT_FORMAT = "EEE, MMM d - hh:mm a";
 
 export async function POST(req: NextRequest) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const body = await req.json().catch(() => ({}));
+  const { planId } = body as { planId?: string };
 
-  const { allowed, reason } = await checkActiveSubscription(session.user.id);
-  if (!allowed) {
-    return NextResponse.json({ error: reason, subscriptionRequired: true }, { status: 403 });
-  }
+  return ndjsonResponse(async (send) => {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      send({ type: "preflight", key: "auth", status: "error", message: "Unauthorized" });
+      send({ type: "error", message: "Unauthorized" });
+      return;
+    }
+    const userId = session.user.id;
+    send({ type: "preflight", key: "auth", status: "done" });
 
-  const rl = checkRateLimit(session.user.id, "generate", RATE_LIMITS.generation);
-  if (!rl.allowed) {
-    return NextResponse.json({ error: `Too many requests. Try again in ${rl.retryAfterSecs}s.` }, { status: 429 });
-  }
+    const { allowed, reason } = await checkActiveSubscription(userId);
+    if (!allowed) {
+      send({ type: "preflight", key: "subscription", status: "error", message: reason });
+      send({ type: "error", message: reason, subscriptionRequired: true });
+      return;
+    }
+    send({ type: "preflight", key: "subscription", status: "done" });
 
-  const body = await req.json();
-  const { planId } = body;
+    const rl = checkRateLimit(userId, "generate", RATE_LIMITS.generation);
+    if (!rl.allowed) {
+      const message = `Too many requests. Try again in ${rl.retryAfterSecs}s.`;
+      send({ type: "preflight", key: "ratelimit", status: "error", message });
+      send({ type: "error", message });
+      return;
+    }
+    send({ type: "preflight", key: "ratelimit", status: "done" });
 
-  const plan = await prisma.contentPlan.findFirst({
-    where: { id: planId, userId: session.user.id },
-  });
-  if (!plan) return NextResponse.json({ error: "Plan not found" }, { status: 404 });
+    const plan = await prisma.contentPlan.findFirst({ where: { id: planId, userId } });
+    if (!plan) {
+      send({ type: "preflight", key: "plan", status: "error", message: "Plan not found" });
+      send({ type: "error", message: "Plan not found" });
+      return;
+    }
+    send({ type: "preflight", key: "plan", status: "done" });
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { subscription: true },
-  });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  // Determine how many posts to generate based on user's posting schedule.
-  // The fallback lives in one shared place so Settings and the scheduler can
-  // never disagree about which days an unset schedule means.
-  const schedule = parsePostingSchedule(user.postingSchedule);
-  // Fixed batch size: the schedule decides which DAYS the posts land on, not how
-  // many posts are written.
-  const postCount = POSTS_PER_BATCH;
-
-  // ── Enforce 30-post limit per billing cycle ──
-  const POST_LIMIT_PER_CYCLE = 30;
-  const subscription = user.subscription;
-
-  if (subscription) {
-    // Reset counter if it's been more than 30 days since last reset
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    if (!subscription.cyclePostsResetAt || subscription.cyclePostsResetAt < thirtyDaysAgo) {
-      await prisma.subscription.update({
-        where: { id: subscription.id },
-        data: { postsGeneratedThisCycle: 0, cyclePostsResetAt: new Date() },
-      });
-      subscription.postsGeneratedThisCycle = 0;
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { subscription: true },
+    });
+    if (!user) {
+      send({ type: "preflight", key: "user", status: "error", message: "User not found" });
+      send({ type: "error", message: "User not found" });
+      return;
     }
 
-    // Check limit (Admins have no limits)
-    if (user.role !== "admin" && subscription.postsGeneratedThisCycle + postCount > POST_LIMIT_PER_CYCLE) {
-      const remaining = POST_LIMIT_PER_CYCLE - subscription.postsGeneratedThisCycle;
-      return NextResponse.json(
-        {
-          error: `Post generation limit reached for this billing cycle. You have ${remaining} post(s) remaining out of ${POST_LIMIT_PER_CYCLE}.`,
-          postsRemaining: remaining,
-          postsLimit: POST_LIMIT_PER_CYCLE,
-        },
-        { status: 429 }
+    // The schedule decides WHICH days posts land on; the batch size is fixed.
+    const schedule = parsePostingSchedule(user.postingSchedule);
+    const postCount = POSTS_PER_BATCH;
+    const timezone = user.timezone || "Asia/Kolkata";
+    send({
+      type: "preflight",
+      key: "schedule",
+      status: "done",
+      days: schedule.days,
+      time: schedule.time,
+      timezone,
+      batchSize: postCount,
+    });
+
+    // Enforce the per-cycle limit.
+    const subscription = user.subscription;
+    if (subscription) {
+      // Reset the counter once the 30-day window has elapsed.
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      if (!subscription.cyclePostsResetAt || subscription.cyclePostsResetAt < thirtyDaysAgo) {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { postsGeneratedThisCycle: 0, cyclePostsResetAt: new Date() },
+        });
+        subscription.postsGeneratedThisCycle = 0;
+      }
+
+      if (user.role !== "admin" && subscription.postsGeneratedThisCycle + postCount > POST_LIMIT_PER_CYCLE) {
+        const remaining = POST_LIMIT_PER_CYCLE - subscription.postsGeneratedThisCycle;
+        const message = `Post generation limit reached for this billing cycle. You have ${remaining} post(s) remaining out of ${POST_LIMIT_PER_CYCLE}.`;
+        send({ type: "preflight", key: "quota", status: "error", message, postsRemaining: remaining });
+        send({ type: "error", message, postsRemaining: remaining, postsLimit: POST_LIMIT_PER_CYCLE });
+        return;
+      }
+    }
+    send({
+      type: "preflight",
+      key: "quota",
+      status: "done",
+      used: subscription?.postsGeneratedThisCycle ?? 0,
+      limit: POST_LIMIT_PER_CYCLE,
+    });
+
+    const strategy = JSON.parse(plan.strategy) as {
+      weekTheme: string;
+      weekFocus: string;
+      postTypes: string[];
+      pillars: object[];
+      tone: object;
+      postMix: object;
+    };
+    send({
+      type: "strategy",
+      status: "done",
+      theme: strategy.weekTheme ?? null,
+      focus: strategy.weekFocus ?? null,
+      postTypes: strategy.postTypes ?? [],
+    });
+
+    const profileContext = buildProfileContext(user);
+    // Posts are generated in Human Mode by default; the per-post editor toggle
+    // can switch an individual post to AI mode (which regenerates it).
+    const humanMode = true;
+
+    const allowedTypes = deriveAllowedPostTypes(user.contentStyles);
+    // The LITERAL selected styles drive a per-post style plan so each post is
+    // written in a distinct style the user actually chose.
+    const selectedStyles = parseSelectedStyles(user.contentStyles);
+
+    // Web-research step: ground the posts in real, current facts before writing.
+    // Best-effort - if grounding fails (quota, network, etc.) we write without a brief.
+    let researchBrief = "";
+    try {
+      const researchPrompt = buildResearchPrompt(
+        strategy.weekTheme ?? "",
+        strategy.weekFocus ?? "",
+        strategy.pillars ?? [],
+        user.industry || "business",
+        user.targetAudience || ""
       );
+      send({
+        type: "research",
+        status: "start",
+        message: "Searching the web for current facts",
+        prompt: researchPrompt,
+      });
+      researchBrief = await generateGroundedText(researchPrompt);
+      send({
+        type: "research",
+        status: "done",
+        chars: researchBrief.length,
+        excerpt: researchBrief.slice(0, 280),
+      });
+    } catch (err) {
+      console.error("Research step failed, writing without a brief:", (err as Error).message);
+      researchBrief = "";
+      send({
+        type: "research",
+        status: "skipped",
+        message: "Research unavailable - writing without a brief",
+      });
     }
-  }
 
-  const strategy = JSON.parse(plan.strategy) as {
-    weekTheme: string;
-    weekFocus: string;
-    postTypes: string[];
-    pillars: object[];
-    tone: object;
-    postMix: object;
-  };
+    const postTypesForPrompt = strategy.postTypes ?? allowedTypes;
+    // Same assignment the prompt uses, so each saved post.style matches the style the
+    // writer was told to use for that post (drives the per-post style badge).
+    const styleAssignment = assignPostStyles(selectedStyles, postTypesForPrompt, postCount);
 
-  const profileContext = buildProfileContext(user);
-  // Posts are generated in Human Mode by default; the per-post editor toggle
-  // can switch an individual post to AI mode (which regenerates it).
-  const humanMode = true;
-
-  const allowedTypes = deriveAllowedPostTypes(user.contentStyles);
-  // The user's LITERAL selected styles drive a per-post style plan so each post is
-  // written in a distinct style they actually chose (not a single flattened type).
-  const selectedStyles = parseSelectedStyles(user.contentStyles);
-
-  // Web-research step: ground the posts in real, current facts before writing.
-  // Best-effort - if grounding fails (quota, network, etc.) we write without a brief.
-  let researchBrief = "";
-  try {
-    const researchPrompt = buildResearchPrompt(
-      strategy.weekTheme ?? "",
-      strategy.weekFocus ?? "",
-      strategy.pillars ?? [],
-      user.industry || "business",
-      user.targetAudience || ""
+    const prompt = buildPostsPrompt(
+      profileContext,
+      strategy.weekTheme ?? "Professional Growth",
+      strategy.weekFocus ?? "Sharing expertise",
+      postTypesForPrompt,
+      { pillars: strategy.pillars, tone: strategy.tone, postMix: strategy.postMix },
+      humanMode,
+      postCount,
+      allowedTypes,
+      researchBrief,
+      selectedStyles,
+      imageStyleTaxonomyBlock(),
+      IMAGE_CATEGORIES.map((c) => c.id).join("|")
     );
-    researchBrief = await generateGroundedText(researchPrompt);
-  } catch (err) {
-    console.error("Research step failed, writing without a brief:", (err as Error).message);
-    researchBrief = "";
-  }
 
-  const postTypesForPrompt = strategy.postTypes ?? allowedTypes;
-  // Same assignment the prompt uses, so each saved post.style matches the style the
-  // writer was told to use for that post (used for the per-post style badge in the UI).
-  const styleAssignment = assignPostStyles(selectedStyles, postTypesForPrompt, postCount);
+    send({
+      type: "write",
+      status: "start",
+      count: postCount,
+      styles: styleAssignment,
+      allowedTypes,
+      prompt,
+    });
 
-  const prompt = buildPostsPrompt(
-    profileContext,
-    strategy.weekTheme ?? "Professional Growth",
-    strategy.weekFocus ?? "Sharing expertise",
-    postTypesForPrompt,
-    { pillars: strategy.pillars, tone: strategy.tone, postMix: strategy.postMix },
-    humanMode,
-    postCount,
-    allowedTypes,
-    researchBrief,
-    selectedStyles,
-    imageStyleTaxonomyBlock(),
-    IMAGE_CATEGORIES.map((c) => c.id).join("|")
-  );
-
-  try {
     const raw = await generateText(prompt);
     const posts = parseJSON<
       Array<{
@@ -149,18 +215,20 @@ export async function POST(req: NextRequest) {
         callToAction: string;
       }>
     >(raw);
+    send({
+      type: "write",
+      status: "done",
+      count: posts.length,
+      titles: posts.map((p) => cleanInline(p.title)),
+    });
 
-    // Schedule on the user's chosen posting days (in their timezone), starting from
-    // now, never in the past, and skipping every day that already holds a post - so a
-    // new batch fills the next FREE matching days and rolls into the following weeks
-    // instead of reusing dates that are already taken.
-    const timezone = user.timezone || "Asia/Kolkata";
+    // Schedule on the chosen posting days (in the user timezone), starting from now,
+    // never in the past, and skipping every day that already holds a post.
+    send({ type: "schedule", status: "start" });
 
-    // Days already holding a post. The 48h lookback covers "today" in any timezone
-    // (past days can never be picked anyway, since slots must be in the future).
     const alreadyScheduled = await prisma.post.findMany({
       where: {
-        plan: { userId: user.id },
+        plan: { userId },
         scheduledAt: { gte: new Date(Date.now() - 48 * 60 * 60 * 1000) },
       },
       select: { scheduledAt: true },
@@ -174,41 +242,66 @@ export async function POST(req: NextRequest) {
       schedule.days,
       schedule.time,
       timezone,
-      posts.length, // one slot per post actually written, continuing into later weeks
+      posts.length,
       occupiedDays
     );
+    send({
+      type: "schedule",
+      status: "done",
+      skippedDays: Array.from(occupiedDays).sort(),
+      slots: postingSlots.map((d) => ({
+        iso: d.toISOString(),
+        label: utcToLocalTime(d, timezone, SLOT_FORMAT),
+      })),
+    });
 
     // One slot per post, in order. If slots somehow run out the post is left
     // unscheduled rather than silently reusing a date that is already taken.
-    const createdPosts = await Promise.all(
-      posts.map(async (post, idx) => {
-        const scheduledAt: Date | undefined = postingSlots[idx];
+    send({ type: "save", status: "start", total: posts.length });
+    const createdPosts = [];
+    for (let idx = 0; idx < posts.length; idx++) {
+      const post = posts[idx];
+      const scheduledAt: Date | undefined = postingSlots[idx];
 
-        return prisma.post.create({
-          data: {
-            planId: plan.id,
-            title: cleanInline(post.title),
-            body: formatPostBody(post.body),
-            hashtags: JSON.stringify(post.hashtags),
-            // Enforce the user's onboarding selection: never save a post type the
-            // model produced outside the allowed set. Coerce any stray type to an
-            // allowed one so the calendar only ever shows selected types.
-            postType: allowedTypes.includes(post.postType) ? post.postType : allowedTypes[0],
-            // The actual user-selected style this post was written in (drives the UI
-            // badge); falls back to null for safety so the badge shows the post type.
-            style: styleAssignment[idx] ?? null,
-            imageStyle: clampImageStyle(post.imageStyle),
-            imagePrompt: post.imagePrompt,
-            weekNumber: 1,
-            scheduledAt,
-            humanModeOverride: true, // default to Human Mode; editor toggle can switch to AI
-            status: "draft", // user must review, add image, and mark as ready
-          },
-        });
-      })
-    );
+      const created = await prisma.post.create({
+        data: {
+          planId: plan.id,
+          title: cleanInline(post.title),
+          body: formatPostBody(post.body),
+          hashtags: JSON.stringify(post.hashtags),
+          // Enforce the onboarding selection: never save a post type the model
+          // produced outside the allowed set. Coerce any stray type to an allowed
+          // one so the calendar only ever shows selected types.
+          postType: allowedTypes.includes(post.postType) ? post.postType : allowedTypes[0],
+          // The actual selected style this post was written in (drives the UI badge);
+          // falls back to null for safety so the badge shows the post type.
+          style: styleAssignment[idx] ?? null,
+          imageStyle: clampImageStyle(post.imageStyle),
+          imagePrompt: post.imagePrompt,
+          weekNumber: 1,
+          scheduledAt,
+          humanModeOverride: true, // default to Human Mode; editor toggle can switch to AI
+          status: "draft", // user must review, add image, and mark as ready
+        },
+      });
+      createdPosts.push(created);
 
-    // Increment billing cycle counter
+      send({
+        type: "post",
+        index: idx,
+        id: created.id,
+        title: created.title,
+        postType: created.postType,
+        style: created.style,
+        imageStyle: created.imageStyle,
+        scheduledAt: scheduledAt ? scheduledAt.toISOString() : null,
+        scheduledLabel: scheduledAt ? utcToLocalTime(scheduledAt, timezone, SLOT_FORMAT) : null,
+        status: "done",
+      });
+    }
+    send({ type: "save", status: "done", count: createdPosts.length });
+
+    // Increment the billing cycle counter.
     let postsRemaining = POST_LIMIT_PER_CYCLE;
     if (subscription) {
       const newCount = subscription.postsGeneratedThisCycle + createdPosts.length;
@@ -222,14 +315,13 @@ export async function POST(req: NextRequest) {
       postsRemaining = POST_LIMIT_PER_CYCLE - newCount;
     }
 
-    return NextResponse.json({
-      posts: createdPosts,
+    send({
+      type: "done",
+      posts: createdPosts.map((p) => ({ id: p.id, title: p.title })),
+      count: createdPosts.length,
       weekTheme: strategy.weekTheme,
       postsRemaining,
       postsLimit: POST_LIMIT_PER_CYCLE,
     });
-  } catch (err) {
-    console.error("Posts generation error:", err);
-    return NextResponse.json({ error: "Failed to generate posts" }, { status: 500 });
-  }
+  }, () => "Failed to generate posts");
 }

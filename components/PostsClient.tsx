@@ -159,6 +159,8 @@ export default function PostsClient({
     lastImageBatch,
     startImageGeneration,
     cancelImageGeneration,
+    imagePipeline,
+    showPipeline,
   } = useGeneration();
   const [posts, setPosts] = useState(initialPosts);
   // useState only seeds on the FIRST render, so without this the list ignores
@@ -436,6 +438,14 @@ export default function PostsClient({
           <span className="flex-1 text-sm text-purple-700 dark:text-purple-300">
             {imageStatus ?? "Generating images..."}
           </span>
+          {imagePipeline && (
+            <button
+              onClick={() => showPipeline("images")}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-purple-300 px-3 py-1.5 text-sm text-purple-700 transition-colors hover:bg-purple-100/60 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900/30"
+            >
+              View pipeline
+            </button>
+          )}
           <button
             onClick={cancelImageGeneration}
             className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
