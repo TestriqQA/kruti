@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
 
   let generated = 0;
   const errors: string[] = [];
+  // Returned so the caller can render the new images immediately instead of
+  // waiting for a refetch.
+  const images: { id: string; imageUrl: string }[] = [];
 
   // Generate sequentially to avoid overloading the image API
   for (const post of posts) {
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest) {
             imageGenCount: post.imageGenCount + 1,
           },
         });
+        images.push({ id: post.id, imageUrl });
         generated++;
       }
     } catch (err) {
@@ -96,6 +100,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     generated,
     total: posts.length,
+    images,
     errors: errors.length > 0 ? `Failed for ${errors.length} post(s)` : undefined,
   });
 }

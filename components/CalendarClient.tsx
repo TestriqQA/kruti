@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Calendar, Sparkles, FileText, ChevronLeft, ChevronRight, Linkedin, GripVertical } from "lucide-react";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn, getPostTypeColor, getStatusColor } from "@/lib/utils";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, addMonths, subMonths, startOfWeek } from "date-fns";
@@ -30,6 +30,10 @@ interface Props {
 export default function CalendarClient({ posts: initialPosts, userTimezone = "Asia/Kolkata" }: Props) {
   const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
+  // useState only seeds on the FIRST render, so without this the calendar ignores
+  // every later router.refresh() - newly generated posts wouldn't appear until a
+  // reload, and a reschedule wouldn't pick up server-side corrections.
+  useEffect(() => setPosts(initialPosts), [initialPosts]);
   const [view, setView] = useState<"calendar" | "list">("calendar");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dragPostId, setDragPostId] = useState<string | null>(null);

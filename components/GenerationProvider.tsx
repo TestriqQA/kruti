@@ -18,6 +18,13 @@ interface GenerationContextValue {
   error: string | null;
   startGeneration: (reuseStrategy: boolean) => void;
   cancelGeneration: () => void;
+  /** Bulk image generation - an independent run, same survive-navigation rules. */
+  imageGenerating: boolean;
+  imageStatus: string | null;
+  /** Images from the last finished batch, so a mounted list can paint them at once. */
+  lastImageBatch: { id: string; imageUrl: string }[] | null;
+  startImageGeneration: (postIds: string[]) => void;
+  cancelImageGeneration: () => void;
 }
 
 const noop = () => {};
@@ -28,6 +35,11 @@ const GenerationContext = createContext<GenerationContextValue>({
   error: null,
   startGeneration: noop,
   cancelGeneration: noop,
+  imageGenerating: false,
+  imageStatus: null,
+  lastImageBatch: null,
+  startImageGeneration: noop,
+  cancelImageGeneration: noop,
 });
 
 export function useGeneration() {
@@ -61,6 +73,13 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   const abortRef = useRef<AbortController | null>(null);
 
+  const [imageGenerating, setImageGenerating] = useState(false);
+  const [imageStatus, setImageStatus] = useState<string | null>(null);
+  const [lastImageBatch, setLastImageBatch] = useState<
+    { id: string; imageUrl: string }[] | null
+  >(null);
+  const imageAbortRef = useRef<AbortController | null>(null);
+
   // Lets the long-running run read the CURRENT route without becoming dependent
   // on it - the user may navigate several times before it finishes.
   const pathnameRef = useRef(pathname);
@@ -70,18 +89,76 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   // Closing or reloading the tab DOES kill an in-flight run, so ask first.
   useEffect(() => {
-    if (!generating) return;
+    if (!generating && !imageGenerating) return;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [generating]);
+  }, [generating, imageGenerating]);
 
   const cancelGeneration = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  const cancelImageGeneration = useCallback(() => {
+    imageAbortRef.current?.abort();
+  }, []);
+
+  const startImageGeneration = useCallback(
+    async (postIds: string[]) => {
+      if (imageAbortRef.current || postIds.length === 0) return; // one batch at a time
+
+      const ac = new AbortController();
+      imageAbortRef.current = ac;
+      setImageGenerating(true);
+      setLastImageBatch(null);
+      setImageStatus(
+        `Generating images for ${postIds.length} post${postIds.length === 1 ? "" : "s"}...`
+      );
+
+      try {
+        const res = await fetch("/api/generate/image/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postIds }),
+          signal: ac.signal,
+        });
+        const data = await res.json();
+        // "No eligible posts" comes back as 200 with an error field and no total,
+        // so treat any error with nothing generated as a failure.
+        if (!res.ok || (data.error && !data.generated)) {
+          throw new Error(data.error || "Image generation failed");
+        }
+
+        const images: { id: string; imageUrl: string }[] = data.images ?? [];
+        setLastImageBatch(images.length > 0 ? images : null);
+
+        const summary = `Generated images for ${data.generated} of ${data.total} post(s)${
+          data.errors ? ` - ${data.errors}` : ""
+        }`;
+        setImageStatus(summary);
+        toast(summary, "success");
+        router.refresh(); // pulls the new images into whatever page is open
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setImageStatus("Image generation cancelled.");
+          toast("Image generation cancelled", "info");
+        } else {
+          console.error(err);
+          const message =
+            err instanceof Error ? err.message : "Image generation failed";
+          setImageStatus(message);
+          toast(message, "error");
+        }
+      } finally {
+        imageAbortRef.current = null;
+        setImageGenerating(false);
+      }
+    },
+    [router, toast]
+  );
 
   const startGeneration = useCallback(
     async (reuseStrategy: boolean) => {
@@ -182,7 +259,18 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   return (
     <GenerationContext.Provider
-      value={{ generating, progress, error, startGeneration, cancelGeneration }}
+      value={{
+        generating,
+        progress,
+        error,
+        startGeneration,
+        cancelGeneration,
+        imageGenerating,
+        imageStatus,
+        lastImageBatch,
+        startImageGeneration,
+        cancelImageGeneration,
+      }}
     >
       {children}
     </GenerationContext.Provider>

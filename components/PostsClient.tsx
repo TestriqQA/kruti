@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Search, Linkedin, Calendar, CheckSquare, Square,
@@ -11,6 +11,7 @@ import {
 import { cn, formatDate, getPostTypeColor, getStatusColor } from "@/lib/utils";
 import PostImage from "@/components/PostImage";
 import GeneratePostsButton from "@/components/GeneratePostsButton";
+import { useGeneration } from "@/components/GenerationProvider";
 
 interface Post {
   id: string;
@@ -150,7 +151,29 @@ export default function PostsClient({
   postsRemaining: number;
 }) {
   const router = useRouter();
+  // Image generation runs in GenerationProvider (above every page), so it keeps
+  // going if the user navigates away mid-batch.
+  const {
+    imageGenerating,
+    imageStatus,
+    lastImageBatch,
+    startImageGeneration,
+    cancelImageGeneration,
+  } = useGeneration();
   const [posts, setPosts] = useState(initialPosts);
+  // useState only seeds on the FIRST render, so without this the list ignores
+  // every later router.refresh() and keeps showing stale rows - which is why
+  // freshly generated images (and duplicated posts) never appeared.
+  useEffect(() => setPosts(initialPosts), [initialPosts]);
+
+  // Paint a finished batch immediately rather than waiting on the refetch.
+  useEffect(() => {
+    if (!lastImageBatch || lastImageBatch.length === 0) return;
+    const byId = new Map(lastImageBatch.map((i) => [i.id, i.imageUrl]));
+    setPosts((prev) =>
+      prev.map((p) => (byId.has(p.id) ? { ...p, imageUrl: byId.get(p.id)! } : p))
+    );
+  }, [lastImageBatch]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -169,9 +192,6 @@ export default function PostsClient({
 
   // Delete confirm
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-  // Bulk image gen
-  const [bulkImageLoading, setBulkImageLoading] = useState(false);
 
   // Sort
   const [sortBy, setSortBy] = useState<"default" | "date-asc" | "date-desc">("default");
@@ -306,24 +326,10 @@ export default function PostsClient({
     bulkAction("delete");
   }
 
-  async function handleBulkImageGen() {
-    setBulkImageLoading(true);
-    try {
-      const res = await fetch("/api/generate/image/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postIds: Array.from(selected) }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Image generation failed");
-      showFeedback(`Generated images for ${data.generated} of ${data.total} post(s)${data.errors ? ` - ${data.errors}` : ""}`);
-      clearSelection();
-      router.refresh();
-    } catch (err) {
-      showFeedback(err instanceof Error ? err.message : "Image generation failed", true);
-    } finally {
-      setBulkImageLoading(false);
-    }
+  function handleBulkImageGen() {
+    startImageGeneration(Array.from(selected));
+    // The run is detached now, so it can no longer clear this for us.
+    clearSelection();
   }
 
   async function handleDuplicate(postId: string, e: React.MouseEvent) {
@@ -422,6 +428,24 @@ export default function PostsClient({
         </div>
       )}
 
+      {/* Image generation - shown independently of the selection, so it survives
+          clearing the selection and navigating away and back. */}
+      {imageGenerating && (
+        <div className="flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 dark:border-purple-800 dark:bg-purple-900/20">
+          <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-purple-600 dark:text-purple-400" />
+          <span className="flex-1 text-sm text-purple-700 dark:text-purple-300">
+            {imageStatus ?? "Generating images..."}
+          </span>
+          <button
+            onClick={cancelImageGeneration}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+          >
+            <X className="w-3.5 h-3.5" />
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Bulk action bar */}
       {selectedCount > 0 && (
         <div className="flex items-center gap-3 bg-blue-600/5 dark:bg-blue-600/10 border border-blue-600/20 rounded-xl px-4 py-3 flex-wrap">
@@ -443,11 +467,11 @@ export default function PostsClient({
           {/* Generate Images */}
           <button
             onClick={handleBulkImageGen}
-            disabled={bulkLoading || bulkImageLoading}
+            disabled={bulkLoading || imageGenerating}
             className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
           >
-            {bulkImageLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            {bulkImageLoading ? "Generating..." : "Generate Images"}
+            {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+            {imageGenerating ? "Generating..." : "Generate Images"}
           </button>
 
           {/* Mark as Ready */}
