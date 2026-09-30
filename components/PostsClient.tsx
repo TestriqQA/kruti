@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn, formatDate, getPostTypeColor, getStatusColor } from "@/lib/utils";
 import PostImage from "@/components/PostImage";
+import GeneratePostsButton from "@/components/GeneratePostsButton";
 
 interface Post {
   id: string;
@@ -139,7 +140,15 @@ function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string,
   );
 }
 
-export default function PostsClient({ posts: initialPosts }: { posts: Post[] }) {
+export default function PostsClient({
+  posts: initialPosts,
+  recentPlan,
+  postsRemaining,
+}: {
+  posts: Post[];
+  recentPlan: { strategy: string; weekStart: Date | string } | null;
+  postsRemaining: number;
+}) {
   const router = useRouter();
   const [posts, setPosts] = useState(initialPosts);
   const [search, setSearch] = useState("");
@@ -335,12 +344,16 @@ export default function PostsClient({ posts: initialPosts }: { posts: Post[] }) 
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-gray-100 flex items-center gap-2">
-          <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-          All Posts
-        </h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">{posts.length} posts generated</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            All Posts
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{posts.length} posts generated</p>
+        </div>
+        {/* Generate without going back to the dashboard. */}
+        <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
       </div>
 
       {/* Filters */}

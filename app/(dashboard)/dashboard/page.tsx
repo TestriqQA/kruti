@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
+import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -94,20 +95,8 @@ export default async function DashboardPage() {
   const isTrialExpired = subscription?.status === "trialing" &&
     subscription.trialEnd != null && subscription.trialEnd < now;
 
-  // Compute posts remaining in billing cycle
-  const POST_LIMIT = 30;
-  let postsRemaining = POST_LIMIT;
-  if (user?.role === "admin") {
-    postsRemaining = Infinity;
-  } else if (subscription) {
-    // Reset counter if it's been more than 30 days since last reset
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    if (!subscription.cyclePostsResetAt || subscription.cyclePostsResetAt < thirtyDaysAgo) {
-      postsRemaining = POST_LIMIT;
-    } else {
-      postsRemaining = POST_LIMIT - subscription.postsGeneratedThisCycle;
-    }
-  }
+  // Posts remaining in the billing cycle (same rule the posts page uses).
+  const postsRemaining = postsRemainingInCycle(user?.role, subscription, now);
 
   // Build stats from grouped counts
   const statusMap = Object.fromEntries(
@@ -152,7 +141,7 @@ export default async function DashboardPage() {
       upcomingPosts={postsToShow}
       batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}
-      postsLimit={POST_LIMIT}
+      postsLimit={POST_LIMIT_PER_CYCLE}
       isTrialExpired={isTrialExpired}
       postsPerBatch={postsPerBatch}
       cycleResetDate={subscription?.cyclePostsResetAt
