@@ -6,7 +6,7 @@ import { generateText, parseJSON, generateGroundedText } from "@/lib/gemini";
 import { buildPostsPrompt, buildResearchPrompt, deriveAllowedPostTypes, parseSelectedStyles, assignPostStyles } from "@/lib/prompts";
 import { buildProfileContext } from "@/lib/linkedin";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
-import { parsePostingSchedule } from "@/lib/posting-schedule";
+import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
@@ -46,7 +46,9 @@ export async function POST(req: NextRequest) {
   // The fallback lives in one shared place so Settings and the scheduler can
   // never disagree about which days an unset schedule means.
   const schedule = parsePostingSchedule(user.postingSchedule);
-  const postCount = schedule.days.length; // one post per scheduled day
+  // Fixed batch size: the schedule decides which DAYS the posts land on, not how
+  // many posts are written.
+  const postCount = POSTS_PER_BATCH;
 
   // ── Enforce 30-post limit per billing cycle ──
   const POST_LIMIT_PER_CYCLE = 30;

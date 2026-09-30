@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
-import { parsePostingSchedule } from "@/lib/posting-schedule";
+import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -76,7 +76,7 @@ export default async function DashboardPage() {
   // same helper as /api/generate/posts with the same inputs, so the range shown
   // here is the range the user actually gets.
   const postingSchedule = parsePostingSchedule(user?.postingSchedule);
-  const postsPerBatch = postingSchedule.days.length;
+  const postsPerBatch = POSTS_PER_BATCH;
   const timezone = user?.timezone || "Asia/Kolkata";
   const occupiedDays = new Set(
     alreadyScheduled.map((p) => toZonedDayKey(p.scheduledAt as Date, timezone))

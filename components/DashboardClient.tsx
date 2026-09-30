@@ -42,7 +42,7 @@ interface Props {
   postsRemaining: number; // posts remaining in billing cycle
   postsLimit: number; // total posts allowed per cycle (30)
   isTrialExpired: boolean; // whether user's trial has ended
-  postsPerBatch: number; // number of posts per generation (based on posting schedule)
+  postsPerBatch: number; // posts per generation (fixed POSTS_PER_BATCH, not schedule-derived)
   cycleResetDate: string | null; // ISO date when post counter resets
 }
 

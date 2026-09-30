@@ -16,6 +16,15 @@ export const DEFAULT_POSTING_SCHEDULE: PostingSchedule = {
 };
 
 /**
+ * How many posts one "Generate" produces. Deliberately a fixed number rather
+ * than `days.length`: the batch size stays the same no matter how many posting
+ * days the user picked, and the schedule only decides WHICH days those posts
+ * land on (rolling into later weeks when the batch needs more days than a
+ * single week provides).
+ */
+export const POSTS_PER_BATCH = 5;
+
+/**
  * Parse the JSON string stored on `User.postingSchedule`, falling back to
  * DEFAULT_POSTING_SCHEDULE for missing, malformed or empty values.
  */
