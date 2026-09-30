@@ -3,6 +3,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
+import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
+import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
+import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -13,7 +16,7 @@ export default async function DashboardPage() {
   const [user, recentPlan, allPostCounts, newsletters, upcomingPosts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { name: true, headline: true, industry: true, image: true, postingSchedule: true, role: true, positioning: true, contentStyles: true },
+      select: { name: true, headline: true, industry: true, image: true, postingSchedule: true, role: true, positioning: true, contentStyles: true, timezone: true },
     }),
     // Get most recent week's plan
     prisma.contentPlan.findFirst({
@@ -50,14 +53,17 @@ export default async function DashboardPage() {
   ]);
 
   // Also count posts that are posted to LinkedIn (safety net for status mismatch)
-  const [linkedInPostedCount, latestScheduledPost, subscription] = await Promise.all([
+  const [linkedInPostedCount, alreadyScheduled, subscription] = await Promise.all([
     prisma.post.count({
       where: { plan: { userId: session.user.id }, postedToLinkedIn: true },
     }),
-    // Find the latest scheduled post to determine where the next batch should start
-    prisma.post.findFirst({
-      where: { plan: { userId: session.user.id }, scheduledAt: { not: null } },
-      orderBy: { scheduledAt: "desc" },
+    // Days that already hold a post - the next batch skips them, exactly as
+    // /api/generate/posts does, so this preview matches what really gets created.
+    prisma.post.findMany({
+      where: {
+        plan: { userId: session.user.id },
+        scheduledAt: { gte: new Date(now.getTime() - 48 * 60 * 60 * 1000) },
+      },
       select: { scheduledAt: true },
     }),
     // Get subscription for billing cycle post count
@@ -67,45 +73,30 @@ export default async function DashboardPage() {
     }),
   ]);
 
-  // Compute next batch start date
-  let nextStartDate: Date;
-  if (latestScheduledPost?.scheduledAt) {
-    nextStartDate = new Date(latestScheduledPost.scheduledAt);
-    nextStartDate.setDate(nextStartDate.getDate() + 1);
-    nextStartDate.setHours(0, 0, 0, 0);
-    // Skip weekends
-    while (nextStartDate.getDay() === 0 || nextStartDate.getDay() === 6) {
-      nextStartDate.setDate(nextStartDate.getDate() + 1);
-    }
-  } else {
-    nextStartDate = new Date();
-    nextStartDate.setHours(0, 0, 0, 0);
-  }
-
-  // Compute posts per batch based on user's posting schedule
-  const postingSchedule = user?.postingSchedule
-    ? (JSON.parse(user.postingSchedule) as { days: string[]; time: string })
-    : { days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"], time: "09:00" };
-  const postsPerBatch = postingSchedule.days.length;
+  // Posts per batch, and the exact dates that batch will land on. This calls the
+  // same helper as /api/generate/posts with the same inputs, so the range shown
+  // here is the range the user actually gets.
+  const postingSchedule = parsePostingSchedule(user?.postingSchedule);
+  const postsPerBatch = POSTS_PER_BATCH;
+  const timezone = user?.timezone || "Asia/Kolkata";
+  const occupiedDays = new Set(
+    alreadyScheduled.map((p) => toZonedDayKey(p.scheduledAt as Date, timezone))
+  );
+  const batchDates = getNextScheduledSlots(
+    now,
+    postingSchedule.days,
+    postingSchedule.time,
+    timezone,
+    postsPerBatch,
+    occupiedDays
+  );
 
   // Check if trial is expired
   const isTrialExpired = subscription?.status === "trialing" &&
     subscription.trialEnd != null && subscription.trialEnd < now;
 
-  // Compute posts remaining in billing cycle
-  const POST_LIMIT = 30;
-  let postsRemaining = POST_LIMIT;
-  if (user?.role === "admin") {
-    postsRemaining = Infinity;
-  } else if (subscription) {
-    // Reset counter if it's been more than 30 days since last reset
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    if (!subscription.cyclePostsResetAt || subscription.cyclePostsResetAt < thirtyDaysAgo) {
-      postsRemaining = POST_LIMIT;
-    } else {
-      postsRemaining = POST_LIMIT - subscription.postsGeneratedThisCycle;
-    }
-  }
+  // Posts remaining in the billing cycle (same rule the posts page uses).
+  const postsRemaining = postsRemainingInCycle(user?.role, subscription, now);
 
   // Build stats from grouped counts
   const statusMap = Object.fromEntries(
@@ -148,12 +139,11 @@ export default async function DashboardPage() {
       }
       stats={{ totalPosts, readyPosts, draftPosts, publishedPosts, newsletters }}
       upcomingPosts={postsToShow}
-      nextStartDate={nextStartDate.toISOString()}
+      batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}
-      postsLimit={POST_LIMIT}
+      postsLimit={POST_LIMIT_PER_CYCLE}
       isTrialExpired={isTrialExpired}
       postsPerBatch={postsPerBatch}
-      postingDays={postingSchedule.days}
       cycleResetDate={subscription?.cyclePostsResetAt
         ? new Date(subscription.cyclePostsResetAt.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
         : null}

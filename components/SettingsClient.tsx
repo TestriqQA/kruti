@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { cn } from "@/lib/utils";
+import { parsePostingSchedule, type PostingSchedule } from "@/lib/posting-schedule";
 
 interface Subscription {
   status: string;
@@ -106,10 +107,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
   // Post signature
   const [postSignature, setPostSignature] = useState(user?.postSignature ?? "");
 
-  // Posting schedule
-  const defaultSchedule = { days: ["Monday", "Wednesday", "Friday"], time: "09:00" };
-  const [postingSchedule, setPostingSchedule] = useState<{ days: string[]; time: string }>(
-    user?.postingSchedule ? { ...defaultSchedule, ...JSON.parse(user.postingSchedule) } : defaultSchedule
+  // Posting schedule. Parsed through the shared helper so the default shown here
+  // is byte-for-byte the default the scheduler applies (and malformed JSON stored
+  // on the user can no longer throw during render).
+  const [postingSchedule, setPostingSchedule] = useState<PostingSchedule>(() =>
+    parsePostingSchedule(user?.postingSchedule)
   );
 
   // Timezone
