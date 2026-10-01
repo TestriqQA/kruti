@@ -378,7 +378,7 @@ export default function PostsClient({
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          className="px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
         >
           <option value="all">All Types</option>
           <option value="thought-leadership">Thought Leadership</option>
@@ -390,7 +390,7 @@ export default function PostsClient({
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
         >
           <option value="all">All Status</option>
           <option value="draft">Draft</option>
@@ -400,7 +400,7 @@ export default function PostsClient({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
         >
           <option value="default">Sort: Default</option>
           <option value="date-asc">Date (Oldest first)</option>

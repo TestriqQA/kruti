@@ -286,7 +286,7 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
         {/* Header */}
         <div className="px-8 pt-7 pb-6 border-b border-slate-100 dark:border-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-10 w-auto mb-5" />
+          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto mb-5" />
           <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">Welcome to Kruti.io</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Let&apos;s set up your content strategy</p>
 
@@ -376,7 +376,7 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                   className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white"
                 />
                 {showIndustryDropdown && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#0D131F] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg max-h-60 overflow-y-auto">
                     {INDUSTRIES.filter((ind) => ind.toLowerCase().includes(industry.toLowerCase())).length > 0 ? (
                       INDUSTRIES.filter((ind) => ind.toLowerCase().includes(industry.toLowerCase())).map((ind) => (
                         <div
@@ -386,14 +386,14 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                             setIndustry(ind);
                             setShowIndustryDropdown(false);
                           }}
-                          className="px-4 py-2.5 text-sm text-slate-900 hover:bg-blue-50 cursor-pointer"
+                          className="px-4 py-2.5 text-sm text-slate-900 dark:text-slate-100 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer"
                         >
                           {ind}
                         </div>
                       ))
                     ) : (
                       industry.trim() ? (
-                        <div className="px-4 py-2.5 text-sm text-slate-500 italic">
+                        <div className="px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400 italic">
                           Using custom industry: &quot;{industry}&quot;
                         </div>
                       ) : null

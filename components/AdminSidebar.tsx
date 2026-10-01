@@ -125,7 +125,7 @@ export default function AdminSidebar({ user, imagePromptsRevealUntil = null }: A
         <div className="p-6 border-b border-gray-100 dark:border-gray-800">
           <div className="flex flex-col gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt="Kruti.io" className="h-10 w-auto" />
+            <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
             <div className="flex items-center gap-1.5">
               <Shield className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
               <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">

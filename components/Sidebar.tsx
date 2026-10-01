@@ -47,7 +47,7 @@ export default function Sidebar({ user }: SidebarProps) {
       <div className="p-5 border-b border-slate-100 dark:border-white/10">
         <Link href="/dashboard" className="flex items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-12 w-auto" />
+          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
         </Link>
       </div>
 

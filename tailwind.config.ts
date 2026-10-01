@@ -5,6 +5,10 @@ const config: Config = {
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    // lib/ builds class strings too (the post-type and status capsule palettes in
+    // lib/utils.ts). Without this Tailwind never emits those classes and the
+    // capsules silently fall back to unstyled.
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {

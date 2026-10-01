@@ -109,7 +109,7 @@ export default function AdminContentStatsClient({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Posts by Status */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-gray-400" />
             Posts by Status
           </h3>
@@ -133,7 +133,7 @@ export default function AdminContentStatsClient({
 
         {/* Posts by Type */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-gray-400" />
             Posts by Type
           </h3>
@@ -160,7 +160,7 @@ export default function AdminContentStatsClient({
 
         {/* Newsletter Status */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
             <Mail className="w-4 h-4 text-gray-400" />
             Newsletters by Status
           </h3>
@@ -179,7 +179,7 @@ export default function AdminContentStatsClient({
 
         {/* Top Users */}
         <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
             <Trophy className="w-4 h-4 text-amber-500" />
             Most Active Users
           </h3>

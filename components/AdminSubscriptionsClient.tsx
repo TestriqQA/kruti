@@ -238,7 +238,7 @@ export default function AdminSubscriptionsClient({
                           <button
                             onClick={() => handleStatusChange(sub.id, "active")}
                             disabled={actionLoading === sub.id}
-                            className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors disabled:opacity-50"
+                            className="px-2 py-1 text-xs bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors disabled:opacity-50"
                           >
                             Activate
                           </button>
@@ -256,7 +256,7 @@ export default function AdminSubscriptionsClient({
                         <div className="relative group">
                           <button
                             disabled={actionLoading === sub.id}
-                            className="px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50 flex items-center gap-1"
+                            className="px-2 py-1 text-xs bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors disabled:opacity-50 flex items-center gap-1"
                           >
                             <Plus className="w-3 h-3" /> Trial
                           </button>

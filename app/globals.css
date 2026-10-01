@@ -27,6 +27,46 @@
 
 @layer base {
   body { @apply bg-gray-50 text-gray-900; }
+
+  /* Native UI (select popups, scrollbars, date/time pickers, autofill) is drawn by
+     the browser, not by Tailwind. Without this it stays light while the app is
+     dark - which is why open dropdowns and scrollbars looked out of place. */
+  :root {
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
+}
+
+/* Scrollbars: color-scheme already darkens them, this just softens the contrast
+   so they sit against the dark surfaces instead of glowing against them. */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: content-box;
+}
+.dark {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* Native dropdown options: Chrome/Edge on Windows honour these on the popup. */
+.dark select option,
+.dark select optgroup {
+  background-color: #0D131F;
+  color: #e2e8f0;
 }
 
 .linkedin-gradient {
@@ -39,6 +79,27 @@
 
 .prose-linkedin {
   @apply text-sm leading-relaxed whitespace-pre-wrap;
+}
+
+/* Native select arrows are painted by the browser at a FIXED inset from the right
+   border - padding-right does not move them (verified: at padding-right:80px the
+   arrow stays put). So the native arrow is switched off and replaced with our own
+   chevron, which we can position with breathing room from the border. Pair this
+   class with a right padding (pr-9/pr-10) so the text never runs under it. */
+select.select-field {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.875rem center;
+  background-size: 1rem 1rem;
+}
+.dark select.select-field {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+select.select-field::-ms-expand {
+  display: none;
 }
 
 /* Hide horizontal scrollbar (used by the blog category filter) */
