@@ -286,7 +286,7 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
         {/* Header */}
         <div className="px-8 pt-7 pb-6 border-b border-slate-100 dark:border-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-10 w-auto mb-5" />
+          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto mb-5" />
           <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">Welcome to Kruti.io</h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Let&apos;s set up your content strategy</p>
 

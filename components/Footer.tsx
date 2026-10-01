@@ -50,7 +50,7 @@ export default function Footer() {
           <div className="col-span-2">
             <Link href="/" className="inline-flex items-center" aria-label="Kruti.io home">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.png" alt="Kruti.io" className="h-12 w-auto" />
+              <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
             </Link>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-gray-500 dark:text-gray-400">
               AI-powered LinkedIn content - 30 strategic posts, professional images, and newsletters
