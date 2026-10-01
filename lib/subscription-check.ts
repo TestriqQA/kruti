@@ -155,3 +155,100 @@ export async function checkActiveSubscription(userId: string): Promise<{
 
   return { allowed: false, reason: "Your subscription is not active. Please subscribe to continue." };
 }
+
+// ── Entitlement state ────────────────────────────────────────────────────────
+
+export interface SubscriptionState {
+  /** True when the user may use the app. */
+  entitled: boolean;
+  /** True when the dashboard should be locked behind the paywall. */
+  locked: boolean;
+  status: string;
+  trialEnd: Date | null;
+  /** Whole days left on the trial (ceil), or null when not trialing. */
+  daysLeft: number | null;
+  /** Trialing with under 24h left - the final-day nudge. */
+  isLastDay: boolean;
+}
+
+/**
+ * The single source of truth for "can this user use the app right now".
+ *
+ * The dashboard layout, the paywall and the API guards all read this, so the
+ * rule lives in ONE place instead of being re-implemented per surface (which is
+ * how admins ended up seeing "trial expired" banners).
+ *
+ * Mirrors checkActiveSubscription, including the admin and lifetime-domain
+ * bypasses, and adds the trial countdown the UI needs.
+ */
+export async function getSubscriptionState(userId: string): Promise<SubscriptionState> {
+  const base = {
+    entitled: true,
+    locked: false,
+    status: "active",
+    trialEnd: null as Date | null,
+    daysLeft: null as number | null,
+    isLastDay: false,
+  };
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true, email: true },
+  });
+
+  // Admins and lifetime-free domains are never gated.
+  if (user?.role === "admin") return base;
+  if (isLifetimeFreeEmail(user?.email)) {
+    await ensureLifetimeSubscription(userId);
+    return base;
+  }
+
+  const sub = await prisma.subscription.findUnique({ where: { userId } });
+  if (!sub) {
+    // No record at all. This is an anomaly - the jwt callback creates a trial at
+    // sign-in - so do NOT paywall them: checkActiveSubscription creates the trial
+    // on the first real action. Locking here would strand a legitimate new user,
+    // and this read path deliberately has no side effects.
+    return { ...base, status: "none" };
+  }
+
+  // Paid, or cancelled but still inside the paid period.
+  if (sub.status === "active" || sub.status === "cancel_pending") {
+    return { ...base, status: sub.status, trialEnd: sub.trialEnd };
+  }
+
+  if (sub.status === "trialing") {
+    const now = Date.now();
+    const endMs = sub.trialEnd ? sub.trialEnd.getTime() : 0;
+    const msLeft = endMs - now;
+    if (msLeft > 0) {
+      return {
+        entitled: true,
+        locked: false,
+        status: "trialing",
+        trialEnd: sub.trialEnd,
+        daysLeft: Math.ceil(msLeft / 86400000),
+        // Final-day nudge fires inside the last 24 hours.
+        isLastDay: msLeft <= 86400000,
+      };
+    }
+    // Trial ran out.
+    return {
+      entitled: false,
+      locked: true,
+      status: "trialing",
+      trialEnd: sub.trialEnd,
+      daysLeft: 0,
+      isLastDay: false,
+    };
+  }
+
+  // canceled | past_due | unpaid | anything unknown - not entitled.
+  return {
+    ...base,
+    entitled: false,
+    locked: true,
+    status: sub.status,
+    trialEnd: sub.trialEnd,
+  };
+}

@@ -116,7 +116,10 @@ export default function Sidebar({ user }: SidebarProps) {
           {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           {theme === "dark" ? "Light Mode" : "Dark Mode"}
         </button>
+        {/* Exempt from the subscription lock: a locked user must always be able
+            to leave. See SubscriptionLock / ALLOW_WHEN_LOCKED. */}
         <button
+          data-allow-when-locked=""
           onClick={() => signOut({ callbackUrl: "/" })}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors w-full"
         >

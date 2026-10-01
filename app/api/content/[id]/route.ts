@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkActiveSubscription } from "@/lib/subscription-check";
 import { isImageCategoryId } from "@/lib/image-categories";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -20,6 +21,13 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sub = await checkActiveSubscription(session.user.id);
+  if (!sub.allowed) {
+    return NextResponse.json(
+      { error: sub.reason, subscriptionRequired: true },
+      { status: 403 }
+    );
+  }
 
   const body = await req.json();
 
@@ -79,6 +87,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const sub = await checkActiveSubscription(session.user.id);
+  if (!sub.allowed) {
+    return NextResponse.json(
+      { error: sub.reason, subscriptionRequired: true },
+      { status: 403 }
+    );
+  }
 
   const existing = await prisma.post.findFirst({
     where: { id: params.id, plan: { userId: session.user.id } },
