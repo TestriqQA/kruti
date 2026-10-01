@@ -321,7 +321,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
             <select
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="select-field w-full pl-4 pr-11 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
             >
               <option value="">Select industry</option>
               {INDUSTRIES.map((ind) => (
@@ -767,7 +767,7 @@ function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: str
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl max-h-64 overflow-hidden flex flex-col">
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-[#0D131F] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl max-h-64 overflow-hidden flex flex-col">
           <div className="p-2 border-b border-slate-100 dark:border-white/10">
             <input
               type="text"

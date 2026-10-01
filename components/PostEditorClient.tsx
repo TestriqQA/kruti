@@ -1061,7 +1061,7 @@ export default function PostEditorClient({
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               disabled={post.postedToLinkedIn || isTrialExpired}
-              className="text-sm px-3 py-2 border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="select-field text-sm pl-3 pr-10 py-2 border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
               title={
                 post.postedToLinkedIn
                   ? "Published posts cannot change status"
@@ -1388,7 +1388,7 @@ export default function PostEditorClient({
                 <select
                   value={imageStyle}
                   onChange={(e) => handleImageStyleChange(e.target.value)}
-                  className="w-full text-sm rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200 px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="select-field w-full text-sm rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.04] text-slate-700 dark:text-slate-200 pl-2.5 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
                 >
                   {IMAGE_CATEGORY_GROUPS.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -1687,7 +1687,7 @@ export default function PostEditorClient({
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-gray-100"
+                className="select-field w-full pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-gray-100"
                 disabled={post.postedToLinkedIn || isTrialExpired}
               >
                 <option value="draft">Draft</option>

@@ -196,7 +196,7 @@ function Brand() {
   return (
     <a href="#overview" className="flex items-center">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo.png" alt="Kruti.io" className="h-20 w-auto" />
+      <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
     </a>
   );
 }
@@ -359,7 +359,7 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
 
       {/* ── Navbar ───────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-[#F6F8FB]/80 backdrop-blur-md dark:border-white/10 dark:bg-[#0A0E14]/80">
-        <nav className="mx-auto flex h-24 max-w-7xl items-center justify-between px-5 sm:px-8">
+        <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
           <Brand />
 
           {/* Desktop links */}
@@ -402,7 +402,7 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
                   key={l.label}
                   href={l.href}
                   onClick={() => setMenuOpen(false)}
-                  className="rounded-lg px-3 py-2.5 text-base font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-white/5"
+                  className="rounded-lg px-3 py-2.5 text-base font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-blue-300"
                 >
                   {l.label}
                 </a>

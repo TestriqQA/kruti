@@ -110,10 +110,10 @@ function Navbar() {
   const [open, setOpen] = useState(false);
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/70 bg-[#F6F8FB]/80 backdrop-blur-md dark:border-white/10 dark:bg-[#0A0E14]/80">
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8">
+      <nav className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 sm:px-8">
         <Link href="/" className="flex items-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-12 w-auto" />
+          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
         </Link>
 
         <div className="hidden items-center gap-8 lg:flex">
@@ -154,7 +154,7 @@ function Navbar() {
                 key={l.label}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="rounded-lg px-3 py-2.5 text-base font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-white/5"
+                className="rounded-lg px-3 py-2.5 text-base font-medium text-slate-700 hover:bg-blue-50 hover:text-blue-700 dark:text-slate-200 dark:hover:bg-white/5 dark:hover:text-blue-300"
               >
                 {l.label}
               </Link>
