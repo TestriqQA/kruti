@@ -93,7 +93,7 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
         <button
           onClick={handleGenerate}
           disabled={generating || isTrialExpired}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 disabled:opacity-70 shadow-md shadow-blue-200"
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 disabled:opacity-70"
           title={isTrialExpired ? "Subscribe to generate newsletters" : undefined}
         >
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
