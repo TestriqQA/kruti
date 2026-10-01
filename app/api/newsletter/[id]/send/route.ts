@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { checkActiveSubscription } from "@/lib/subscription-check";
 import { sendNewsletterEmail, type NewsletterContent } from "@/lib/email";
 
 // POST /api/newsletter/:id/send - send newsletter immediately
@@ -12,6 +13,13 @@ export async function POST(
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const sub = await checkActiveSubscription(session.user.id);
+  if (!sub.allowed) {
+    return NextResponse.json(
+      { error: sub.reason, subscriptionRequired: true },
+      { status: 403 }
+    );
   }
 
   const newsletter = await prisma.newsletter.findUnique({
