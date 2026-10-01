@@ -59,17 +59,22 @@ const authMiddleware = withAuth(
         return NextResponse.next();
       }
 
+      // Entitlement, from the cookie claims. These can lag the database, so this
+      // is only the coarse routing rule - the dashboard layout re-checks against
+      // the DB and is what actually decides whether to lock the UI.
       const status = token.subscriptionStatus as string | undefined;
-      if (!status || (status !== "active" && status !== "trialing" && status !== "cancel_pending")) {
-        return NextResponse.redirect(new URL("/subscribe", req.url));
+      let entitled = status === "active" || status === "cancel_pending";
+      if (status === "trialing") {
+        // A trial with no end date is treated as running (matches the old rule).
+        entitled = !token.trialEnd || new Date(token.trialEnd as string) > new Date();
       }
 
-      // If trialing, check if the trial has actually expired
-      if (status === "trialing" && token.trialEnd) {
-        const trialEndDate = new Date(token.trialEnd as string);
-        if (trialEndDate < new Date()) {
-          return NextResponse.redirect(new URL("/subscribe", req.url));
-        }
+      // Not entitled: /dashboard still renders (it shows the paywall lock), but
+      // every other page funnels back to it so there is nowhere to navigate.
+      // API routes are deliberately excluded - they must answer with JSON from
+      // their own guard, not an HTML redirect that would break fetch().
+      if (!entitled && !pathname.startsWith("/api/") && pathname !== "/dashboard") {
+        return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }
 
