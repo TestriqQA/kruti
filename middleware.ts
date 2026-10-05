@@ -73,7 +73,14 @@ const authMiddleware = withAuth(
       // every other page funnels back to it so there is nowhere to navigate.
       // API routes are deliberately excluded - they must answer with JSON from
       // their own guard, not an HTML redirect that would break fetch().
-      if (!entitled && !pathname.startsWith("/api/") && pathname !== "/dashboard") {
+      // /support is exempt alongside /dashboard: a lapsed user still needs a way
+      // to reach support. Exact match keeps any /support/* subroute closed.
+      if (
+        !entitled &&
+        !pathname.startsWith("/api/") &&
+        pathname !== "/dashboard" &&
+        pathname !== "/support"
+      ) {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     }

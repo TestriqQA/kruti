@@ -62,6 +62,17 @@
   scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
+/* Reserve the scrollbar gutter on the app's scroll containers.
+   The scrollbar here is a classic one that occupies layout width (10px, set
+   above), not an overlay. So the moment a page grows past the viewport the
+   scrollbar appears and silently narrows the content box, shifting the whole
+   layout sideways - measured at exactly 10px on the two-column /support grid
+   every time a ticket was folded open. Reserving the gutter up front costs the
+   same 10px permanently and makes the width constant instead. */
+.scroll-gutter-stable {
+  scrollbar-gutter: stable;
+}
+
 /* Native dropdown options: Chrome/Edge on Windows honour these on the popup. */
 .dark select option,
 .dark select optgroup {

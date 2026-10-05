@@ -71,6 +71,7 @@ model User {
   contentPlans        ContentPlan[]
   newsletters         Newsletter[]
   subscription        Subscription?
+  supportTickets      SupportTicket[]
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
 }
@@ -169,4 +170,45 @@ model AppSetting {
   key       String   @id
   value     String?  @db.Text
   updatedAt DateTime @updatedAt
+}
+
+/// A support request raised by a user from /support. Deliberately flat: one
+/// description, a few screenshots, one status. No threading, no replies.
+model SupportTicket {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description String   @db.Text
+  /// JSON array of { url, name, size } for the uploaded screenshots.
+  /// Blobs live under the "support/" prefix, which the image-cleanup cron
+  /// deliberately never sweeps (see lib/image-cleanup.ts).
+  screenshots String?  @db.Text
+  status      String   @default("open") // open | in_progress | closed
+  adminNote   String?  @db.Text
+  replies     SupportReply[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// An admin's reply on a ticket.
+///
+/// Deliberately short-lived: a reply is deleted 3 days after it is written,
+/// whether or not the user read it (runSupportCleanup in lib/scheduler.ts, wired
+/// to a daily cron). Queries also filter by age so an expired reply disappears
+/// the moment it is 3 days old, without waiting for the sweep.
+model SupportReply {
+  id        String        @id @default(cuid())
+  ticketId  String
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  message   String        @db.Text
+  /// Null until the user opens the ticket. Only drives the unread badge - it
+  /// never affects when the reply is deleted.
+  readAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([ticketId])
+  @@index([createdAt])
 }
