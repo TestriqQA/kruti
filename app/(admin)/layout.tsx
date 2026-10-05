@@ -18,7 +18,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex h-screen bg-gray-50 dark:bg-gray-950">
       <AdminSidebar user={session.user} imagePromptsRevealUntil={imagePromptsRevealUntil} />
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto scroll-gutter-stable">
         <div className="max-w-7xl mx-auto w-full p-6">{children}</div>
       </main>
     </div>

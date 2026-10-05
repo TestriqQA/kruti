@@ -10,6 +10,7 @@ import {
   BarChart3,
   Mail,
   Settings,
+  LifeBuoy,
   LogOut,
   Shield,
   Moon,
@@ -26,6 +27,9 @@ const navItems = [
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/newsletter", label: "Newsletter", icon: Mail },
   { href: "/settings", label: "Settings", icon: Settings },
+  // allowWhenLocked: a user whose trial ended is exactly the user who needs to
+  // raise a ticket, so this link must survive the paywall lock.
+  { href: "/support", label: "Help & Support", icon: LifeBuoy, allowWhenLocked: true },
 ];
 
 interface SidebarProps {
@@ -35,9 +39,11 @@ interface SidebarProps {
     image?: string | null;
     role?: string;
   };
+  /** Unread, unexpired admin replies - badged on the Support link. */
+  supportUnread?: number;
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, supportUnread = 0 }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
@@ -74,6 +80,7 @@ export default function Sidebar({ user }: SidebarProps) {
             <Link
               key={item.href}
               href={item.href}
+              {...(item.allowWhenLocked ? { "data-allow-when-locked": "" } : {})}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                 active
@@ -83,6 +90,11 @@ export default function Sidebar({ user }: SidebarProps) {
             >
               <item.icon className={cn("w-4 h-4", active ? "text-blue-600 dark:text-blue-400" : "")} />
               {item.label}
+              {item.href === "/support" && supportUnread > 0 && (
+                <span className="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-semibold text-center">
+                  {supportUnread}
+                </span>
+              )}
             </Link>
           );
         })}

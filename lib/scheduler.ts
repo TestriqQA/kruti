@@ -3,6 +3,7 @@ import { postToLinkedIn } from "@/lib/linkedin-post";
 import { getTokenStatus, refreshAccessToken } from "@/lib/linkedin-token";
 import { sendNewsletterEmail, sendTrialReminderEmail, type NewsletterContent } from "@/lib/email";
 import { cleanupOldImages } from "@/lib/image-cleanup";
+import { replyCutoff } from "@/lib/support";
 
 // ─── Auto-Post Job ──────────────────────────────────────────────────────────
 // Finds posts with status "ready" that are due (past-due or within the next
@@ -287,3 +288,20 @@ export async function runTokenRefresh(): Promise<{ refreshed: number; failed: nu
   return { refreshed, failed };
 }
 
+
+// ─── Support Reply Cleanup Job ───────────────────────────────────────────────
+// Admin replies are deliberately short-lived: each one is deleted REPLY_TTL_DAYS
+// after it was written, whether or not the user ever read it. Read state only
+// drives the unread badge; it never keeps a reply alive.
+export async function runSupportReplyCleanup(): Promise<{ deleted: number }> {
+  const cutoff = replyCutoff();
+
+  const { count } = await prisma.supportReply.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+
+  if (count > 0) {
+    console.log(`[Cron:support-cleanup] Deleted ${count} expired admin repl${count === 1 ? "y" : "ies"}`);
+  }
+  return { deleted: count };
+}

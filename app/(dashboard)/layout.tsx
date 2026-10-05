@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import Sidebar from "@/components/Sidebar";
 import Link from "next/link";
 import { getSubscriptionState } from "@/lib/subscription-check";
+import { prisma } from "@/lib/prisma";
+import { replyCutoff } from "@/lib/support";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import TrialEndingPopup from "@/components/TrialEndingPopup";
 
@@ -31,6 +33,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // whether the UI gets locked.
   const state = await getSubscriptionState(session.user.id);
 
+  // Unread admin replies that have not expired yet - drives the sidebar badge so
+  // the user notices a reply without having to open /support.
+  const supportUnread = await prisma.supportReply.count({
+    where: {
+      readAt: null,
+      createdAt: { gte: replyCutoff() },
+      ticket: { userId: session.user.id },
+    },
+  });
+
   const showTrialBanner =
     state.status === "trialing" &&
     !state.locked &&
@@ -49,8 +61,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         id="app-shell"
         className="flex h-screen bg-[#F6F8FB] text-slate-900 antialiased dark:bg-[#0A0E14] dark:text-slate-100"
       >
-        <Sidebar user={session.user} />
-        <main className="flex-1 overflow-y-auto flex flex-col">
+        <Sidebar user={session.user} supportUnread={supportUnread} />
+        <main className="flex-1 overflow-y-auto scroll-gutter-stable flex flex-col">
           {showTrialBanner && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/50 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
               <p className="text-sm text-amber-800 dark:text-amber-300">

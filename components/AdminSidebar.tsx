@@ -11,6 +11,7 @@ import {
   FileText,
   Server,
   LineChart,
+  LifeBuoy,
   LogOut,
   ArrowLeft,
   Shield,
@@ -29,6 +30,7 @@ const adminNavItems = [
   { href: "/admin/content", label: "Content Stats", icon: FileText, exact: false },
   { href: "/admin/analytics", label: "Usage & Cost", icon: LineChart, exact: false },
   { href: "/admin/system", label: "System", icon: Server, exact: false },
+  { href: "/admin/tickets", label: "Support Tickets", icon: LifeBuoy, exact: false },
 ];
 
 interface AdminSidebarProps {
