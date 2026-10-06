@@ -1,7 +1,8 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { blogPosts, getBlogPost } from "@/lib/blog-data";
+import { blogPosts, getBlogPost, postModifiedDate } from "@/lib/blog-data";
+import { absoluteUrl, OG_IMAGE_PATH } from "@/lib/site-url";
 import { ArrowLeft, Clock, Tag, Calendar, User, ChevronRight } from "lucide-react";
 import SignInButton from "@/components/SignInButton";
 
@@ -17,21 +18,38 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = getBlogPost(params.slug);
   if (!post) return { title: "Post Not Found" };
 
+  // D-04: no `keywords` here on purpose. Google has ignored the meta keywords
+  // tag since 2009 and it only advertises the target terms to competitors.
+  // post.keywords is still used for on-page and internal-linking decisions.
+  const url = absoluteUrl(`/blog/${post.slug}`);
+
+  // NOTE: post.image covers are 2752x1536, not the 1200x630 declared below.
+  // D-21 (generated share cards) is the proper fix and is still outstanding.
+  const image = absoluteUrl(post.image || OG_IMAGE_PATH);
+
   return {
     title: `${post.title} - Kruti.io Blog`,
     description: post.description,
-    keywords: post.keywords.join(", "),
     authors: [{ name: post.author }],
     openGraph: {
       title: post.title,
       description: post.description,
       type: "article",
       publishedTime: post.date,
+      // article:modified_time - how search engines learn a post was revised.
+      modifiedTime: postModifiedDate(post),
       authors: [post.author],
-      url: `https://kruti.io/blog/${post.slug}`,
+      url,
+      images: [{ url: image, width: 1200, height: 630, alt: post.title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.title,
+      description: post.description,
+      images: [image],
     },
     alternates: {
-      canonical: `https://kruti.io/blog/${post.slug}`,
+      canonical: url,
     },
   };
 }
@@ -131,21 +149,44 @@ export default function BlogPostPage({ params }: Props) {
   const currentIndex = blogPosts.findIndex((p) => p.slug === post.slug);
   const relatedPosts = blogPosts.filter((_, i) => i !== currentIndex).slice(0, 3);
 
-  // JSON-LD structured data for SEO
+  // ── D-05 / S-03: Article + BreadcrumbList ─────────────────────────────────
+  // Was BlogPosting; S-03 specifies Article. Both are valid schema.org types,
+  // but matching the spec keeps the Rich Results expectations predictable.
+  const canonical = absoluteUrl(`/blog/${post.slug}`);
+
+  // S-03 asks for a Person author with a name, bio and LinkedIn URL, and says
+  // explicitly not to use "Kruti.io Team". Every post currently carries exactly
+  // that string, and the real author details are F-08, still with the founder.
+  // So the type stays Organization until F-08 lands: a Person with no URL and a
+  // placeholder name would be worse than an honest Organization credit.
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "BlogPosting",
+    "@type": "Article",
     headline: post.title,
     description: post.description,
+    image: absoluteUrl(post.image || OG_IMAGE_PATH),
     datePublished: post.date,
+    dateModified: postModifiedDate(post),
     author: { "@type": "Organization", name: post.author },
     publisher: {
       "@type": "Organization",
       name: "Kruti.io",
-      url: "https://kruti.io",
+      logo: { "@type": "ImageObject", url: absoluteUrl("/logo.png") },
     },
-    mainEntityOfPage: `https://kruti.io/blog/${post.slug}`,
-    keywords: post.keywords.join(", "),
+    mainEntityOfPage: canonical,
+  };
+
+  // Mirrors the visible breadcrumb trail rendered further down this page, which
+  // is what S-03 requires - breadcrumb markup that disagrees with the visible
+  // trail is a Rich Results error.
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: absoluteUrl("/") },
+      { "@type": "ListItem", position: 2, name: "Blog", item: absoluteUrl("/blog") },
+      { "@type": "ListItem", position: 3, name: post.title, item: canonical },
+    ],
   };
 
   return (
@@ -153,6 +194,10 @@ export default function BlogPostPage({ params }: Props) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       {/* Header */}

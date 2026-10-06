@@ -11,6 +11,20 @@ export interface BlogPost {
   /** Optional cover image URL. When omitted, the UI renders a designed
    *  category-themed gradient cover instead. */
   image?: string;
+  /**
+   * Date of the last substantive edit, as YYYY-MM-DD.
+   *
+   * Drives sitemap <lastmod> (D-02), article:modified_time (D-04) and the
+   * Article schema's dateModified (D-05). Left unset on a post that has not
+   * been revised since publication, in which case `date` is used - claiming a
+   * post was updated when it was not is the thing to avoid here.
+   */
+  updated?: string;
+}
+
+/** The date to advertise as last-modified. Falls back to the publish date. */
+export function postModifiedDate(post: BlogPost): string {
+  return post.updated ?? post.date;
 }
 
 export const blogPosts: BlogPost[] = [

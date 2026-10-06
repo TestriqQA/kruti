@@ -1,7 +1,20 @@
+import { buildRedirects, buildCanonicalHostRedirect } from "./lib/redirects.mjs";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     instrumentationHook: true,
+  },
+  /**
+   * D-10 (one canonical hostname) and D-19 (redirect map).
+   *
+   * Order matters: the host redirect runs first, so a request to
+   * www.kruti.io/blog/old-slug lands on kruti.io/blog/old-slug and is then
+   * redirected on to the new slug. Two hops only ever happen for a www request
+   * to a renamed URL; everything else is a single 301.
+   */
+  async redirects() {
+    return [...buildCanonicalHostRedirect(), ...buildRedirects()];
   },
   images: {
     remotePatterns: [
