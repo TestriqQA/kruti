@@ -204,8 +204,13 @@ model SupportReply {
   ticketId  String
   ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   message   String        @db.Text
-  /// Null until the user opens the ticket. Only drives the unread badge - it
-  /// never affects when the reply is deleted.
+  /// Who wrote it: "admin" | "user". Defaults to "admin" on purpose - every row
+  /// that existed before the conversation became two-way was an admin reply, so
+  /// the default backfills them correctly without a data migration.
+  authorRole String       @default("admin")
+  /// When the OTHER party read it. An admin reply is read by the user; a user
+  /// reply is read by an admin. Only drives the unread badges - it never affects
+  /// when the reply is deleted.
   readAt    DateTime?
   createdAt DateTime      @default(now())
 

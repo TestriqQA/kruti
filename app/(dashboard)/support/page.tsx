@@ -37,7 +37,7 @@ export default async function SupportPage() {
           // disappears the moment it turns 3 days old.
           where: { createdAt: { gte: cutoff } },
           orderBy: { createdAt: "asc" },
-          select: { id: true, message: true, createdAt: true, readAt: true },
+          select: { id: true, message: true, createdAt: true, readAt: true, authorRole: true },
         },
       },
     }),
