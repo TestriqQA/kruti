@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import LegalContact from "@/components/LegalContact";
 import LegalSection from "@/components/LegalSection";
 
 export const metadata: Metadata = {
@@ -27,7 +28,7 @@ export default function CookiePolicyPage() {
         </p>
         <p>
           This Cookie Policy explains how <strong>Kruti.io</strong>, operated by{" "}
-          <strong>Cinute Digital Pvt. Ltd.</strong>, uses cookies and similar technologies on
+          <strong>Cinute InfoMedia</strong>, uses cookies and similar technologies on
           kruti.io.
         </p>
       </LegalSection>
@@ -50,20 +51,32 @@ export default function CookiePolicyPage() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               <tr>
-                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">next-auth.session-token</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Maintains your authenticated session using a secure JWT token</td>
+                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">__Secure-next-auth.session-token</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Maintains your authenticated session using a signed JWT</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Essential</td>
-                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Session / 30 days</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">24 hours</td>
               </tr>
               <tr>
-                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">next-auth.csrf-token</td>
+                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">__Host-next-auth.csrf-token</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Protects against cross-site request forgery (CSRF) attacks</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Essential</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Session</td>
               </tr>
               <tr>
-                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">next-auth.callback-url</td>
+                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">__Secure-next-auth.callback-url</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Stores the redirect URL during the LinkedIn OAuth sign-in flow</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Essential</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Session</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">__Secure-next-auth.state</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Guards the LinkedIn OAuth exchange against interception; set on each sign-in attempt</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Essential</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">15 minutes</td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">site-gate</td>
+                <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Remembers that you passed the access gate, where one is enabled on a pre-release build</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Essential</td>
                 <td className="px-3 py-2 text-gray-600 dark:text-gray-400">Session</td>
               </tr>
@@ -79,9 +92,11 @@ export default function CookiePolicyPage() {
         </p>
         <ul className="list-disc pl-5 space-y-2">
           <li>
-            <strong>Razorpay (Payment Processing):</strong> When the Razorpay checkout modal
-            opens for subscription payment, Razorpay may set cookies for session management,
-            fraud detection, and payment processing. These cookies are governed by{" "}
+            <strong>Razorpay (Payment Processing):</strong> Razorpay&rsquo;s checkout script loads
+            on dashboard pages where a subscription action is available &mdash; not only once you
+            open the payment modal &mdash; and may set cookies for session management, fraud
+            detection and payment processing from that point. Loading the script also discloses
+            your IP address and browser to Razorpay. These cookies are governed by{" "}
             <a href="https://razorpay.com/privacy/" target="_blank" rel="noopener noreferrer" className="text-[#0A66C2] dark:text-blue-400 hover:underline">
               Razorpay&rsquo;s Privacy Policy
             </a>.
@@ -96,7 +111,7 @@ export default function CookiePolicyPage() {
           </li>
         </ul>
         <p>
-          <strong>Note:</strong> Google AI API calls (Gemini and Imagen) are made server-side and
+          <strong>Note:</strong> Google AI API calls (Gemini) are made server-side and
           do not result in any client-side cookies being set by Google.
         </p>
       </LegalSection>
@@ -107,16 +122,26 @@ export default function CookiePolicyPage() {
         </p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            <strong>Theme preference:</strong> Your dark mode or light mode selection is stored
-            locally so it persists between visits.
+            <strong>Theme preference</strong> (<code className="text-xs">theme</code>): your dark
+            or light mode selection, so it persists between visits.
           </li>
           <li>
-            <strong>Application state:</strong> Temporary UI state data (e.g., sidebar collapse
-            state) may be stored in memory or local storage for a smoother experience.
+            <strong>Onboarding draft</strong>: while you are completing onboarding, your answers
+            are saved in local storage so you do not lose them if you close the tab. This includes
+            the professional details you type &mdash; your headline, industry, summary, skills,
+            tone and target audience &mdash; and it is cleared once onboarding is submitted.
+          </li>
+          <li>
+            <strong>Trial notice dismissal</strong>: a record that you dismissed the
+            trial-ending notice, so it is not shown again the same day.
           </li>
         </ul>
         <p>
-          Local storage data does not leave your device and is not transmitted to our servers.
+          These items are written by your browser and are not themselves transmitted to us.
+          Be aware, though, that the onboarding answers held in the draft above are the same
+          answers you then submit to us when you finish onboarding, and which we send to
+          Google&rsquo;s Gemini API to generate your content. The local copy is a convenience,
+          not a guarantee that the information stays on your device.
         </p>
       </LegalSection>
 
@@ -187,13 +212,7 @@ export default function CookiePolicyPage() {
           If you have questions about our use of cookies, please contact us:
         </p>
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mt-2 space-y-1.5">
-          <p><strong>Cinute Digital Pvt. Ltd.</strong></p>
-          <p>
-            Email:{" "}
-            <a href="mailto:support@kruti.io" className="text-[#0A66C2] dark:text-blue-400 hover:underline">
-              support@kruti.io
-            </a>
-          </p>
+          <LegalContact />
           <p>Website: kruti.io</p>
         </div>
       </LegalSection>

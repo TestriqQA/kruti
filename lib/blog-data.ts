@@ -1113,7 +1113,9 @@ What do you actually get for the price? Are there usage limits that matter for y
 
 ### Key Features That Differentiate
 
-The best tools in 2026 go beyond basic text generation:
+The best tools in 2026 go beyond basic text generation. The list below describes the
+category as a whole - no single tool offers all of it, Kruti.io included, so treat it as a
+checklist to score tools against rather than a description of any one product:
 
 - **AI-powered image generation** - Create custom visuals for your posts
 - **Content calendar management** - Plan weeks of content at a glance
@@ -1121,6 +1123,9 @@ The best tools in 2026 go beyond basic text generation:
 - **Engagement prediction** - Estimate how a post will perform before publishing
 - **Multi-language support** - Create content in your audience's language
 - **Team collaboration** - Multiple users managing one brand's content
+
+For the record, Kruti.io covers the first three. It does not predict engagement, does not
+offer multi-language generation, and is a single-user tool with no team seats.
 
 ### Why Safety Matters
 

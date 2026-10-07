@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import LegalContact from "@/components/LegalContact";
 import Link from "next/link";
 import LegalSection from "@/components/LegalSection";
 
@@ -23,7 +24,7 @@ export default function RefundPolicyPage() {
       <LegalSection id="overview" title="1. Overview">
         <p>
           This Refund Policy applies to all subscription payments for <strong>Kruti.io</strong>,
-          operated by <strong>Cinute Digital Pvt. Ltd.</strong> All payments are processed securely
+          operated by <strong>Cinute InfoMedia</strong> All payments are processed securely
           through <strong>Razorpay</strong>.
         </p>
         <p>
@@ -218,13 +219,7 @@ export default function RefundPolicyPage() {
           For any questions about refunds, cancellations, or billing, please contact us:
         </p>
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mt-2 space-y-1.5">
-          <p><strong>Cinute Digital Pvt. Ltd.</strong></p>
-          <p>
-            Email:{" "}
-            <a href="mailto:support@kruti.io" className="text-[#0A66C2] dark:text-blue-400 hover:underline">
-              support@kruti.io
-            </a>
-          </p>
+          <LegalContact />
           <p>Website: kruti.io</p>
         </div>
         <p className="mt-3 text-xs text-gray-500 dark:text-gray-500">

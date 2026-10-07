@@ -1,5 +1,6 @@
 "use client";
 
+import DeleteAccountSection from "@/components/DeleteAccountSection";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
@@ -739,6 +740,10 @@ export default function SettingsClient({ user }: { user: User | null }) {
           {saved ? "All changes saved!" : "Save All Settings"}
         </button>
       </div>
+
+      {/* Erasure (DPDP s.12(3)). Last on the page, visually separated, and
+          high-friction by design - it is irreversible. */}
+      <DeleteAccountSection />
     </div>
   );
 }

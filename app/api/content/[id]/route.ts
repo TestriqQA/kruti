@@ -87,13 +87,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const sub = await checkActiveSubscription(session.user.id);
-  if (!sub.allowed) {
-    return NextResponse.json(
-      { error: sub.reason, subscriptionRequired: true },
-      { status: 403 }
-    );
-  }
+
+  // Deliberately NOT subscription-gated.
+  //
+  // This used to call checkActiveSubscription and 403 before deleting, which
+  // meant a user whose trial had lapsed could not delete their own posts. That
+  // is a direct defect under DPDP s.12(3) (right to erasure) - a lapsed
+  // subscription cannot be a reason to hold someone's data hostage - and it is
+  // user-hostile regardless of the law. The paywall belongs on CREATING
+  // content, not on removing it. Ownership is still enforced below.
 
   const existing = await prisma.post.findFirst({
     where: { id: params.id, plan: { userId: session.user.id } },
