@@ -24,8 +24,11 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
   }
 
+  // Only ADMIN replies. readAt means "read by the other party", so a user
+  // cannot mark their own messages read - doing so would clear the admin's
+  // "new reply from user" signal from the wrong side of the conversation.
   const { count } = await prisma.supportReply.updateMany({
-    where: { ticketId: ticket.id, readAt: null },
+    where: { ticketId: ticket.id, readAt: null, authorRole: "admin" },
     data: { readAt: new Date() },
   });
 

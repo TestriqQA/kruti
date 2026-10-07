@@ -40,8 +40,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const reply = await prisma.supportReply.create({
-    data: { ticketId: ticket.id, message },
-    select: { id: true, message: true, createdAt: true, readAt: true },
+    data: { ticketId: ticket.id, message, authorRole: "admin" },
+    select: { id: true, message: true, createdAt: true, readAt: true, authorRole: true },
   });
 
   // Replying on an untouched ticket moves it along, so the queue reflects reality.

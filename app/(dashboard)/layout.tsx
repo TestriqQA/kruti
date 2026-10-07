@@ -50,6 +50,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
     supportUnread = await prisma.supportReply.count({
       where: {
         readAt: null,
+        // Admin replies only. Counting the user's own replies here would badge
+        // their sidebar for messages they wrote themselves.
+        authorRole: "admin",
         createdAt: { gte: replyCutoff() },
         ticket: { userId: session.user.id },
       },
@@ -93,7 +96,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
               </Link>
             </div>
           )}
-          <div className="flex-1 max-w-6xl mx-auto w-full p-6">{children}</div>
+          {/* max-w-7xl, matching the admin shell. The dashboard was capped a
+              size narrower at 6xl, which left visible dead space either side on
+              any normal laptop screen. */}
+          <div className="flex-1 max-w-7xl mx-auto w-full p-6">{children}</div>
           <footer className="flex-shrink-0 border-t border-slate-200 dark:border-white/10 px-6 py-3">
             <nav className="flex justify-center gap-4">
               <Link href="/privacy" className="text-xs text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Privacy</Link>
