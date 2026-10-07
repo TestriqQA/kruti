@@ -15,13 +15,16 @@ export default async function AdminTicketsPage() {
         screenshots: true,
         status: true,
         createdAt: true,
+        // Drives the "Last updated" column. Prisma maintains it via @updatedAt,
+        // so it moves on a status change or an admin reply without us setting it.
+        updatedAt: true,
         user: { select: { name: true, email: true, image: true } },
         replies: {
           // Same age filter the user sees, so admins are not looking at a reply
           // the user no longer has.
           where: { createdAt: { gte: cutoff } },
           orderBy: { createdAt: "asc" },
-          select: { id: true, message: true, createdAt: true, readAt: true },
+          select: { id: true, message: true, createdAt: true, readAt: true, authorRole: true },
         },
       },
     }),
@@ -34,6 +37,7 @@ export default async function AdminTicketsPage() {
       initialTickets={tickets.map((t) => ({
         ...t,
         createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
         replies: t.replies.map((r) => ({
           ...r,
           createdAt: r.createdAt.toISOString(),

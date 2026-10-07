@@ -12,6 +12,8 @@ import {
   MessageSquare,
   Clock,
   ChevronDown,
+  Check,
+  CheckCheck,
   CheckCircle2,
   Lock,
 } from "lucide-react";
@@ -29,6 +31,9 @@ import {
   CLOSED_STATUS,
   formatBytes,
   parseAttachments,
+  isUserReply,
+  groupConversation,
+  MAX_REPLY_CHARS,
   isTicketClosed,
   type TicketAttachment,
 } from "@/lib/support";
@@ -36,6 +41,7 @@ import {
 interface Reply {
   id: string;
   message: string;
+  authorRole: string;
   createdAt: string;
   readAt: string | null;
 }
@@ -59,6 +65,10 @@ const STATUS_STYLE: Record<string, string> = {
   in_progress: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
   closed: "bg-slate-100 text-slate-600 dark:bg-white/[0.08] dark:text-slate-400",
 };
+
+/** Time only - the date lives in the separator above the group. */
+const clockTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 
 const shortDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -98,6 +108,8 @@ export default function SupportClient({
   // Closing is irreversible, so the button asks once before it fires.
   const [confirmCloseId, setConfirmCloseId] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyingId, setReplyingId] = useState<string | null>(null);
 
   const shown = filter === "all" ? tickets : tickets.filter((t) => t.status === filter);
 
@@ -108,8 +120,10 @@ export default function SupportClient({
   // Tracked per REPLY, not per ticket. Latching on the ticket id meant the
   // second and every later reply on a ticket the user had already opened was
   // never marked read, so the sidebar badge kept counting it forever.
+  // Admin replies only - the user's own messages are never "unread" to them.
   const unreadCount = (t: Ticket) =>
-    t.replies.filter((r) => !r.readAt && !readLocally.has(r.id)).length;
+    t.replies.filter((r) => !isUserReply(r.authorRole) && !r.readAt && !readLocally.has(r.id))
+      .length;
 
   useEffect(() => {
     return () => picked.forEach((p) => URL.revokeObjectURL(p.preview));
@@ -128,8 +142,10 @@ export default function SupportClient({
     const t = tickets.find((x) => x.id === openId);
     if (!t) return;
 
+    // Admin replies only. The user's own messages stay unread until an admin
+    // reads them, so firing on those would clear the admin's "new reply" signal.
     const pending = t.replies.filter(
-      (r) => !r.readAt && !attemptedRef.current.has(r.id)
+      (r) => !isUserReply(r.authorRole) && !r.readAt && !attemptedRef.current.has(r.id)
     );
     if (pending.length === 0) return;
 
@@ -254,6 +270,37 @@ export default function SupportClient({
     }
   }
 
+  async function handleReply(id: string) {
+    const message = (replyDrafts[id] || "").trim();
+    if (message.length < 2 || replyingId) return;
+
+    setReplyingId(id);
+    try {
+      const res = await fetch(`/api/support/tickets/${id}/reply`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not send your reply.");
+
+      // A dropped session is answered with a 307 to sign-in, which fetch()
+      // follows and reports as a 200 of HTML. Confirm the route really answered.
+      if (!data?.reply?.id) {
+        throw new Error("Your session has expired. Reload the page and sign in again.");
+      }
+
+      setReplyDrafts((prev) => ({ ...prev, [id]: "" }));
+      toast("Reply sent.", "success");
+      // The transcript comes from server props, so a refresh is what paints it.
+      router.refresh();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not send your reply.", "error");
+    } finally {
+      setReplyingId(null);
+    }
+  }
+
   async function handleClose(id: string) {
     setClosingId(id);
     try {
@@ -299,7 +346,13 @@ export default function SupportClient({
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+      {/* 60/40: form left, tickets right.
+          The tickets column used to be pinned at a fixed 360px, so every pixel
+          of extra width went to the form and the conversation stayed cramped.
+          Proportional columns mean it now grows with the viewport.
+          minmax(0,...) on both, so a long unbroken string in either column
+          cannot blow the grid out past its track. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         {/* ── Left: raise a ticket ─────────────────────────────── */}
         <div className="space-y-6 min-w-0">
           <section className="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl p-5">
@@ -574,35 +627,145 @@ export default function SupportClient({
                     <div className="px-4 pb-4 border-t border-slate-200/70 dark:border-white/10 pt-3 space-y-3">
                       {t.replies.length === 0 ? (
                         <p className="text-xs text-slate-400 dark:text-slate-500">
-                          No reply yet. We will answer here.
+                          No reply yet. We will answer here &mdash; and you can add anything you
+                          forgot using the box below.
                         </p>
                       ) : (
-                        /* Every reply sits in ONE box: a single expiry notice at the
-                           top, then the messages separated by a hairline, instead of
-                           a bordered card and a repeated warning per message. */
+                        /* The whole conversation in ONE box: a single expiry notice
+                           at the top, then the messages as chat bubbles. */
                         <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.06] overflow-hidden">
                           {/* ONE heading for the whole box - not repeated per message. */}
                           <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[0.04]">
                             <MessageSquare className="w-3 h-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                             <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
-                              Kruti.io support
+                              Conversation
                             </span>
                             <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
                               {t.replies.length} message{t.replies.length === 1 ? "" : "s"}
                             </span>
                           </div>
 
-                          <div className="divide-y divide-slate-200/70 dark:divide-white/10">
-                            {t.replies.map((r) => (
-                              <div key={r.id} className="px-3 py-2.5">
-                                <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-1 tabular-nums">
-                                  {shortDate(r.createdAt)}
-                                </p>
-                                <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap break-words">
-                                  {r.message}
-                                </p>
+                          {/* Chat transcript, grouped twice: a date separator per
+                              day, and one bubble per run of consecutive messages
+                              from the same author. No dividers - alignment and
+                              colour carry the turn-taking. */}
+                          <div className="px-3 py-3 space-y-3">
+                            {groupConversation(t.replies).map((day) => (
+                              <div key={day.dayKey} className="space-y-2">
+                                <div className="flex justify-center">
+                                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-slate-500 shadow-sm dark:bg-white/[0.08] dark:text-slate-400">
+                                    {day.label}
+                                  </span>
+                                </div>
+
+                                {/* Each message keeps its OWN bubble, time and tick.
+                                    A run from one sender is grouped visually
+                                    instead: tight stacking, the name only on the
+                                    first, and the squared "tail" corner only on
+                                    the last. Merging them into one bubble reads as
+                                    a single long message and hides per-message
+                                    read state. */}
+                                {day.groups.map((g) => {
+                                  const mine = isUserReply(g.authorRole);
+                                  return (
+                                    <div key={g.messages[0].id} className="space-y-0.5">
+                                      {g.messages.map((m, i) => {
+                                        const first = i === 0;
+                                        const last = i === g.messages.length - 1;
+                                        return (
+                                          <div
+                                            key={m.id}
+                                            className={cn(
+                                              "flex",
+                                              mine ? "justify-end" : "justify-start"
+                                            )}
+                                          >
+                                            <div
+                                              className={cn(
+                                                "max-w-[85%] rounded-2xl px-3 py-1.5",
+                                                mine
+                                                  ? "bg-blue-600 text-white"
+                                                  : "border border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200",
+                                                last && (mine ? "rounded-br-sm" : "rounded-bl-sm")
+                                              )}
+                                            >
+                                              {first && !mine && (
+                                                <p className="mb-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                                                  Kruti.io support
+                                                </p>
+                                              )}
+                                              <p className="whitespace-pre-wrap break-words text-sm">
+                                                {m.message}
+                                              </p>
+                                              <div
+                                                className={cn(
+                                                  "mt-0.5 flex items-center justify-end gap-1 text-[10px] tabular-nums",
+                                                  mine
+                                                    ? "text-blue-100"
+                                                    : "text-slate-400 dark:text-slate-500"
+                                                )}
+                                              >
+                                                <span>{clockTime(m.createdAt)}</span>
+                                                {/* Ticks only on your own messages:
+                                                    one until support reads it, two
+                                                    once they have. Per message, so
+                                                    the state is never approximated. */}
+                                                {mine &&
+                                                  (m.readAt ? (
+                                                    <CheckCheck className="h-3 w-3" />
+                                                  ) : (
+                                                    <Check className="h-3 w-3" />
+                                                  ))}
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Reply composer. Hidden on a closed ticket, matching the
+                          server: the reply route answers 409 once a ticket is
+                          closed, so showing the box would only produce an error. */}
+                      {!closed && (
+                        <div>
+                          <textarea
+                            rows={2}
+                            value={replyDrafts[t.id] || ""}
+                            onChange={(e) =>
+                              setReplyDrafts((prev) => ({
+                                ...prev,
+                                [t.id]: e.target.value.slice(0, MAX_REPLY_CHARS),
+                              }))
+                            }
+                            placeholder="Reply to support..."
+                            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-gray-100 placeholder:text-slate-400 resize-y"
+                          />
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleReply(t.id)}
+                              disabled={
+                                (replyDrafts[t.id] || "").trim().length < 2 || replyingId === t.id
+                              }
+                              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {replyingId === t.id ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <Send className="w-3 h-3" />
+                              )}
+                              Send
+                            </button>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
+                              {(replyDrafts[t.id] || "").length} / {MAX_REPLY_CHARS}
+                            </span>
                           </div>
                         </div>
                       )}
