@@ -12,14 +12,6 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const sub = await checkActiveSubscription(session.user.id);
-  if (!sub.allowed) {
-    return NextResponse.json(
-      { error: sub.reason, subscriptionRequired: true },
-      { status: 403 }
-    );
-  }
-
   const body = await req.json();
   const { action, postIds, time, status } = body as {
     action: string;
@@ -46,6 +38,22 @@ export async function POST(req: NextRequest) {
   }
 
   const validIds = posts.map((p) => p.id);
+
+  // The subscription gate is applied PER ACTION rather than to the whole route.
+  //
+  // "delete" is deliberately exempt: it used to 403 for a lapsed user, meaning
+  // they could not remove their own posts - a direct defect under DPDP s.12(3)
+  // (right to erasure). A paywall may stop someone creating or scheduling more
+  // content; it must not stop them deleting what is already theirs.
+  if (action !== "delete") {
+    const sub = await checkActiveSubscription(session.user.id);
+    if (!sub.allowed) {
+      return NextResponse.json(
+        { error: sub.reason, subscriptionRequired: true },
+        { status: 403 }
+      );
+    }
+  }
 
   switch (action) {
     case "schedule-time": {

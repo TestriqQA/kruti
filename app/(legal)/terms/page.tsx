@@ -1,11 +1,12 @@
 import { Metadata } from "next";
+import LegalContact from "@/components/LegalContact";
 import Link from "next/link";
 import LegalSection from "@/components/LegalSection";
 
 export const metadata: Metadata = {
   title: "Terms of Use | Kruti.io",
   description:
-    "Terms of Use for Kruti.io, the AI-powered LinkedIn content platform by Cinute Digital Pvt. Ltd.",
+    "Terms of Use for Kruti.io, the AI-powered LinkedIn content platform by Cinute InfoMedia",
 };
 
 export default function TermsOfUsePage() {
@@ -23,7 +24,7 @@ export default function TermsOfUsePage() {
       <LegalSection id="acceptance" title="1. Acceptance of Terms">
         <p>
           By accessing or using <strong>Kruti.io</strong> at kruti.io (the &ldquo;Service&rdquo;),
-          operated by <strong>Cinute Digital Pvt. Ltd.</strong> (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or
+          operated by <strong>Cinute InfoMedia</strong> (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or
           &ldquo;our&rdquo;), you agree to be bound by these Terms of Use (&ldquo;Terms&rdquo;).
         </p>
         <p>
@@ -37,7 +38,7 @@ export default function TermsOfUsePage() {
           <Link href="/refund" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Refund Policy</Link>,{" "}
           <Link href="/cookies" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Cookie Policy</Link>, and{" "}
           <Link href="/disclaimer" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Disclaimer</Link>,
-          constitute the entire agreement between you and Cinute Digital Pvt. Ltd. regarding the Service.
+          constitute the entire agreement between you and Cinute InfoMedia regarding the Service.
         </p>
       </LegalSection>
 
@@ -48,7 +49,7 @@ export default function TermsOfUsePage() {
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li>AI-generated content strategies and weekly content plans</li>
-          <li>Post generation using Google Gemini 2.5 Pro (text) and Google Imagen 3 (images)</li>
+          <li>Post generation using Google Gemini (Gemini 2.5 Flash and 2.5 Pro for text, Gemini 3.1 Flash Image for images)</li>
           <li>Content calendar with scheduling capabilities</li>
           <li>Auto-posting to LinkedIn on your behalf</li>
           <li>Content repurposing for multiple platforms</li>
@@ -140,7 +141,7 @@ export default function TermsOfUsePage() {
           </li>
           <li>
             <strong>Google&rsquo;s terms apply:</strong> Content generated using Google Gemini and
-            Imagen is also subject to Google&rsquo;s Generative AI Terms of Service.
+            Gemini is also subject to Google&rsquo;s Generative AI Terms of Service.
           </li>
           <li>
             <strong>License to process:</strong> You grant Kruti.io a non-exclusive,
@@ -202,11 +203,11 @@ export default function TermsOfUsePage() {
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
             The Kruti.io platform, including its design, codebase, UI, branding, and
-            documentation, is the property of <strong>Cinute Digital Pvt. Ltd.</strong> and is
+            documentation, is the property of <strong>Cinute InfoMedia</strong> and is
             protected by applicable intellectual property laws.
           </li>
           <li>
-            <strong>Google Gemini</strong> and <strong>Google Imagen</strong> are trademarks of
+            <strong>Google Gemini</strong> is a trademark of
             Google LLC.
           </li>
           <li>
@@ -227,7 +228,7 @@ export default function TermsOfUsePage() {
         <p>To the maximum extent permitted by applicable law:</p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            Kruti.io and Cinute Digital Pvt. Ltd. shall not be liable for any indirect,
+            Kruti.io and Cinute InfoMedia shall not be liable for any indirect,
             incidental, special, consequential, or punitive damages arising from your use of the
             Service.
           </li>
@@ -313,13 +314,7 @@ export default function TermsOfUsePage() {
           For questions about these Terms of Use, please contact us:
         </p>
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mt-2 space-y-1.5">
-          <p><strong>Cinute Digital Pvt. Ltd.</strong></p>
-          <p>
-            Email:{" "}
-            <a href="mailto:support@kruti.io" className="text-[#0A66C2] dark:text-blue-400 hover:underline">
-              support@kruti.io
-            </a>
-          </p>
+          <LegalContact />
           <p>Website: kruti.io</p>
         </div>
       </LegalSection>

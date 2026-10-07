@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import LegalContact from "@/components/LegalContact";
 import Link from "next/link";
 import LegalSection from "@/components/LegalSection";
 
@@ -22,12 +23,12 @@ export default function DisclaimerPage() {
 
       <LegalSection id="general" title="1. General Disclaimer">
         <p>
-          <strong>Kruti.io</strong>, operated by <strong>Cinute Digital Pvt. Ltd.</strong>, is
+          <strong>Kruti.io</strong>, operated by <strong>Cinute InfoMedia</strong>, is
           provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without any warranties
           of any kind, whether express, implied, or statutory.
         </p>
         <p>
-          To the fullest extent permitted by applicable law, Cinute Digital Pvt. Ltd. disclaims
+          To the fullest extent permitted by applicable law, Cinute InfoMedia disclaims
           all warranties, including but not limited to implied warranties of merchantability,
           fitness for a particular purpose, non-infringement, and accuracy of informational
           content.
@@ -40,8 +41,7 @@ export default function DisclaimerPage() {
 
       <LegalSection id="ai-content-accuracy" title="2. AI-Generated Content Accuracy">
         <p>
-          Kruti.io uses <strong>Google Gemini 2.5 Pro</strong> for text generation and{" "}
-          <strong>Google Imagen 3</strong> for image generation. Regarding AI-generated content:
+          Kruti.io uses <strong>Google Gemini</strong> for both text and image generation &mdash; Gemini 2.5 Flash and Gemini 2.5 Pro for text, and Gemini 3.1 Flash Image for images. Regarding AI-generated content:
         </p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
@@ -150,7 +150,7 @@ export default function DisclaimerPage() {
       <LegalSection id="third-party-services" title="6. Third-Party Services">
         <p>
           Kruti.io integrates with third-party services including LinkedIn, Google AI (Gemini
-          and Imagen), and Razorpay. Regarding these integrations:
+          ), and Razorpay. Regarding these integrations:
         </p>
         <ul className="list-disc pl-5 space-y-1">
           <li>
@@ -195,7 +195,7 @@ export default function DisclaimerPage() {
         </p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            Cinute Digital Pvt. Ltd.&rsquo;s total aggregate liability for any and all claims
+            Cinute InfoMedia&rsquo;s total aggregate liability for any and all claims
             arising from or related to the Service shall not exceed the subscription fees you
             paid in the <strong>three (3) months</strong> immediately preceding the event giving
             rise to the claim.
@@ -218,7 +218,7 @@ export default function DisclaimerPage() {
 
       <LegalSection id="indemnification" title="9. Indemnification">
         <p>
-          You agree to indemnify, defend, and hold harmless <strong>Cinute Digital Pvt.
+          You agree to indemnify, defend, and hold harmless <strong>Cinute InfoMedia Pvt.
           Ltd.</strong>, its officers, directors, employees, and agents from and against any and
           all claims, damages, losses, liabilities, costs, and expenses (including reasonable
           legal fees) arising from:
@@ -236,13 +236,7 @@ export default function DisclaimerPage() {
           If you have questions about this Disclaimer, please contact us:
         </p>
         <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 mt-2 space-y-1.5">
-          <p><strong>Cinute Digital Pvt. Ltd.</strong></p>
-          <p>
-            Email:{" "}
-            <a href="mailto:support@kruti.io" className="text-[#0A66C2] dark:text-blue-400 hover:underline">
-              support@kruti.io
-            </a>
-          </p>
+          <LegalContact />
           <p>Website: kruti.io</p>
         </div>
       </LegalSection>

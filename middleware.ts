@@ -9,10 +9,10 @@ import { NextRequest, NextResponse } from "next/server";
  * /robots.txt would otherwise fall through to withAuth and be answered with a
  * 307 to the sign-in page. A search engine reading that never sees the rules.
  *
- * Add to this list as each crawler file lands: /sitemap.xml (D-02),
- * /llms.txt (D-23).
+ * All three crawler files are now served: /robots.txt (D-01), /sitemap.xml (D-02)
+ * and /llms.txt (D-23).
  */
-const CRAWLER_FILES = ["/robots.txt", "/sitemap.xml"];
+const CRAWLER_FILES = ["/robots.txt", "/sitemap.xml", "/llms.txt"];
 
 /**
  * Page routes that require a session (D-03).

@@ -35,13 +35,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Unread admin replies that have not expired yet - drives the sidebar badge so
   // the user notices a reply without having to open /support.
-  const supportUnread = await prisma.supportReply.count({
-    where: {
-      readAt: null,
-      createdAt: { gte: replyCutoff() },
-      ticket: { userId: session.user.id },
-    },
-  });
+  //
+  // Guarded on purpose. This runs in the layout shared by EVERY page in the
+  // (dashboard) group, so an unhandled throw here does not break a badge - it
+  // 500s /dashboard, /posts, /calendar, /analytics, /newsletter, /settings and
+  // /support all at once. That is exactly what happened on the first production
+  // deploy, where the SupportReply table had been pushed to staging but not to
+  // production and Prisma raised P2021.
+  //
+  // A badge is not worth that blast radius: on failure it degrades to 0 and the
+  // user simply sees no count until the next render.
+  let supportUnread = 0;
+  try {
+    supportUnread = await prisma.supportReply.count({
+      where: {
+        readAt: null,
+        createdAt: { gte: replyCutoff() },
+        ticket: { userId: session.user.id },
+      },
+    });
+  } catch (err) {
+    console.error("[dashboard-layout] support unread count failed:", err);
+  }
 
   const showTrialBanner =
     state.status === "trialing" &&
