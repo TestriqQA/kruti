@@ -1,5 +1,6 @@
 "use client";
 
+import { COMPANY } from "@/lib/company";
 import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import {
@@ -426,7 +427,7 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
             <div className="animate-fade-up">
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                Powered by AI, crafted with love in Mumbai
+                Powered by AI, crafted with love in {COMPANY.address.district}
               </span>
             </div>
             <h1 className="animate-fade-up [animation-delay:80ms] mt-6 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.5rem]">
@@ -734,7 +735,7 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
             <ArrowRight className="h-4 w-4" />
           </button>
           <p className="relative mt-5 text-xs text-slate-400 dark:text-blue-100/80">
-            Built by Cinute Digital Pvt. Ltd., Mumbai, India.
+            Built by {COMPANY.name}, {COMPANY.address.district}, {COMPANY.address.country}.
           </p>
         </div>
       </Section>

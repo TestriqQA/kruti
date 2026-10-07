@@ -1,4 +1,5 @@
 import { absoluteUrl } from "@/lib/site-url";
+import { COMPANY, companyPostalAddress } from "@/lib/company";
 
 /**
  * Organization, WebSite and SoftwareApplication JSON-LD for the homepage
@@ -24,26 +25,30 @@ import { absoluteUrl } from "@/lib/site-url";
  */
 
 const BRAND_LINE =
-  "Kruti.io is an AI LinkedIn content platform by Cinute Digital Pvt. Ltd., Mumbai. It generates 30 posts, images and newsletter drafts a month, which you review and publish through LinkedIn's official API.";
+  "Kruti.io is an AI LinkedIn content platform by Cinute InfoMedia, Thane, India. It generates 30 posts, images and newsletter drafts a month, which you review and publish through LinkedIn's official API.";
 
 const organization = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Kruti.io",
-  legalName: "Cinute Digital Pvt. Ltd.",
+  // S-03 specifies "Cinute Digital Pvt. Ltd." - that is a different company.
+  // The entity that operates Kruti.io is Cinute InfoMedia; see lib/company.ts.
+  legalName: COMPANY.name,
   url: absoluteUrl("/"),
   logo: absoluteUrl("/logo.png"),
   description: BRAND_LINE,
-  address: {
-    "@type": "PostalAddress",
-    addressLocality: "Mumbai",
-    addressCountry: "IN",
-  },
+  // F-02 is now answered, so the full street address is included rather than
+  // the locality-only placeholder this shipped with.
+  address: companyPostalAddress(),
   contactPoint: {
     "@type": "ContactPoint",
     contactType: "customer support",
-    email: "support@kruti.io",
+    email: COMPANY.supportEmail,
   },
+  // Disambiguates the brand from the unrelated entities that dominate the
+  // "kruti" SERP - Ola Krutrim's Kruti assistant and the Kruti Dev font.
+  // These are descriptive facts, not links, so no placeholder URLs are invented.
+  alternateName: "Kruti.io - AI LinkedIn content platform",
 };
 
 const website = {
@@ -63,7 +68,7 @@ const softwareApplication = {
   url: absoluteUrl("/"),
   description:
     "AI tool that plans, writes, schedules and publishes LinkedIn posts, images and newsletter drafts.",
-  publisher: { "@type": "Organization", name: "Cinute Digital Pvt. Ltd." },
+  publisher: { "@type": "Organization", name: COMPANY.name },
   offers: [
     {
       "@type": "Offer",
