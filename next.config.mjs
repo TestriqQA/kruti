@@ -4,6 +4,17 @@ import { buildRedirects, buildCanonicalHostRedirect } from "./lib/redirects.mjs"
 const nextConfig = {
   experimental: {
     instrumentationHook: true,
+    /**
+     * The code-rendered post images (lib/render-card.tsx) read their font files
+     * from disk at request time. Next's tracer cannot see a runtime
+     * `fs.readFileSync(path.join(process.cwd(), ...))`, so without this the
+     * .woff files are left out of the serverless bundle and every designed image
+     * fails in production while working fine locally. Keep in step with
+     * lib/og-fonts.ts if the fonts ever move.
+     */
+    outputFileTracingIncludes: {
+      "/api/generate/**": ["./lib/fonts/**"],
+    },
   },
   /**
    * D-10 (one canonical hostname) and D-19 (redirect map).

@@ -8,6 +8,7 @@
 import { parseImageHistory } from "./image-history";
 import {
   IMAGE_COST_INR,
+  RENDERED_IMAGE_COST_INR,
   CONTENT_COST_PER_POST_INR,
   STRATEGY_COST_INR,
 } from "./pricing";
@@ -33,6 +34,8 @@ export interface UsagePlanInput {
 export interface DailyRecord {
   date: string; // IST day "YYYY-MM-DD"
   images: number;
+  /** Of `images`, how many were laid out in code (free bar the text brief). */
+  renderedImages: number;
   content: number; // posts created
   draft: number;
   ready: number;
@@ -56,6 +59,7 @@ export interface PromptRow {
 
 export interface UsageTotals {
   images: number;
+  renderedImages: number;
   content: number;
   draft: number;
   ready: number;
@@ -108,13 +112,17 @@ export function tsFromBlobUrl(url: string): number | null {
   return ms > 0 ? ms : null;
 }
 
-type ImageKind = "generated" | "cropped" | "uploaded" | "other";
+type ImageKind = "generated" | "rendered" | "cropped" | "uploaded" | "other";
 
 /** Classify a blob URL by its filename prefix / path. */
 export function classifyImageUrl(url: string): ImageKind {
   if (!url) return "other";
   const base = (url.split("/").pop() ?? "").toLowerCase();
   if (base.startsWith("cropped-")) return "cropped"; // re-encode of an existing image, not a new model call
+  // Laid out in code by lib/render-card.tsx - no image-model call, so it costs
+  // only its small text brief. Distinguishing these is the only way the cost
+  // figure below can stay honest now that most images are rendered this way.
+  if (base.startsWith("card-")) return "rendered";
   if (base.startsWith("post-")) return "generated"; // model-generated (single or carousel slide)
   if (base.startsWith("upload-") || url.includes("/uploads/")) return "uploaded";
   return "other";
@@ -128,7 +136,9 @@ export function classifyImageUrl(url: string): ImageKind {
  * surviving evidence of that paid generation - excluding it would undercount real
  * image spend for every cropped post. User uploads (upload-*) are excluded.
  */
-function collectGeneratedImages(post: UsagePostInput): { url: string; ts: number }[] {
+function collectGeneratedImages(
+  post: UsagePostInput
+): { url: string; ts: number; rendered: boolean }[] {
   const urls = new Set<string>();
   if (post.imageUrl) urls.add(post.imageUrl);
   if (post.carouselImages) {
@@ -141,13 +151,14 @@ function collectGeneratedImages(post: UsagePostInput): { url: string; ts: number
   }
   for (const group of parseImageHistory(post.imageHistory)) for (const u of group) urls.add(u);
 
-  const out: { url: string; ts: number }[] = [];
+  const out: { url: string; ts: number; rendered: boolean }[] = [];
   for (const url of Array.from(urls)) {
     const kind = classifyImageUrl(url);
-    if (kind !== "generated" && kind !== "cropped") continue; // exclude user uploads / other
+    // "rendered" counts as an image produced, but is costed separately below.
+    if (kind !== "generated" && kind !== "cropped" && kind !== "rendered") continue;
     const ts = tsFromBlobUrl(url);
     if (ts === null) continue;
-    out.push({ url, ts });
+    out.push({ url, ts, rendered: kind === "rendered" });
   }
   return out;
 }
@@ -156,6 +167,7 @@ function emptyDaily(date: string): DailyRecord {
   return {
     date,
     images: 0,
+    renderedImages: 0,
     content: 0,
     draft: 0,
     ready: 0,
@@ -205,7 +217,9 @@ export function buildUsageReport(
     if (gen.length > 0) {
       let latestTs = 0;
       for (const g of gen) {
-        ensure(istDayKey(g.ts)).images += 1;
+        const rec = ensure(istDayKey(g.ts));
+        rec.images += 1;
+        if (g.rendered) rec.renderedImages += 1;
         if (g.ts > latestTs) latestTs = g.ts;
       }
       // One row per post that generated images in range (even if no prompt was
@@ -250,6 +264,7 @@ export function buildUsageReport(
   const daily = Array.from(days.values()).sort((a, b) => a.date.localeCompare(b.date));
   const totals: UsageTotals = {
     images: 0,
+    renderedImages: 0,
     content: 0,
     draft: 0,
     ready: 0,
@@ -261,10 +276,14 @@ export function buildUsageReport(
     days: daily.length,
   };
   for (const r of daily) {
-    r.imageCostInr = r.images * IMAGE_COST_INR;
+    // Code-rendered images cost only their small text brief; only the ones that
+    // actually hit the image model carry the per-image price.
+    r.imageCostInr =
+      (r.images - r.renderedImages) * IMAGE_COST_INR + r.renderedImages * RENDERED_IMAGE_COST_INR;
     r.contentCostInr = r.content * CONTENT_COST_PER_POST_INR + r.strategies * STRATEGY_COST_INR;
     r.totalCostInr = r.imageCostInr + r.contentCostInr;
     totals.images += r.images;
+    totals.renderedImages += r.renderedImages;
     totals.content += r.content;
     totals.draft += r.draft;
     totals.ready += r.ready;

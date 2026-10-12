@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { put } from "@vercel/blob";
-import type { ImageCategory } from "@/lib/image-categories";
+import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
+import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -42,99 +43,6 @@ function friendlyImageError(rawMessage: string): string {
   return "Image generation failed. Please try again in a moment.";
 }
 
-// ─── Branded Image Prompt (designed infographic that explains the post) ────────
-
-/**
- * Build the final image-model prompt as a confident brief for ONE premium, designed
- * marketing INFOGRAPHIC that explains the post at a glance - built on a named
- * `structure`, with organized informative labels (nodes + optional feature cards), a
- * prominent headline + subheadline, and a polished, content-matched look. NOT a plain
- * photo and NOT a bare 3D object. Pass `position` per carousel slide.
- */
-export function buildBrandedImagePrompt(brief: {
-  style: string;
-  theme?: string;
-  structure: string;
-  headline: string;
-  subheadline?: string;
-  visual: string;
-  nodes?: string[];
-  cards?: string[];
-  palette: string;
-  position?: string;
-  connectsFrom?: string;
-  connectsTo?: string;
-  format?: string; // genApproach for a non-infographic designed format (text-card, banner, comparison, diagram)
-  formatLabel?: string;
-  formatGuidance?: string;
-  bodyText?: string; // hero words for a quote card / big stat / screenshot
-}): string {
-  const { style, structure, headline, visual, palette, position } = brief;
-  const clean = (s: string) => (s || "").replace(/\s+/g, " ").trim();
-  const subheadline = clean(brief.subheadline || "");
-  const nodes = (brief.nodes ?? []).map(clean).filter(Boolean).slice(0, 5);
-  const cards = (brief.cards ?? []).map(clean).filter(Boolean).slice(0, 4);
-
-  const subLine = subheadline
-    ? `Below the headline, set one supporting subheadline at a medium size - clearly smaller than the headline but still comfortably readable on a phone, about half the headline's text height: "${subheadline}".\n`
-    : "";
-  const nodesLine = nodes.length
-    ? `Label the key parts of the structure with these exact words, each as its own clean label on its node, step, or section - set them in a solid weight at a size that stays crisply legible on a phone (never tiny, thin, or faint) with strong contrast against their background (spell every word exactly; add no other invented labels): ${nodes.map((n) => `"${n}"`).join(", ")}.\n`
-    : "";
-  const cardsLine = cards.length
-    ? `Add a tidy row of ${cards.length} small feature cards, each with a clean modern icon and one of these exact short labels: ${cards.map((c) => `"${c}"`).join(", ")}.\n`
-    : "";
-  const carouselLine = position
-    ? `This is ${position} in a set: keep the same ${style}, palette, layout system, and type treatment on every slide so the carousel reads as one cohesive series.\n`
-    : "";
-  const connectsFrom = clean(brief.connectsFrom || "");
-  const connectsTo = clean(brief.connectsTo || "");
-  const continuityLine =
-    connectsFrom || connectsTo
-      ? `CONTINUITY WITH THE SET: ${connectsFrom ? `this slide follows from the previous one - ${connectsFrom}. ` : ""}${connectsTo ? `it then leads into the next slide - ${connectsTo}. ` : ""}Carry a clear visual through-line (a recurring motif, consistent characters or objects, or a progressing element) so this slide obviously belongs to the same series as its neighbours.\n`
-      : "";
-  const themeLine = brief.theme
-    ? `ART DIRECTION (derived from THIS specific post - commit to it, never a generic house look): ${clean(brief.theme)}.\n`
-    : "";
-  const fmt = brief.format || "designed-infographic";
-  const formatNoun =
-    fmt === "text-card"
-      ? "text-forward card"
-      : fmt === "banner"
-      ? "promo banner"
-      : fmt === "comparison"
-      ? "two-panel comparison graphic"
-      : fmt === "diagram"
-      ? "diagram"
-      : "infographic";
-  const formatLine = brief.formatLabel
-    ? `FORMAT: ${brief.formatLabel}${brief.formatGuidance ? ` - ${clean(brief.formatGuidance)}` : ""}.\n`
-    : "";
-  const bodyText = clean(brief.bodyText || "");
-  const bodyLine = bodyText
-    ? `HERO TEXT: set "${bodyText}" as the large, dominant words that ARE the design - big, bold, beautifully set typography filling most of the safe area, perfectly legible on a phone.\n`
-    : "";
-
-  return `Design ONE premium, professionally designed square (1:1) marketing ${formatNoun} for a LinkedIn feed - a rich, polished graphic that represents the post at a glance, the way a top design agency would make it. This is a DESIGNED graphic, NOT a plain photo, and NOT a bare 3D object floating on an empty background.
-
-${formatLine}STYLE: ${style}.
-${themeLine}STRUCTURE (the backbone - build the whole graphic on this): ${structure}. Lay the content out on this structure with clean modern icons, connectors or flow lines, and neat panels or cards, so the viewer understands the post just by looking.
-
-WHAT TO SHOW: ${visual}
-
-HEADLINE (the largest text on the slide): set "${headline}" as a big, bold headline that dominates and anchors the composition - it should span most of the safe width (roughly 70 percent of the image) and stand about 12 to 18 percent of the image height tall, so it reads instantly on a small phone screen without being oversized. If it is long, wrap it onto at most two lines rather than shrinking it; never render the headline small. ${bodyLine}${subLine}${nodesLine}${cardsLine}All on-image text must be real, correctly spelled, and meaningful - never scrambled, fake, or nonsense lettering, and add no text beyond the headline, subheadline, hero text, node labels, and card labels named above.
-
-TYPE SIZE AND LEGIBILITY (critical - every on-image word must be easily readable on a phone at a glance): use three clear, distinct sizes - a dominant headline, a medium subheadline about half its height, and small-but-legible labels in a solid weight. Keep every word large enough to read without zooming; favour fewer, larger words over many small ones, and never let text become thin, faint, cramped, or squeezed to fit. When space is tight, DROP or shorten a label rather than shrinking the type. Prioritise legible text over filling the frame with fine detail.
-
-COLOUR AND FINISH: ${palette} Render it the way a top human design studio would - premium, modern, and editorial, with believable depth, true-to-life materials and surface texture, and soft natural shadows, so any real object in it looks genuinely real. NO neon glow, NO glowing outlines or light halos, NO drawn border, frame, box, keyline or inset panel around the whole slide, NO heavy sci-fi blue, NO circuit-board or digital-grid cliche, and NO obvious "AI infographic" look. Use tasteful, confident colour (colourful is fine when the topic suits it) on clean, realistic surfaces, so a LinkedIn viewer thinks "what a great graphic" rather than "this was made by AI". Crisp, high-resolution, and genuinely UNIQUE to this post - never a generic stock photo or a flat gradient wash.
-
-REALISM OF REAL THINGS: any real-world object, product, device, screen, or material that appears must read as an authentic, physically accurate version of the real thing - correct proportions, genuine materials and surface texture, natural light - rendered cleanly WITHIN the chosen STYLE above (if that style is flat or illustrated, keep it a faithful, recognizable rendition of the real object, not a literal photo, and never a vague blob or generic AI shape). This stays a designed infographic, not a photograph of a whole scene, but every depicted object should look believably real.
-
-REAL BRANDS AND LOGOS: only ever depict a brand, company, product, tool, or logo that the post text itself names - never add or invent one. When a named brand does appear, render it as its genuine, instantly recognizable real-world form using that brand's TRUE official colours - the real logo or wordmark in its actual brand colours, correctly proportioned and spelled, NOT recoloured to match the slide palette and NOT a made-up mark (the brand's real colours take priority over the palette for that logo only). If a mark cannot be rendered cleanly and accurately, show the product itself or a plain, correctly spelled wordmark in the real brand colour rather than a garbled, distorted, or fake logo.
-
-${carouselLine}${continuityLine}Square 1:1, FULL-BLEED: the background artwork extends all the way to every edge and corner, so the edge of the artwork is the edge of the image. Draw NO border, frame, outline, keyline, rounded-rectangle, box, or inset panel around the whole slide or its outer edge - the slide itself has no drawn edge of any kind (interior cards or panels the layout calls for are fine; just nothing that frames the whole composition). Keep all text (headline, subheadline, and every label) and the key graphics set in a little from each edge, about a tenth of the width, so nothing important is clipped at any edge or corner - but treat that margin as EMPTY background breathing room, never a drawn line, rule, frame, or panel. If a line of text is long, wrap it onto at most two lines rather than shrinking it, and never crop a word. Above all, make it a cohesive, information-rich, on-concept infographic that clearly represents THIS post.`;
-}
-
 /**
  * Build a photoreal / editorial SCENE prompt for the realistic-scene and meme
  * categories (a believable real photograph, not a designed infographic). Personal
@@ -170,54 +78,152 @@ Keep any on-image words minimal, real, and correctly spelled, and add no text be
 }
 
 /**
- * Dispatch to the right prompt builder for a post's chosen image category:
- * designed formats (infographic, diagram, comparison, text-card, banner) use the
- * branded builder; realistic-scene and meme use the photoreal builder.
+ * Build the image-model prompt for a post's chosen image category.
+ *
+ * Photographic categories only (meme and the realistic scenes). The designed
+ * formats used to dispatch to a branded-infographic builder from here; they are
+ * laid out in code now, so that builder and this branch are both gone.
  */
 export function buildCategoryImagePrompt(
   category: ImageCategory,
+  // Every field is optional because they are optional on ImageBrief - only the
+  // photographic path populates them, and the fallback brief can leave gaps. The
+  // defaults below keep the prompt coherent either way.
   brief: {
-    style: string;
-    structure: string;
     headline: string;
-    subheadline?: string;
-    visual: string;
-    nodes?: string[];
-    cards?: string[];
-    palette: string;
+    style?: string;
+    visual?: string;
+    palette?: string;
     theme?: string;
-    bodyText?: string;
     caption?: string;
   }
 ): string {
-  if (category.genApproach === "realistic-scene" || category.genApproach === "meme") {
-    return buildRealisticImagePrompt(
-      {
-        style: brief.style,
-        visual: brief.visual,
-        headline: brief.headline,
-        caption: brief.caption,
-        palette: brief.palette,
-        theme: brief.theme,
-      },
-      category
-    );
+  const visual = brief.visual || "A clean, believable editorial scene representing the post's core idea.";
+  const palette = brief.palette || "natural daylight, real materials, soft true-to-life colour.";
+  const style = brief.style || "editorial photoreal, natural light";
+
+  // Only the photographic categories reach this now. The designed formats are
+  // laid out in code by lib/render-card.tsx, so there is no second branch left
+  // to pick - see usesCodeRender() in lib/image-categories.ts.
+  return buildRealisticImagePrompt(
+    {
+      style,
+      visual,
+      headline: brief.headline,
+      caption: brief.caption,
+      palette,
+      theme: brief.theme,
+    },
+    category
+  );
+}
+
+// ─── Code-rendered images (the designed formats) ─────────────────────────────
+
+/**
+ * Lay a designed format out in code and store it, returning the Blob URL.
+ *
+ * Replaces a 10-20s diffusion call that cost $0.101 and could not be trusted to
+ * spell a label, with a ~200ms deterministic render that costs nothing. See the
+ * header of lib/render-card.tsx for why, and usesCodeRender() in
+ * lib/image-categories.ts for which formats come here.
+ *
+ * Returns null on failure and sets `lastImageGenError`, matching
+ * generatePostImage() so callers need no new error path.
+ */
+export async function renderAndStoreDesignedImage(
+  category: ImageCategory,
+  brief: DesignBrief,
+  postId: string,
+  opts?: {
+    author?: { name?: string | null; headline?: string | null };
+    slide?: { index: number; total: number };
   }
-  return buildBrandedImagePrompt({
-    style: brief.style,
-    theme: brief.theme,
-    structure: brief.structure,
-    headline: brief.headline,
-    subheadline: brief.subheadline,
-    visual: brief.visual,
-    nodes: brief.nodes,
-    cards: brief.cards,
-    palette: brief.palette,
-    bodyText: brief.bodyText,
-    format: category.genApproach,
-    formatLabel: category.label,
-    formatGuidance: category.briefGuidance,
-  });
+): Promise<string | null> {
+  lastImageGenError = null;
+  try {
+    const buffer = await renderDesignedImage({
+      category,
+      brief,
+      seed: postId,
+      author: opts?.author,
+      slide: opts?.slide,
+    });
+
+    // Filename shape is load-bearing twice over. lib/usage-analytics.ts recovers
+    // an image's generation DATE from the 13-digit epoch embedded here (there is
+    // no event table), and it tells code-rendered images from model-generated
+    // ones by this "card-" prefix - which is the only way the admin cost figure
+    // can know these were free. Keep `generated/card-<id>-<ts>.png`.
+    const filename = `card-${postId}-${Date.now()}.png`;
+    const blob = await put(`generated/${filename}`, buffer, {
+      access: "public",
+      contentType: "image/png",
+    });
+    console.log(`[RenderCard] ${category.id} rendered:`, blob.url);
+    return blob.url;
+  } catch (err) {
+    const raw = (err as Error).message;
+    console.error(`[RenderCard] ${category.id} failed:`, raw);
+    lastImageGenError =
+      "Couldn't build the image for this post. Please try again in a moment.";
+    return null;
+  }
+}
+
+export type CarouselRenderEvent = {
+  index: number;
+  status: "start" | "done" | "error";
+  url?: string;
+  message?: string;
+};
+
+/**
+ * Render a cohesive carousel from a plan: one code-rendered slide per entry,
+ * every one on the plan's single shared theme, each carrying a position
+ * indicator so the set visibly belongs together.
+ *
+ * Sequential rather than parallel. The old diffusion path had to fire all four
+ * slides at once to fit inside the 60s function limit - which is also why
+ * carousels were pinned to 1K while single images got 2K. A slide now takes
+ * about 200ms, so the whole set finishes well inside a second; doing them in
+ * order keeps memory flat and lets the progress events arrive in slide order.
+ */
+export async function renderCarouselFromPlan(
+  plan: { themeId?: string; slides: DesignBrief[] },
+  postId: string,
+  onSlideEvent?: (e: CarouselRenderEvent) => void
+): Promise<string[]> {
+  // Every slide is information design, so they all use the infographic layout.
+  // A slide with no labels renders as a clean statement slide, which is exactly
+  // what the plan asks for on the hook and the takeaway.
+  const category = getImageCategory("infographic");
+  const total = plan.slides.length;
+  const urls: string[] = [];
+
+  for (let i = 0; i < total; i++) {
+    onSlideEvent?.({ index: i, status: "start" });
+    const url = await renderAndStoreDesignedImage(
+      category,
+      // The plan's theme wins over anything a slide carries: one palette across
+      // the set is the whole point.
+      { ...plan.slides[i], themeId: plan.themeId },
+      `${postId}-c${i}`,
+      { slide: { index: i, total } }
+    );
+    if (url) {
+      urls.push(url);
+      onSlideEvent?.({ index: i, status: "done", url });
+    } else {
+      onSlideEvent?.({
+        index: i,
+        status: "error",
+        message: lastImageGenError || "Slide could not be built",
+      });
+    }
+  }
+
+  return urls;
 }
 
 // ─── Image Generation ────────────────────────────────────────────────────────
@@ -233,7 +239,7 @@ export async function generatePostImage(
 
   let prompt: string;
   if (allowText) {
-    // The caller passed a complete, branded prompt (built by buildBrandedImagePrompt)
+    // The caller passed a complete, built prompt (from buildRealisticImagePrompt)
     // that intentionally renders a short headline. Send it as-is - do NOT append the
     // no-text wrapper or it would forbid the headline we want.
     prompt = imagePrompt || "Professional abstract business concept";
@@ -305,125 +311,4 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
     lastImageGenError = "Image generation didn't return an image. Please try again in a moment.";
   }
   return null;
-}
-
-// ─── Carousel (multiple images) ───────────────────────────────────────────────
-
-// Distinct VISUAL-FIRST treatments so each fallback carousel slide is a genuinely
-// different hero image (not all infographics, not all photos), used only when the
-// content-aware plan is unavailable.
-const CAROUSEL_VARIATIONS = [
-  "as a bold hero composition built around one striking focal subject",
-  "as a clean editorial data visualization anchored by one real figure",
-  "as a warm, natural documentary-style scene",
-  "as a bold flat illustration with strong shapes and confident colour",
-  "as a minimal conceptual composition around a single clear metaphor",
-  "as an elegant, richly-lit close-up of the key object or detail",
-];
-
-/**
- * Generate `count` visually-distinct images for a carousel post, in parallel.
- * Returns the successfully-generated Blob URLs (may be fewer than `count` if
- * some generations fail).
- */
-export async function generateCarouselImages(
-  basePrompt: string,
-  postId: string,
-  industry?: string,
-  count = 4,
-  onSlideEvent?: (e: CarouselSlideEvent) => void
-): Promise<string[]> {
-  const base = basePrompt || "Professional abstract business concept";
-  const results = await Promise.all(
-    Array.from({ length: count }, async (_, i) => {
-      const prompt = `${base} - ${CAROUSEL_VARIATIONS[i % CAROUSEL_VARIATIONS.length]}`;
-      onSlideEvent?.({ index: i, status: "start" });
-      // allowText so the designed labels in the prompt survive (no no-text wrapper).
-      const url = await generatePostImage(prompt, `${postId}-c${i}`, industry, true, "1K");
-      if (url) {
-        onSlideEvent?.({ index: i, status: "done", url });
-      } else {
-        onSlideEvent?.({ index: i, status: "error", message: lastImageGenError || "No image returned" });
-      }
-      return url;
-    })
-  );
-  return results.filter((u): u is string => !!u);
-}
-
-/**
- * Render a cohesive carousel from a content-aware plan: one branded image per
- * slide (hook -> key points -> takeaway), all sharing the plan's palette. Each
- * slide renders its own short headline. Returns the successful Blob URLs.
- */
-export type CarouselSlideEvent = {
-  index: number;
-  status: "start" | "done" | "error";
-  url?: string;
-  message?: string;
-};
-
-export async function generateCarouselFromPlan(
-  plan: {
-    style: string;
-    palette: string;
-    theme?: string;
-    slides: {
-      structure: string;
-      headline: string;
-      subheadline?: string;
-      visual: string;
-      nodes?: string[];
-      connectsFrom?: string;
-      connectsTo?: string;
-    }[];
-  },
-  postId: string,
-  industry?: string,
-  onSlideEvent?: (e: CarouselSlideEvent) => void
-): Promise<string[]> {
-  const total = plan.slides.length;
-  const results = await Promise.all(
-    plan.slides.map(async (slide, i) => {
-      const role = i === 0 ? "the hook" : i === total - 1 ? "the takeaway" : "a key point";
-      const position = `slide ${i + 1} of ${total} - ${role}`;
-      const prompt = buildBrandedImagePrompt({
-        style: plan.style,
-        theme: plan.theme,
-        structure: slide.structure,
-        headline: slide.headline,
-        subheadline: slide.subheadline,
-        visual: slide.visual,
-        nodes: slide.nodes,
-        palette: plan.palette,
-        position,
-        connectsFrom: slide.connectsFrom,
-        connectsTo: slide.connectsTo,
-      });
-      onSlideEvent?.({ index: i, status: "start" });
-      const url = await generatePostImage(prompt, `${postId}-c${i}`, industry, true, "1K");
-      if (url) {
-        onSlideEvent?.({ index: i, status: "done", url });
-      } else {
-        onSlideEvent?.({ index: i, status: "error", message: lastImageGenError || "No image returned" });
-      }
-      return url;
-    })
-  );
-  return results.filter((u): u is string => !!u);
-}
-
-// ─── Image Prompt Builder ────────────────────────────────────────────────────
-
-export function buildImagePrompt(
-  postTitle: string,
-  postType: string,
-  industry: string,
-  headline?: string
-): string {
-  // Carousel fallback (used only when the content-aware plan fails). Keeps the same
-  // visual-first intent as the main path: one striking hero image anchored to the
-  // person's ROLE - never an industry stereotype, never a text-heavy poster.
-  const role = (headline || "").trim() || "professional";
-  return `A single striking, premium editorial image that represents "${postTitle}", built from the real, tangible world of a ${role} (broad field: ${industry || "business"} - context only, never a generic stereotype of the field such as chips, wires, or circuit boards). One clear focal subject fills the frame with natural depth, real textures, and deliberate lighting, telling the story on its own. Match the medium, colours, and mood to what THIS topic is genuinely about, and let the visual be the hero rather than any text. Full-bleed square (1:1), edge to edge with no border or margin on any side. Premium, magazine-quality, high resolution, suitable for a LinkedIn feed.`;
 }

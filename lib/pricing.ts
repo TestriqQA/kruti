@@ -8,7 +8,7 @@
 // thumb: ~4 characters per token.
 //
 // Models in use:
-//   - Images: Nano Banana Pro = gemini-3-pro-image (priced by image output tokens).
+//   - Images: Nano Banana 2 = gemini-3.1-flash-image (see lib/imagen.ts).
 //   - Text:   gemini-2.5-flash (posts, strategy, image briefs) + Google Search grounding.
 
 /** USD -> INR. Override via env (e.g. for live FX) without code changes. */
@@ -21,10 +21,27 @@ export const FLASH_OUTPUT_USD_PER_M = 2.5;
 // ── Google Search grounding tool (gemini-2.5-flash tier) — USD per grounded prompt ──
 export const GROUNDING_USD_PER_CALL = 35 / 1000; // $35 / 1,000 prompts = 0.035
 
-// ── Nano Banana Pro = gemini-3-pro-image — image OUTPUT tokens ──
-export const IMAGE_OUTPUT_USD_PER_M = 120; // $120 / 1M image-output tokens
-export const IMAGE_TOKENS_2K = 1120; // 1K and 2K both bill 1120 output tokens
-export const IMAGE_TOKENS_4K = 2000;
+// ── Images: Nano Banana 2 = gemini-3.1-flash-image — USD per generated image ──
+//
+// This block used to price Nano Banana PRO (gemini-3-pro-image) at $120 per 1M
+// image-output tokens x 1120 tokens = $0.134 an image, while lib/imagen.ts has
+// only ever called gemini-3.1-flash-image. Admin analytics therefore overstated
+// every image by roughly a third, and understated nothing - so the dashboard was
+// reporting a spend the account was never charged.
+//
+// Priced per image rather than per output token because the Flash tier's rate
+// genuinely differs by resolution: unlike Pro, 1K and 2K are NOT the same price,
+// which matters here because carousels render at 1K and single images at 2K.
+export const IMAGE_USD_1K = 0.067;
+export const IMAGE_USD_2K = 0.101;
+export const IMAGE_USD_4K = 0.15;
+
+/**
+ * Nano Banana Pro, for reference only - nothing calls it today. If lib/imagen.ts
+ * is ever pointed back at gemini-3-pro-image, swap these into imageCostUsd().
+ */
+export const PRO_IMAGE_USD_1K_2K = 0.134;
+export const PRO_IMAGE_USD_4K = 0.24;
 
 export const toInr = (usd: number): number => usd * USD_TO_INR;
 
@@ -32,10 +49,11 @@ export function flashTextCostUsd(inputTokens: number, outputTokens: number): num
   return (inputTokens / 1e6) * FLASH_INPUT_USD_PER_M + (outputTokens / 1e6) * FLASH_OUTPUT_USD_PER_M;
 }
 
-/** Cost (USD) of generating one image at the given resolution (output tokens only). */
+/** Cost (USD) of generating one image at the given resolution. */
 export function imageCostUsd(resolution: "1K" | "2K" | "4K" = "2K"): number {
-  const tokens = resolution === "4K" ? IMAGE_TOKENS_4K : IMAGE_TOKENS_2K;
-  return (tokens / 1e6) * IMAGE_OUTPUT_USD_PER_M;
+  if (resolution === "1K") return IMAGE_USD_1K;
+  if (resolution === "4K") return IMAGE_USD_4K;
+  return IMAGE_USD_2K;
 }
 
 /** One grounded research call: flash text + N grounding queries. */
@@ -48,7 +66,10 @@ const EST = {
   research: { input: 3000, output: 500 }, // buildResearchPrompt (grounded)
   postsWrite: { input: 3500, perPostOutput: 460 }, // buildPostsPrompt
   strategy: { input: 3000, output: 1200 }, // buildStrategyPrompt
-  imageBrief: { input: 1500, output: 250 }, // image / carousel-plan brief
+  imageBrief: { input: 1500, output: 250 }, // photographic scene brief (image model)
+  // buildDesignBriefPrompt - markedly smaller than the old art-direction brief it
+  // replaced, because a code-rendered image needs only the words, not a visual.
+  designBrief: { input: 1200, output: 150 },
 } as const;
 
 /** Full /api/generate/posts batch: grounded research + writing N posts (USD). */
@@ -64,10 +85,18 @@ export function strategyCostUsd(): number {
 
 // ── Per-unit INR rates the analytics dashboard multiplies by activity counts ──
 
-/** Per generated image (Nano Banana Pro @ 2K), incl. its small text brief. */
+/**
+ * Per generated image (Nano Banana 2 @ 2K), incl. its small text brief.
+ *
+ * A single blended rate on purpose: analytics recovers images from Blob
+ * filenames and cannot tell a single image from a carousel slide, so every image
+ * is costed at the 2K rate. Carousel slides actually render at 1K
+ * (IMAGE_USD_1K), so an account that leans on carousels is costed slightly HIGH
+ * here - the opposite direction to the old Pro-rate bug, and a much smaller gap.
+ */
 export const IMAGE_COST_INR = toInr(
   imageCostUsd("2K") + flashTextCostUsd(EST.imageBrief.input, EST.imageBrief.output)
-); // ~INR 11.48
+); // ~INR 8.68
 
 /**
  * Per post created. A posts batch (~5 posts) costs one grounded research call plus
@@ -75,6 +104,18 @@ export const IMAGE_COST_INR = toInr(
  * amortise the typical 5-post batch across its posts.
  */
 export const CONTENT_COST_PER_POST_INR = toInr(postsBatchCostUsd(5) / 5); // ~INR 0.75
+
+/**
+ * Per CODE-RENDERED image (lib/render-card.tsx) - no image-model call at all,
+ * so the only cost is the small flash brief that writes the on-image text.
+ *
+ * This is what the twelve designed formats and every carousel slide now cost,
+ * which is roughly 1/140th of IMAGE_COST_INR above. Analytics tells the two
+ * apart by the "card-" blob prefix; see classifyImageUrl in lib/usage-analytics.ts.
+ */
+export const RENDERED_IMAGE_COST_INR = toInr(
+  flashTextCostUsd(EST.designBrief.input, EST.designBrief.output)
+); // ~INR 0.06
 
 /** Per strategy (ContentPlan) generation. */
 export const STRATEGY_COST_INR = toInr(strategyCostUsd()); // ~INR 0.33
