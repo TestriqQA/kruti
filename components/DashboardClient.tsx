@@ -23,6 +23,7 @@ import {
   ListChecks,
 } from "lucide-react";
 import { cn, formatDate, getPostTypeColor } from "@/lib/utils";
+import type { ProfileGap } from "@/lib/profile-completeness";
 
 interface Post {
   id: string;
@@ -46,9 +47,11 @@ interface Props {
   isTrialExpired: boolean; // whether user's trial has ended
   postsPerBatch: number; // posts per generation (fixed POSTS_PER_BATCH, not schedule-derived)
   cycleResetDate: string | null; // ISO date when post counter resets
+  /** Profile fields still missing; non-empty means generation is blocked. */
+  profileGaps: ProfileGap[];
 }
 
-export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate }: Props) {
+export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate, profileGaps }: Props) {
   // The run itself lives in GenerationProvider, above every page, so navigating
   // away doesn't kill it. This component only reads and controls it.
   const {
@@ -112,21 +115,52 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
     { label: "Drafts", value: stats.draftPosts, icon: AlertCircle, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-900/30" },
   ];
 
-  const profileIncomplete = !user?.headline || !user?.industry;
-
   return (
     <div className="space-y-8">
-      {/* Profile tip */}
-      {profileIncomplete && (
-        <div className="flex items-center gap-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-3">
-          <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
-            Update your professional headline, industry, and skills in{" "}
-            <Link href="/settings" className="font-semibold underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-200">
-              Settings
-            </Link>{" "}
-            before generating content for better, more personalized results.
-          </p>
+      {/* ── Profile completeness ───────────────────────────────────────────
+          This was a soft "tip" gated on `!headline || !industry`, which missed
+          the fields that actually matter - summary, skills and target audience
+          - and read as optional advice. It is now driven by the same
+          assessProfile() the generation preflight refuses on, so what it lists
+          is exactly what is blocking the Generate button, and it links to the
+          guided wizard rather than the Settings form. */}
+      {profileGaps.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Finish your profile to start generating
+              </p>
+              <p className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">
+                Your posts are written from your profile. Without these, every post reads like it
+                could have been written for anybody - which is why we pause generation until they
+                are filled in.
+              </p>
+              <ul className="mt-2.5 space-y-1">
+                {profileGaps.map((g) => (
+                  <li key={g.key} className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                    <span className="font-semibold">{g.label}:</span> {g.hint}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex items-center gap-4 flex-wrap">
+                <Link
+                  href="/onboarding"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-xl transition-colors"
+                >
+                  Finish setup
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/settings"
+                  className="text-xs font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-100"
+                >
+                  Or edit in Settings
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

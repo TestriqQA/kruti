@@ -196,6 +196,24 @@ export function isImageCategoryId(v: unknown): v is string {
   return typeof v === "string" && IMAGE_CATEGORY_IDS.has(v);
 }
 
+/**
+ * Is this format laid out in code, or sent to the image model?
+ *
+ * Information design (a headline, labels, a structure) is laid out in code via
+ * lib/render-card.tsx: the text comes out correctly spelled and correctly sized
+ * every time, the palette is applied from tokens, and it costs nothing. A
+ * diffusion model cannot be instructed to do any of that reliably.
+ *
+ * The photographic formats - one meme and four realistic scenes - still go to
+ * the image model, because a believable scene is exactly what it IS good at and
+ * what code cannot produce.
+ *
+ * This is the single place the split is decided; every image route branches on it.
+ */
+export function usesCodeRender(category: ImageCategory): boolean {
+  return category.genApproach !== "realistic-scene" && category.genApproach !== "meme";
+}
+
 /** Look up a category, falling back to the safe default (infographic). */
 export function getImageCategory(id: string | null | undefined): ImageCategory {
   return (

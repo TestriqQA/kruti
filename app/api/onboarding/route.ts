@@ -2,7 +2,34 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  assessProfile,
+  resolveToneKey,
+  sanitizeStringList,
+  sanitizeProfileText,
+  MAX_AUDIENCE_CHARS,
+  MAX_HEADLINE_CHARS,
+  MAX_SUMMARY_CHARS,
+  MAX_INDUSTRY_CHARS,
+  MAX_POSITIONING_CHARS,
+  MAX_SKILLS,
+  MAX_SKILL_CHARS,
+  MAX_LIST_ITEMS,
+  MAX_LIST_ITEM_CHARS,
+  type ProfileInput,
+} from "@/lib/profile-completeness";
 
+/**
+ * Completes onboarding.
+ *
+ * This route is the ONLY way `onboardingCompleted` is set to true, which makes
+ * it the gate on content quality: everything the AI prompts know about a user
+ * arrives here. It therefore validates against lib/profile-completeness.ts
+ * server-side rather than trusting the wizard's own disabled-button logic - a
+ * profile that gets past this with empty fields produces generic posts for the
+ * life of the account, and `skills` in particular was simply not read here at
+ * all before, so it was null for every single user.
+ */
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -10,65 +37,92 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
-    const {
-      positioning,
-      contentGoals,
-      contentStyles,
-      targetAudience,
-      headline,
-      summary,
-      industry,
-      timezone,
-      tonePrefs,
-    } = body;
+    const body = await req.json().catch(() => ({}));
 
-    // Use "field" in body pattern to safely map data, similar to profile route
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updateData: Record<string, any> = {
-      onboardingCompleted: true,
+    const headline = sanitizeProfileText(body.headline, MAX_HEADLINE_CHARS);
+    const industry = sanitizeProfileText(body.industry, MAX_INDUSTRY_CHARS);
+    const summary = sanitizeProfileText(body.summary, MAX_SUMMARY_CHARS);
+    const positioning = sanitizeProfileText(body.positioning, MAX_POSITIONING_CHARS);
+    const targetAudience = sanitizeProfileText(body.targetAudience, MAX_AUDIENCE_CHARS);
+    const skills = sanitizeStringList(body.skills, MAX_SKILLS, MAX_SKILL_CHARS);
+    const contentGoals = sanitizeStringList(body.contentGoals, MAX_LIST_ITEMS, MAX_LIST_ITEM_CHARS);
+    const contentStyles = sanitizeStringList(body.contentStyles, MAX_LIST_ITEMS, MAX_LIST_ITEM_CHARS);
+    // resolveToneKey accepts a bare key, a JSON-encoded key or an object shape,
+    // so the raw value can go straight in.
+    const toneKey = resolveToneKey(
+      typeof body.tonePrefs === "string" ? body.tonePrefs : null
+    );
+
+    // Validate the payload with the same rule every other surface uses, so the
+    // wizard, Settings, the generation preflights and the dashboard banner can
+    // never disagree about what "complete" means.
+    const candidate: ProfileInput = {
+      headline,
+      industry,
+      summary,
+      positioning,
+      targetAudience,
+      skills: JSON.stringify(skills),
+      contentGoals: JSON.stringify(contentGoals),
+      contentStyles: JSON.stringify(contentStyles),
+      tonePrefs: toneKey ? JSON.stringify(toneKey) : null,
     };
 
-    if (positioning !== undefined) updateData.positioning = positioning || null;
-    // Encode tonePrefs the same way the profile route does (JSON-stringified string),
-    // so resolveTone() parses it consistently. Settings can override it later.
-    if (tonePrefs !== undefined) updateData.tonePrefs = tonePrefs ? JSON.stringify(tonePrefs) : null;
-    if (contentGoals !== undefined) updateData.contentGoals = contentGoals && contentGoals.length > 0 ? JSON.stringify(contentGoals) : null;
-    if (contentStyles !== undefined) updateData.contentStyles = contentStyles && contentStyles.length > 0 ? JSON.stringify(contentStyles) : null;
-    if (targetAudience !== undefined) updateData.targetAudience = targetAudience || null;
-    if (headline !== undefined) updateData.headline = headline || null;
-    if (summary !== undefined) updateData.summary = summary || null;
-    if (industry !== undefined) updateData.industry = industry || null;
-    
-    if (timezone) {
+    const { complete, gaps } = assessProfile(candidate);
+    if (!complete) {
+      return NextResponse.json(
+        {
+          error: "Your profile is missing some details we need to write good content.",
+          gaps,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Timezone is validated rather than rejected - a bad IANA string is a
+    // browser quirk, not a reason to fail the whole setup.
+    let timezone = "Asia/Kolkata";
+    if (typeof body.timezone === "string" && body.timezone) {
       try {
-        Intl.DateTimeFormat(undefined, { timeZone: timezone });
-        updateData.timezone = timezone;
+        Intl.DateTimeFormat(undefined, { timeZone: body.timezone });
+        timezone = body.timezone;
       } catch {
-        updateData.timezone = "Asia/Kolkata";
+        // keep the default
       }
     }
 
-    const updated = await prisma.user.update({
+    await prisma.user.update({
       where: { id: session.user.id },
-      data: updateData,
+      data: {
+        onboardingCompleted: true,
+        headline,
+        industry,
+        summary,
+        positioning,
+        targetAudience,
+        skills: JSON.stringify(skills),
+        contentGoals: JSON.stringify(contentGoals),
+        contentStyles: JSON.stringify(contentStyles),
+        // Stored JSON-stringified to match how the profile route writes it and
+        // how resolveTone() reads it back.
+        tonePrefs: JSON.stringify(toneKey),
+        timezone,
+      },
     });
 
-    return NextResponse.json({ success: true, user: updated });
-  } catch (error: any) {
-    console.error("Onboarding API Error:", error);
-    
-    // Handle Prisma "Record to update not found" specifically
-    if (error.code === 'P2025') {
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    const err = error as { code?: string; message?: string };
+    console.error("Onboarding API Error:", err);
+
+    // "Record to update not found" - the session points at a deleted user.
+    if (err.code === "P2025") {
       return NextResponse.json(
         { error: "User not found in database. Please log out and sign in again." },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(
-      { error: error.message || "Internal Server Error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Could not save your profile. Please try again." }, { status: 500 });
   }
 }

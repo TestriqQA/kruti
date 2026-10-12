@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generatePostImage, buildCategoryImagePrompt, lastImageGenError } from "@/lib/imagen";
-import { getImageBrief } from "@/lib/image-brief";
-import { resolveImageCategory } from "@/lib/image-categories";
+import {
+  generatePostImage,
+  buildCategoryImagePrompt,
+  renderAndStoreDesignedImage,
+  lastImageGenError,
+} from "@/lib/imagen";
+import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
+import { resolveImageCategory, usesCodeRender } from "@/lib/image-categories";
 import { appendImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -79,13 +84,23 @@ export async function POST(req: NextRequest) {
     const category = resolveImageCategory(post.imageStyle);
     const brief = await getImageBrief(
       { title: post.title, body: post.body, postType: post.postType },
-      industry,
       category,
       userVisualProfile
     );
-    const prompt = buildCategoryImagePrompt(category, brief);
-    imageUrl = await generatePostImage(prompt, post.id, industry, true);
-    savedPrompt = `${brief.headline || brief.bodyText || category.label} - ${brief.visual}`;
+
+    if (usesCodeRender(category)) {
+      // Information design: laid out in code, so the text is exact and the
+      // render is free. See lib/render-card.tsx.
+      imageUrl = await renderAndStoreDesignedImage(category, brief, post.id, {
+        author: { name: post.plan.user.name, headline: post.plan.user.headline },
+      });
+      savedPrompt = describeDesignBrief(category, brief);
+    } else {
+      // Photographic: a believable scene is what the image model is for.
+      const prompt = buildCategoryImagePrompt(category, brief);
+      imageUrl = await generatePostImage(prompt, post.id, industry, true);
+      savedPrompt = `${brief.headline || brief.bodyText || category.label} - ${brief.visual ?? ""}`;
+    }
   }
 
   if (imageUrl) {

@@ -2,9 +2,13 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { generatePostImage, buildCategoryImagePrompt } from "@/lib/imagen";
-import { getImageBrief } from "@/lib/image-brief";
-import { resolveImageCategory } from "@/lib/image-categories";
+import {
+  generatePostImage,
+  buildCategoryImagePrompt,
+  renderAndStoreDesignedImage,
+} from "@/lib/imagen";
+import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
+import { resolveImageCategory, usesCodeRender } from "@/lib/image-categories";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { ndjsonResponse } from "@/lib/ndjson";
 
@@ -120,27 +124,34 @@ export async function POST(req: NextRequest) {
 
         const brief = await getImageBrief(
           { title: post.title, body: post.body, postType: post.postType },
-          industry,
           category,
           userVisualProfile
         );
-        const prompt = buildCategoryImagePrompt(category, brief);
+        const codeRendered = usesCodeRender(category);
         send({
           ...base,
           status: "rendering",
           category: category.label,
           headline: brief.headline || brief.bodyText || "",
-          visual: brief.visual,
-          prompt,
+          // Only the photographic path still has an art direction to report.
+          visual: codeRendered ? undefined : brief.visual,
+          renderer: codeRendered ? "layout" : "image-model",
         });
-        const imageUrl = await generatePostImage(prompt, post.id, industry, true);
+
+        const imageUrl = codeRendered
+          ? await renderAndStoreDesignedImage(category, brief, post.id, {
+              author: { name: post.plan.user.name, headline: post.plan.user.headline },
+            })
+          : await generatePostImage(buildCategoryImagePrompt(category, brief), post.id, industry, true);
 
         if (imageUrl) {
           await prisma.post.update({
             where: { id: post.id },
             data: {
               imageUrl,
-              imagePrompt: `${brief.headline || brief.bodyText || category.label} - ${brief.visual}`,
+              imagePrompt: codeRendered
+                ? describeDesignBrief(category, brief)
+                : `${brief.headline || brief.bodyText || category.label} - ${brief.visual ?? ""}`,
               imageGenCount: post.imageGenCount + 1,
             },
           });

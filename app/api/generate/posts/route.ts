@@ -8,6 +8,7 @@ import { buildProfileContext } from "@/lib/linkedin";
 import { getNextScheduledSlots, toZonedDayKey, utcToLocalTime } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { assessProfile, profileGapMessage } from "@/lib/profile-completeness";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
 import { IMAGE_CATEGORIES, imageStyleTaxonomyBlock, clampImageStyle } from "@/lib/image-categories";
@@ -69,6 +70,20 @@ export async function POST(req: NextRequest) {
       send({ type: "error", message: "User not found" });
       return;
     }
+    send({ type: "preflight", key: "user", status: "done" });
+
+    // Content-quality gate. buildProfileContext() is the only thing that makes
+    // these posts this person's - a thin profile spends five of the user's 30
+    // monthly posts on output that reads like anybody's. `user` is the full row,
+    // so this adds no query.
+    const profile = assessProfile(user);
+    if (!profile.complete) {
+      const message = profileGapMessage(profile.gaps);
+      send({ type: "preflight", key: "profile", status: "error", message });
+      send({ type: "error", message, profileIncomplete: true, gaps: profile.gaps });
+      return;
+    }
+    send({ type: "preflight", key: "profile", status: "done" });
 
     // The schedule decides WHICH days posts land on; the batch size is fixed.
     const schedule = parsePostingSchedule(user.postingSchedule);
