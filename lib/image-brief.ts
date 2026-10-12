@@ -1,6 +1,12 @@
-import { generateProText, parseJSON } from "@/lib/gemini";
-import { buildImageBriefPrompt, buildCarouselPlanPrompt, UserVisualProfile } from "@/lib/prompts";
-import type { ImageCategory } from "@/lib/image-categories";
+import { generateProText, generateTextWithConfig, parseJSON } from "@/lib/gemini";
+import {
+  buildImageBriefPrompt,
+  buildDesignBriefPrompt,
+  buildCarouselDesignPrompt,
+  UserVisualProfile,
+} from "@/lib/prompts";
+import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
+import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
 
 /**
  * Content-aware image briefs.
@@ -13,36 +19,66 @@ import type { ImageCategory } from "@/lib/image-categories";
  * cards), a prominent headline + subheadline, and a polished, content-matched look.
  */
 
+/**
+ * One brief, two very different shapes depending on how the image is produced.
+ *
+ * CODE-RENDERED formats (the twelve designed ones) only populate the text
+ * fields plus `themeId` - they are laid out by lib/render-card.tsx, so there is
+ * nothing for a prose art direction to do.
+ *
+ * PHOTOGRAPHIC formats (meme + realistic scenes) still populate `visual`,
+ * `style` and `palette`, because those are what the image model consumes.
+ *
+ * Hence the optionality: the four art-direction fields used to be required, and
+ * were being generated - at real token cost - for designed formats that then
+ * threw them away.
+ */
 export interface ImageBrief {
-  style: string; // aesthetic register, content-matched (modern editorial, realistic premium - never neon/glow)
-  structure: string; // the named information-design layout that maps the post
   headline: string; // prominent bold headline (2-6 words, <=34 chars)
   subheadline: string; // one supporting subheadline line (<=70 chars), "" if none
-  visual: string; // art-director brief for the designed graphic (layout + icons + connectors + cards)
-  nodes: string[]; // 3-7 short real labels from the post (roadmap steps / spokes / comparison sides)
-  cards: string[]; // 0-4 optional short feature/benefit cards from the post
-  palette: string; // rich colour + accent + light direction, differs per post
-  theme?: string; // per-post art-direction line (parity with the carousel path)
+  nodes: string[]; // short real labels from the post (steps / stages / comparison sides)
+  cards: string[]; // 0-4 optional short feature/benefit chips from the post
   bodyText?: string; // hero words for text-card formats (quote / stat / screenshot line)
-  caption?: string; // one short caption line for a meme
+
+  /** Code-rendered only: the chosen palette id from lib/image-themes.ts. */
+  themeId?: string;
+
+  /** Photographic only: art-director brief for the image model. */
+  visual?: string;
+  /** Photographic only: the aesthetic register. */
+  style?: string;
+  /** Photographic only: colour + light direction, in prose. */
+  palette?: string;
+  /** Photographic only: the named information-design layout. */
+  structure?: string;
+  /** Photographic only: per-post art-direction line. */
+  theme?: string;
+  /** Photographic only: one short caption line for a meme. */
+  caption?: string;
 }
 
 export interface CarouselSlide {
-  structure: string;
   headline: string;
   subheadline?: string;
-  visual: string;
+  /** Short labels carrying the slide's detail; [] on the hook and takeaway slides. */
   nodes?: string[];
-  connectsFrom?: string; // how this slide follows from the previous one (narrative continuity)
-  connectsTo?: string; // how this slide leads into the next one
+
+  /** Photographic-era fields, unused by the code renderer. */
+  structure?: string;
+  visual?: string;
+  connectsFrom?: string;
+  connectsTo?: string;
 }
 
 export interface CarouselPlan {
-  theme?: string; // overall theme + modern visual direction, derived from analysing the post
-  style: string; // one shared art-direction style, reused by every slide
-  palette: string; // one shared palette + light mood, reused by every slide
+  /** The ONE palette id shared by every slide - what makes the set read as a set. */
+  themeId?: string;
   slides: CarouselSlide[]; // exactly `count` entries, in carousel order (hook ... takeaway)
-  plannerModel?: string; // which text model actually produced the plan (pro tier or flash fallback)
+
+  /** Photographic-era fields, unused by the code renderer. */
+  theme?: string;
+  style?: string;
+  palette?: string;
 }
 
 const DEFAULT_PALETTE =
@@ -65,6 +101,19 @@ export function clampHeadline(raw: string, max = 40): string {
 /** Subheadline: one clean line, capped so it stays a supporting line. */
 export function clampSubhead(raw: unknown): string {
   return clampHeadline(String(raw ?? ""), 70);
+}
+
+/**
+ * Normalise the chosen palette id.
+ *
+ * Returns undefined rather than the default for anything unrecognised, so
+ * resolveTheme() seeds from the post id instead - an unknown id then still
+ * yields a real, varied palette rather than collapsing every such post onto
+ * the same one.
+ */
+export function clampThemeId(raw: unknown): string | undefined {
+  const s = String(raw ?? "").trim().toLowerCase();
+  return IMAGE_THEME_IDS.includes(s) ? s : undefined;
 }
 
 /** Hero body text for text-card formats (a quote, a big stat, a screenshot line). */
@@ -120,96 +169,137 @@ export function clampLabels(raw: unknown, maxItems: number, maxLen: number): str
   return out;
 }
 
+/**
+ * What gets stored in Post.imagePrompt for a code-rendered image.
+ *
+ * Deliberately the CONTENT, not a prompt: there is no prompt any more. Admin
+ * analytics surfaces this field behind its privacy gate, and the words that were
+ * actually set on the graphic are far more useful there than a paragraph of
+ * art direction that no longer describes anything.
+ */
+export function describeDesignBrief(category: ImageCategory, brief: ImageBrief): string {
+  const parts: string[] = [`[${category.label}]`, brief.headline || "(no headline)"];
+  if (brief.subheadline) parts.push(`- ${brief.subheadline}`);
+  if (brief.bodyText) parts.push(`| hero: ${brief.bodyText}`);
+  if (brief.nodes.length > 0) parts.push(`| labels: ${brief.nodes.join(" / ")}`);
+  if (brief.cards.length > 0) parts.push(`| chips: ${brief.cards.join(", ")}`);
+  parts.push(`| theme: ${brief.themeId ?? "auto"}`);
+  return parts.join(" ");
+}
+
 /** A 2-6 word headline derived from the post title, used when the model fails. */
 function headlineFromTitle(title: string): string {
   const words = (title || "Key insight").trim().split(/\s+/).slice(0, 6).join(" ");
   return clampHeadline(words, 34) || "Key insight";
 }
 
-/** Deterministic, still-content-related infographic brief for when the model is down. */
-function fallbackBrief(
+/** Content-only fallback for a code-rendered format, when the model is down. */
+function fallbackDesignBrief(
+  post: { title: string; postType: string },
+  category: ImageCategory
+): ImageBrief {
+  return {
+    headline: headlineFromTitle(post.title),
+    subheadline: "",
+    nodes: [],
+    cards: [],
+    bodyText: category.genApproach === "text-card" ? clampBodyText(post.title) : "",
+    // Left undefined on purpose: resolveTheme() then picks deterministically
+    // from the post id, so a fallback image still gets a real palette and two
+    // different posts do not both come out in the default one.
+    themeId: undefined,
+  };
+}
+
+/** Scene brief for the photographic formats, when the model is down. */
+function fallbackSceneBrief(
   post: { title: string; postType: string },
   category: ImageCategory,
   headline?: string
 ): ImageBrief {
   const role = (headline || "").trim() || "professional";
-  if (category.genApproach === "realistic-scene" || category.genApproach === "meme") {
-    const isMeme = category.genApproach === "meme";
-    return {
-      style: "editorial photoreal, natural light",
-      structure: "",
-      headline: isMeme ? headlineFromTitle(post.title) : "",
-      subheadline: "",
-      visual: `A tasteful, realistic editorial scene representing "${post.title}" for the world of a ${role} - believable real objects and natural light; ${category.briefGuidance}`,
-      nodes: [],
-      cards: [],
-      palette: "natural daylight, real materials, soft true-to-life colour.",
-      caption: isMeme ? headlineFromTitle(post.title) : "",
-    };
-  }
-  const fallbackStyles: Record<string, string> = {
-    "thought-leadership": "deep editorial concept infographic",
-    "tips": "bold flat colour-block infographic",
-    "story": "warm illustrated editorial infographic",
-    "question": "high-contrast mono plus one accent infographic",
-    "listicle": "clean cool-crisp data infographic",
-  };
-  const fallbackStructures: Record<string, string> = {
-    "thought-leadership": "a central idea with three labeled supporting pillars",
-    "tips": "a numbered vertical list of labeled step cards",
-    "story": "a left-to-right journey of connected milestone nodes",
-    "question": "a central question with two contrasting labeled sides",
-    "listicle": "a clean grid of labeled point cards",
-  };
-  const fallbackPalettes: Record<string, string> = {
-    "thought-leadership": "near-black ink background, one bright amber accent, light text, soft real shadows.",
-    "tips": "two bold flat colour blocks, deep teal and warm coral, high contrast, charcoal text.",
-    "story": "warm cream background, terracotta accent, soft brown shadow, ivory cards.",
-    "question": "cool slate-grey background, one decisive magenta accent, light panels, gentle shadow.",
-    "listicle": "crisp off-white background, deep forest-green accent, soft shadows, slate text.",
-  };
-  const structure = fallbackStructures[post.postType] || "a clean labeled diagram of connected nodes";
+  const isMeme = category.genApproach === "meme";
   return {
-    style: fallbackStyles[post.postType] || "clean modern marketing infographic",
-    structure,
-    headline: headlineFromTitle(post.title),
+    style: "editorial photoreal, natural light",
+    structure: "",
+    headline: isMeme ? headlineFromTitle(post.title) : "",
     subheadline: "",
-    visual: `A designed, premium infographic that explains "${post.title}" at a glance for the world of a ${role}: ${structure} with clean modern icons, connectors, and organized labels, filling the frame as one cohesive marketing graphic.`,
+    visual: `A tasteful, realistic editorial scene representing "${post.title}" for the world of a ${role} - believable real objects and natural light; ${category.briefGuidance}`,
     nodes: [],
     cards: [],
-    palette: fallbackPalettes[post.postType] || DEFAULT_PALETTE,
+    palette: "natural daylight, real materials, soft true-to-life colour.",
+    caption: isMeme ? headlineFromTitle(post.title) : "",
   };
 }
 
 /**
- * Build a content-aware brief for a single image. Tries the text model twice, then
- * falls back to a title-derived brief (so the image stays content-related even if the
- * model call fails). Never returns null.
+ * Brief for a CODE-RENDERED format: the words on the graphic, plus a theme id.
+ *
+ * Uses the flash model, not the pro planner. The pro tier was there to write a
+ * rich art-direction paragraph for a diffusion model; this asks for a headline,
+ * a supporting line and a handful of labels drawn from the post, which flash
+ * does just as well for a fraction of the cost. The temperature is kept up so
+ * two similar posts still choose different themes.
  */
-export async function getImageBrief(
+async function getDesignBrief(
   post: { title: string; body: string; postType: string },
-  industry: string,
   category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<ImageBrief> {
-  const scene = category.genApproach === "realistic-scene" || category.genApproach === "meme";
+  const prompt = buildDesignBriefPrompt(
+    post.title,
+    post.body,
+    post.postType,
+    category,
+    themeMenuBlock(),
+    IMAGE_THEME_IDS.join("|"),
+    userProfile
+  );
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      // Pro-tier planner + a modest temperature so single images get the carousel path's
-      // per-post look variety and richer, category-appropriate briefs.
+      const raw = await generateTextWithConfig(prompt, { temperature: 1.1 });
+      const parsed = parseJSON<Partial<ImageBrief>>(raw);
+      const headline = clampHeadline(parsed.headline || "", 34);
+      // A headline is the only hard requirement - every layout is built to
+      // degrade gracefully when nodes, cards or bodyText are missing.
+      if (headline) {
+        return {
+          headline,
+          subheadline: clampSubhead(parsed.subheadline),
+          nodes: clampLabels(parsed.nodes, 5, 28),
+          cards: clampLabels(parsed.cards, 4, 22),
+          bodyText: clampBodyText(parsed.bodyText),
+          themeId: clampThemeId(parsed.themeId),
+        };
+      }
+    } catch (err) {
+      console.error(`[DesignBrief] attempt ${attempt + 1} failed:`, (err as Error).message);
+    }
+  }
+  return fallbackDesignBrief(post, category);
+}
+
+/** Brief for a PHOTOGRAPHIC format: an art direction the image model consumes. */
+async function getSceneBrief(
+  post: { title: string; body: string; postType: string },
+  category: ImageCategory,
+  userProfile?: UserVisualProfile
+): Promise<ImageBrief> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      // Pro-tier planner here: a believable scene brief genuinely benefits from
+      // it, and these are now a minority of images.
       const { text: raw } = await generateProText(
-        buildImageBriefPrompt(post.title, post.body, post.postType, industry, category, userProfile),
+        buildImageBriefPrompt(post.title, post.body, post.postType, category, userProfile),
         { temperature: 1.1, topP: 0.95 }
       );
       const parsed = parseJSON<Partial<ImageBrief>>(raw);
-      const headline = clampHeadline(parsed.headline || "", 34);
-      // Designed formats need headline + visual + palette; scene/meme just need a scene visual.
-      const valid = scene ? !!parsed.visual : !!(headline && parsed.visual && parsed.palette);
-      if (valid) {
+      if (parsed.visual) {
         return {
           style: clampStyle(parsed.style),
           structure: clampStructure(parsed.structure),
-          headline,
+          headline: clampHeadline(parsed.headline || "", 34),
           subheadline: clampSubhead(parsed.subheadline),
           visual: String(parsed.visual),
           nodes: clampLabels(parsed.nodes, 5, 28),
@@ -221,61 +311,94 @@ export async function getImageBrief(
         };
       }
     } catch (err) {
-      console.error(`[ImageBrief] attempt ${attempt + 1} failed:`, (err as Error).message);
+      console.error(`[SceneBrief] attempt ${attempt + 1} failed:`, (err as Error).message);
     }
   }
-  return fallbackBrief(post, category, userProfile?.headline ?? undefined);
+  return fallbackSceneBrief(post, category, userProfile?.headline ?? undefined);
 }
 
 /**
- * Build a cohesive multi-slide carousel plan from a post. Returns null on failure so
- * the caller can fall back to the legacy generic carousel path.
+ * Build a content-aware brief for one image, routed by how that format is
+ * produced. Never returns null - both paths fall back to a title-derived brief
+ * so the image stays related to the post even when the model call fails.
+ */
+export async function getImageBrief(
+  post: { title: string; body: string; postType: string },
+  category: ImageCategory,
+  userProfile?: UserVisualProfile
+): Promise<ImageBrief> {
+  return usesCodeRender(category)
+    ? getDesignBrief(post, category, userProfile)
+    : getSceneBrief(post, category, userProfile);
+}
+
+/**
+ * Last-resort carousel: a hook slide from the title and a close.
+ *
+ * Thin, but legible and free - which is the right trade when the planner is
+ * down. The previous fallback fired four abstract diffusion images carrying no
+ * text at all, which cost real money to say nothing.
+ */
+function fallbackCarouselPlan(post: { title: string }, count: number): CarouselPlan {
+  const slides: CarouselSlide[] = [
+    { headline: headlineFromTitle(post.title), subheadline: "", nodes: [] },
+  ];
+  while (slides.length < Math.max(2, count - 1)) {
+    slides.push({ headline: `Point ${slides.length}`, subheadline: "", nodes: [] });
+  }
+  slides.push({ headline: "The Takeaway", subheadline: "", nodes: [] });
+  return { themeId: undefined, slides: slides.slice(0, count) };
+}
+
+/**
+ * Plan a cohesive multi-slide carousel from a post.
+ *
+ * Always returns a plan. It used to return null so the route could fall back to
+ * the legacy diffusion carousel; there is no diffusion carousel any more - every
+ * slide was always specified as a designed infographic - so a failed plan now
+ * degrades to a thin code-rendered one instead of an expensive wordless one.
+ *
+ * Flash rather than the pro planner: the job is a narrative arc in short
+ * strings, not a four-part art direction.
  */
 export async function getCarouselPlan(
   post: { title: string; body: string; postType: string },
-  industry: string,
   count: number,
   userProfile?: UserVisualProfile
-): Promise<CarouselPlan | null> {
+): Promise<CarouselPlan> {
+  const prompt = buildCarouselDesignPrompt(
+    post.title,
+    post.body,
+    post.postType,
+    count,
+    themeMenuBlock(),
+    IMAGE_THEME_IDS.join("|"),
+    userProfile
+  );
+
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      // The planner is a pro-tier text model (falls back to flash). It reads the full
-      // post and returns one "packet" per slide: the slide's text content plus a
-      // visual prompt built from that text, with prev/next continuity refs.
-      const { text: raw, model: plannerModel } = await generateProText(
-        buildCarouselPlanPrompt(post.title, post.body, post.postType, industry, count, userProfile),
-        // A deliberate temperature so two similar-tone posts diverge (per-post variety);
-        // getCarouselPlan retries twice + clamps, so an occasional off sample is absorbed.
-        { temperature: 1.1, topP: 0.95 }
-      );
+      // A deliberate temperature so two similar-tone posts diverge; two retries
+      // plus clamping absorb the occasional off sample.
+      const raw = await generateTextWithConfig(prompt, { temperature: 1.1 });
       const parsed = parseJSON<Partial<CarouselPlan>>(raw);
       const slides = Array.isArray(parsed.slides)
         ? parsed.slides
-            .filter((s): s is CarouselSlide => !!s && !!s.headline && !!s.visual)
+            .filter((s): s is CarouselSlide => !!s && !!s.headline)
             .map((s) => ({
-              structure: clampStructure((s as { structure?: unknown }).structure),
               headline: clampHeadline(s.headline, 34),
               subheadline: clampSubhead((s as { subheadline?: unknown }).subheadline),
-              visual: String(s.visual),
               nodes: clampLabels((s as { nodes?: unknown }).nodes, 4, 28),
-              connectsFrom: clampHeadline(String((s as { connectsFrom?: unknown }).connectsFrom ?? ""), 100),
-              connectsTo: clampHeadline(String((s as { connectsTo?: unknown }).connectsTo ?? ""), 100),
             }))
             .filter((s) => !!s.headline)
             .slice(0, count)
         : [];
-      if (parsed.style && parsed.palette && slides.length >= 2) {
-        return {
-          theme: clampHeadline(String(parsed.theme ?? ""), 120),
-          style: clampStyle(parsed.style),
-          palette: String(parsed.palette),
-          slides,
-          plannerModel,
-        };
+      if (slides.length >= 2) {
+        return { themeId: clampThemeId(parsed.themeId), slides };
       }
     } catch (err) {
       console.error(`[CarouselPlan] attempt ${attempt + 1} failed:`, (err as Error).message);
     }
   }
-  return null;
+  return fallbackCarouselPlan(post, count);
 }

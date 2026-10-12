@@ -2,12 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  generateCarouselImages,
-  generateCarouselFromPlan,
-  buildImagePrompt,
-  lastImageGenError,
-} from "@/lib/imagen";
+import { renderCarouselFromPlan, lastImageGenError } from "@/lib/imagen";
 import { getCarouselPlan } from "@/lib/image-brief";
 import { appendImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
@@ -112,65 +107,38 @@ export async function POST(req: NextRequest) {
           headline: post.plan.user.headline, // the actual ROLE that drives the imagery
         };
 
-        // Stage 1 - Planner (pro-tier text model): send the full post, get back one
-        // packet per slide (text content + a visual prompt built from that text).
+        // Stage 1 - Planner: send the full post, get back the narrative arc as
+        // text (per-slide headline, supporting line and labels) plus the ONE
+        // palette id the whole set shares.
         send({ type: "plan", status: "start", message: "Sending the full post to the planner" });
         const plan = await getCarouselPlan(
           { title: post.title, body: post.body, postType: post.postType },
-          industry,
           CAROUSEL_COUNT,
           userVisualProfile
         );
 
-        let images: string[];
-        let savedPrompt: string;
+        const total = plan.slides.length;
+        send({
+          type: "plan",
+          status: "done",
+          themeId: plan.themeId ?? null,
+          slides: plan.slides.map((s, i) => ({
+            index: i,
+            role: i === 0 ? "hook" : i === total - 1 ? "takeaway" : "point",
+            headline: s.headline,
+            subheadline: s.subheadline ?? "",
+            nodes: s.nodes ?? [],
+          })),
+        });
 
-        if (plan && plan.slides.length >= 2) {
-          const total = plan.slides.length;
-          send({
-            type: "plan",
-            status: "done",
-            model: plan.plannerModel ?? null,
-            theme: plan.theme ?? null,
-            style: plan.style,
-            palette: plan.palette,
-            slides: plan.slides.map((s, i) => ({
-              index: i,
-              role: i === 0 ? "hook" : i === total - 1 ? "takeaway" : "point",
-              headline: s.headline,
-              subheadline: s.subheadline ?? "",
-              nodes: s.nodes ?? [],
-              visual: s.visual,
-              connectsFrom: s.connectsFrom ?? "",
-              connectsTo: s.connectsTo ?? "",
-            })),
-          });
-
-          // Stage 2 - Renderer (Nano Banana Pro), one fire per slide, in parallel.
-          send({ type: "render", status: "start", total });
-          images = await generateCarouselFromPlan(plan, post.id, industry, (e) =>
-            send({ type: "slide", ...e })
-          );
-          savedPrompt = plan.slides.map((s) => s.headline).join(" / ");
-        } else {
-          // Fallback: planner unavailable - use the legacy generic carousel path.
-          send({
-            type: "plan",
-            status: "fallback",
-            message: "Planner unavailable - using the generic carousel fallback",
-          });
-          const basePrompt = buildImagePrompt(
-            post.title,
-            post.postType,
-            industry,
-            userVisualProfile.headline ?? undefined
-          );
-          send({ type: "render", status: "start", total: CAROUSEL_COUNT });
-          images = await generateCarouselImages(basePrompt, post.id, industry, CAROUSEL_COUNT, (e) =>
-            send({ type: "slide", ...e })
-          );
-          savedPrompt = basePrompt;
-        }
+        // Stage 2 - Renderer. Laid out in code, so the slide text is exact and
+        // the set costs nothing. getCarouselPlan always returns a plan now, so
+        // there is no diffusion fallback branch to take.
+        send({ type: "render", status: "start", total });
+        const images = await renderCarouselFromPlan(plan, post.id, (e) =>
+          send({ type: "slide", ...e })
+        );
+        const savedPrompt = plan.slides.map((s) => s.headline).join(" / ");
 
         if (images.length === 0) {
           send({

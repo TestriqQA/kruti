@@ -2,9 +2,31 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
-import { ChevronRight, ChevronLeft, CheckCircle, User, Target, Palette, Users, Save, Sparkles } from "lucide-react";
+import {
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle,
+  User,
+  Target,
+  Palette,
+  Users,
+  Plus,
+  X,
+  AlertCircle,
+} from "lucide-react";
 import { useToast } from "@/components/Toast";
 import Avatar from "@/components/Avatar";
+import {
+  composeTargetAudience,
+  MIN_HEADLINE_CHARS,
+  MIN_SUMMARY_CHARS,
+  MIN_SKILLS,
+  MIN_CONTENT_STYLES,
+  MIN_AUDIENCE_CHARS,
+  MAX_AUDIENCE_CHARS,
+  MAX_SKILLS,
+  type ProfileGap,
+} from "@/lib/profile-completeness";
 
 const INDUSTRIES = [
   "Technology", "Finance", "Healthcare", "Marketing", "Sales",
@@ -55,6 +77,24 @@ const POSITIONING_OPTIONS = [
   },
 ];
 
+/**
+ * Must stay in step with TONES in SettingsClient and TONE_KEYS in
+ * lib/profile-completeness.ts - a value outside that set resolves to a flat
+ * generic voice in lib/linkedin.ts.
+ *
+ * Tone used to be DERIVED from the chosen positioning here (a
+ * POSITIONING_TO_TONE map), which meant nobody ever actually chose their voice:
+ * every Educator wrote "educational", every Storyteller "inspirational". It is a
+ * real question now, because tone.direction is injected into every single prompt
+ * as a hard constraint.
+ */
+const TONES = [
+  { value: "professional", label: "Professional", desc: "Precise, expert, substantive. Confident without hype." },
+  { value: "conversational", label: "Conversational", desc: "Friendly and relatable, like talking to a peer." },
+  { value: "inspirational", label: "Inspirational", desc: "Story-driven and motivating, but earned." },
+  { value: "educational", label: "Educational", desc: "Teaching-first. Explain the why, step by step." },
+];
+
 const CONTENT_GOALS = [
   "Lead Generation",
   "Network Building",
@@ -81,67 +121,110 @@ const CONTENT_STYLES = [
   "Social Proof / Results",
 ];
 
-// Deterministic target-audience generation - maps the user's first-3-step
-// onboarding answers to a natural-language audience description (no AI/API call).
-const GOAL_AUDIENCE: Record<string, string> = {
-  "Lead Generation": "potential clients and buyers actively looking for solutions",
-  "Network Building": "peers and collaborators open to building genuine professional relationships",
-  "Brand Awareness": "professionals discovering new voices and ideas to follow in their field",
-  "Job Seeking": "hiring managers and recruiters scouting strong talent",
-  "Sales / Business Development": "decision-makers evaluating products, services, and partnerships",
-  "Recruiting Top Talent": "skilled professionals open to new roles and opportunities",
-};
-
-const POSITIONING_VALUE: Record<string, string> = {
-  "Thought Leader": "bold perspectives and a clear point of view on where the industry is heading",
-  "Industry Expert": "deep, credible analysis and technical insight",
-  "Storyteller": "relatable stories and lessons drawn from real experience",
-  "Educator": "practical frameworks and skills they can apply right away",
-  "Entertainer": "sharp insights delivered in an engaging, memorable way",
-  "Contrarian": "fresh takes that challenge conventional thinking",
-  "Practitioner": "hands-on, tactical advice from someone doing the work",
-  "Community Builder": "a sense of community and conversations worth joining",
-};
-
-// Seed a sensible voice/tone from the chosen positioning so a new user's first
-// strategy and posts aren't written in the flat default "Professional" voice. The
-// user can still change this any time in Settings (which overrides this).
-const POSITIONING_TO_TONE: Record<string, string> = {
-  "Thought Leader": "professional",
-  "Industry Expert": "professional",
-  "Practitioner": "professional",
-  "Contrarian": "professional",
-  "Educator": "educational",
-  "Storyteller": "inspirational",
-  "Entertainer": "conversational",
-  "Community Builder": "conversational",
-};
-
 interface OnboardingWizardProps {
   user: {
     name?: string | null;
     headline?: string | null;
     industry?: string | null;
     image?: string | null;
+    summary?: string | null;
+    /** JSON array string. */
+    skills?: string | null;
+    positioning?: string | null;
+    /** JSON array string. */
+    contentGoals?: string | null;
+    /** JSON array string. */
+    contentStyles?: string | null;
+    targetAudience?: string | null;
+    /** Already normalised to a tone key by the page. */
+    tone?: string | null;
   };
+  /**
+   * True when this user already finished onboarding once and is back only
+   * because their profile is missing fields the prompts need.
+   */
+  isTopUp?: boolean;
 }
 
-export default function OnboardingWizard({ user }: OnboardingWizardProps) {
+/** Small helper so the char counters read consistently. */
+function Counter({ value, min, max }: { value: number; min?: number; max?: number }) {
+  const short = min !== undefined && value < min;
+  return (
+    <p
+      className={`text-xs text-right mt-1 ${
+        short ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"
+      }`}
+    >
+      {max !== undefined ? `${value}/${max}` : value}
+      {short ? ` - ${min - value} more needed` : min !== undefined ? " - looks good" : ""}
+    </p>
+  );
+}
+
+export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWizardProps) {
   const { update } = useSession();
   const { toast } = useToast();
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [showIndustryDropdown, setShowIndustryDropdown] = useState(false);
+  const [serverGaps, setServerGaps] = useState<ProfileGap[]>([]);
 
-  // Form state
+  // Form state - seeded from whatever the account already has so a returning
+  // user tops up the gaps instead of retyping everything.
   const [headline, setHeadline] = useState(user.headline ?? "");
   const [industry, setIndustry] = useState(user.industry ?? "");
-  const [summary, setSummary] = useState("");
-  const [positioning, setPositioning] = useState("");
-  const [contentGoals, setContentGoals] = useState<string[]>([]);
-  const [contentStyles, setContentStyles] = useState<string[]>([]);
-  const [targetAudience, setTargetAudience] = useState("");
+  const [summary, setSummary] = useState(user.summary ?? "");
+  const [skills, setSkills] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(user.skills ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const [skillInput, setSkillInput] = useState("");
+  const [positioning, setPositioning] = useState(user.positioning ?? "");
+  const [tone, setTone] = useState(user.tone ?? "");
+  const [contentGoals, setContentGoals] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(user.contentGoals ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+  const [contentStyles, setContentStyles] = useState<string[]>(() => {
+    try {
+      const parsed = JSON.parse(user.contentStyles ?? "[]");
+      return Array.isArray(parsed) ? parsed.filter((s) => typeof s === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // ── Target audience ───────────────────────────────────────────────────────
+  //
+  // Three guided answers rather than one free textarea, because the old field
+  // was filled by a "Generate from Profile" button that composed a template
+  // from industry + positioning + goals. Almost nobody edited it, so every user
+  // in the same industry with the same positioning sent the model BYTE-IDENTICAL
+  // audience text - and "concrete pains and outcomes, in the audience's own
+  // words" is precisely what the strategy prompt is built to consume.
+  //
+  // `audienceText` stays the submitted value so a returning user's existing
+  // description is never clobbered; the guided fields only drive it once the
+  // user actually touches one.
+  const [audienceWho, setAudienceWho] = useState("");
+  const [audiencePain, setAudiencePain] = useState("");
+  const [audienceOutcome, setAudienceOutcome] = useState("");
+  const [audienceTouched, setAudienceTouched] = useState(false);
+  const [audienceText, setAudienceText] = useState(user.targetAudience ?? "");
+
+  useEffect(() => {
+    if (!audienceTouched) return;
+    setAudienceText(composeTargetAudience(audienceWho, audiencePain, audienceOutcome));
+  }, [audienceTouched, audienceWho, audiencePain, audienceOutcome]);
 
   // Auto-detect browser timezone
   const [timezone] = useState(() => {
@@ -152,92 +235,110 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
     }
   });
 
-  const STORAGE_KEY = "kruti_onboarding_draft";
+  // Versioned key. The draft shape changed (skills and tone were added,
+  // targetAudience became audienceText plus three guided fields), so a v1 draft
+  // restored into this wizard would silently drop the user's audience text and
+  // leave them staring at an empty required field they thought they had filled.
+  // Bumping the key discards those drafts instead.
+  const STORAGE_KEY = "kruti_onboarding_draft_v2";
   const [draftRestored, setDraftRestored] = useState(false);
 
   // Restore draft from localStorage on mount
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const draft = JSON.parse(saved);
-        if (draft.step) setStep(draft.step);
-        if (draft.headline) setHeadline(draft.headline);
-        if (draft.industry) setIndustry(draft.industry);
-        if (draft.summary) setSummary(draft.summary);
-        if (draft.positioning) setPositioning(draft.positioning);
-        if (draft.contentGoals) setContentGoals(draft.contentGoals);
-        if (draft.contentStyles) setContentStyles(draft.contentStyles);
-        if (draft.targetAudience) setTargetAudience(draft.targetAudience);
-        setDraftRestored(true);
-        setTimeout(() => setDraftRestored(false), 3000);
-      }
-    } catch { /* ignore corrupt localStorage */ }
+      if (!saved) return;
+      const draft = JSON.parse(saved);
+      if (draft.step) setStep(draft.step);
+      if (draft.headline) setHeadline(draft.headline);
+      if (draft.industry) setIndustry(draft.industry);
+      if (draft.summary) setSummary(draft.summary);
+      if (Array.isArray(draft.skills)) setSkills(draft.skills);
+      if (draft.positioning) setPositioning(draft.positioning);
+      if (draft.tone) setTone(draft.tone);
+      if (Array.isArray(draft.contentGoals)) setContentGoals(draft.contentGoals);
+      if (Array.isArray(draft.contentStyles)) setContentStyles(draft.contentStyles);
+      if (draft.audienceWho) setAudienceWho(draft.audienceWho);
+      if (draft.audiencePain) setAudiencePain(draft.audiencePain);
+      if (draft.audienceOutcome) setAudienceOutcome(draft.audienceOutcome);
+      if (draft.audienceText) setAudienceText(draft.audienceText);
+      if (draft.audienceTouched) setAudienceTouched(true);
+      setDraftRestored(true);
+      setTimeout(() => setDraftRestored(false), 3000);
+    } catch {
+      /* ignore corrupt localStorage */
+    }
   }, []);
 
   // Auto-save draft to localStorage whenever form changes
   const saveDraft = useCallback(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        step, headline, industry, summary, positioning,
-        contentGoals, contentStyles, targetAudience,
-      }));
-    } catch { /* storage full - ignore */ }
-  }, [step, headline, industry, summary, positioning, contentGoals, contentStyles, targetAudience]);
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          step, headline, industry, summary, skills, positioning, tone,
+          contentGoals, contentStyles,
+          audienceWho, audiencePain, audienceOutcome, audienceText, audienceTouched,
+        })
+      );
+    } catch {
+      /* storage full - ignore */
+    }
+  }, [
+    step, headline, industry, summary, skills, positioning, tone,
+    contentGoals, contentStyles,
+    audienceWho, audiencePain, audienceOutcome, audienceText, audienceTouched,
+  ]);
 
   useEffect(() => {
     saveDraft();
   }, [saveDraft]);
 
-  // Clear draft on successful submit
   function clearDraft() {
-    try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
   }
 
   const totalSteps = 4;
   const progress = (step / totalSteps) * 100;
 
-  function toggleMulti(
-    value: string,
-    list: string[],
-    setList: (v: string[]) => void
-  ) {
-    setList(
-      list.includes(value) ? list.filter((v) => v !== value) : [...list, value]
-    );
+  function toggleMulti(value: string, list: string[], setList: (v: string[]) => void) {
+    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   }
 
-  // Build the target audience from the user's first-3-step answers (headline,
-  // industry, positioning, goals) - fully client-side, no AI/API call.
-  function handleGenerateAudience() {
-    if (!industry.trim() && !positioning && contentGoals.length === 0) {
-      toast("Complete the earlier steps first so we can tailor your audience.", "error");
+  function addSkill() {
+    const s = skillInput.trim().replace(/\s+/g, " ");
+    if (!s) return;
+    if (skills.length >= MAX_SKILLS) {
+      toast(`You can add up to ${MAX_SKILLS} skills.`, "error");
       return;
     }
-
-    const who = industry.trim()
-      ? `${industry.trim()} professionals and decision-makers`
-      : "Professionals and decision-makers in your field";
-
-    const goalDescs = contentGoals
-      .map((g) => GOAL_AUDIENCE[g])
-      .filter(Boolean)
-      .slice(0, 2);
-    const goalPart = goalDescs.length ? ` - especially ${goalDescs.join(", and ")}` : "";
-
-    const value = POSITIONING_VALUE[positioning] || "clear, relevant, high-quality content";
-
-    let text = `${who}${goalPart} - who value ${value}.`;
-    // Respect the 300-char field limit; drop the goal detail first if it overflows.
-    if (text.length > 300) text = `${who} who value ${value}.`;
-    text = text.slice(0, 300);
-
-    setTargetAudience(text);
-    toast("Target audience drafted from your profile - tweak it as you like", "success");
+    if (skills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
+      setSkillInput("");
+      return;
+    }
+    setSkills([...skills, s]);
+    setSkillInput("");
   }
+
+  // ── Per-step gates. Mirror lib/profile-completeness.ts; the server re-checks. ──
+  const step1Ok =
+    headline.trim().length >= MIN_HEADLINE_CHARS &&
+    industry.trim().length > 0 &&
+    summary.trim().length >= MIN_SUMMARY_CHARS &&
+    skills.length >= MIN_SKILLS;
+  const step2Ok = !!positioning && !!tone;
+  const step3Ok = contentGoals.length >= 1 && contentStyles.length >= MIN_CONTENT_STYLES;
+  const step4Ok = audienceText.trim().length >= MIN_AUDIENCE_CHARS;
+
+  const stepOk = [step1Ok, step2Ok, step3Ok, step4Ok];
 
   async function handleSubmit() {
     setSubmitting(true);
+    setServerGaps([]);
     try {
       const res = await fetch("/api/onboarding", {
         method: "POST",
@@ -246,39 +347,43 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
           headline,
           industry,
           summary,
+          skills,
           positioning,
+          tonePrefs: tone,
           contentGoals,
           contentStyles,
-          targetAudience,
+          targetAudience: audienceText,
           timezone,
-          tonePrefs: POSITIONING_TO_TONE[positioning] ?? "professional",
         }),
       });
 
       if (res.ok) {
         clearDraft();
-        // Refresh JWT to pick up onboardingCompleted = true
+        // Refresh JWT so middleware sees onboardingCompleted = true
         await update();
-        // Use hard navigation so middleware re-reads the updated JWT cookie
+        // Hard navigation so middleware re-reads the updated JWT cookie
         window.location.href = "/dashboard";
-      } else {
-        const data = await res.json().catch(() => ({}));
-        console.error("Onboarding failed:", data);
+        return;
       }
+
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.gaps) && data.gaps.length > 0) {
+        setServerGaps(data.gaps);
+      }
+      toast(data.error || "Could not save your profile. Please try again.", "error");
     } catch (err) {
       console.error("Onboarding submit error:", err);
+      toast("Network error. Please check your connection and try again.", "error");
     } finally {
       setSubmitting(false);
     }
   }
 
   const stepIcons = [User, Target, Palette, Users];
-  const stepTitles = [
-    "Your Profile",
-    "Content Positioning",
-    "Goals & Style",
-    "Target Audience",
-  ];
+  const stepTitles = ["Your Profile", "Positioning & Voice", "Goals & Style", "Target Audience"];
+
+  const inputCls =
+    "w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
 
   return (
     <div className="min-h-screen bg-[#F6F8FB] dark:bg-[#0A0E14] flex items-center justify-center p-4">
@@ -287,8 +392,14 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
         <div className="px-8 pt-7 pb-6 border-b border-slate-100 dark:border-white/10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto mb-5" />
-          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">Welcome to Kruti.io</h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Let&apos;s set up your content strategy</p>
+          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">
+            {isTopUp ? "Finish your profile" : "Welcome to Kruti.io"}
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+            {isTopUp
+              ? "A few details are missing. These are what make your posts sound like you - not a generic AI."
+              : "Let's set up your content strategy"}
+          </p>
 
           {/* Progress bar */}
           <div className="w-full bg-slate-200 dark:bg-white/10 rounded-full h-2 mt-6">
@@ -303,8 +414,15 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
               const done = i + 1 < step;
               const current = i + 1 === step;
               return (
-                <div key={i} className={`flex flex-col items-center gap-1 ${i + 1 <= step ? "opacity-100" : "opacity-40"}`}>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center ${done ? "bg-green-500" : current ? "bg-blue-600" : "bg-slate-200 dark:bg-white/10"}`}>
+                <div
+                  key={title}
+                  className={`flex flex-col items-center gap-1 ${i + 1 <= step ? "opacity-100" : "opacity-40"}`}
+                >
+                  <div
+                    className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                      done ? "bg-green-500" : current ? "bg-blue-600" : "bg-slate-200 dark:bg-white/10"
+                    }`}
+                  >
                     {done ? (
                       <CheckCircle className="w-4 h-4 text-white" />
                     ) : (
@@ -326,14 +444,36 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
           </div>
         )}
 
+        {/* Server-side validation feedback */}
+        {serverGaps.length > 0 && (
+          <div className="mx-8 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              Still needed
+            </div>
+            <ul className="mt-2 space-y-1">
+              {serverGaps.map((g) => (
+                <li key={g.key} className="text-xs text-amber-700 dark:text-amber-300/90">
+                  <span className="font-medium">{g.label}:</span> {g.hint}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {/* Content */}
         <div className="px-8 py-6">
-          {/* Step 1: Profile */}
+          {/* ── Step 1: Profile ─────────────────────────────────────────── */}
           {step === 1 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">Confirm your profile</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Review and complete your details so we can personalize your content</p>
+                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
+                  Tell us about your work
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                  LinkedIn only shares your name, photo and email with us - everything below is what
+                  makes your content specific to you.
+                </p>
               </div>
 
               {user.image && (
@@ -354,9 +494,10 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                   type="text"
                   value={headline}
                   onChange={(e) => setHeadline(e.target.value)}
-                  placeholder="e.g. Senior Product Manager at Acme Corp"
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="e.g. Senior Product Manager at Acme - I help B2B teams ship faster"
+                  className={inputCls}
                 />
+                <Counter value={headline.trim().length} min={MIN_HEADLINE_CHARS} />
               </div>
 
               <div className="relative">
@@ -373,7 +514,7 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                   onFocus={() => setShowIndustryDropdown(true)}
                   onBlur={() => setShowIndustryDropdown(false)}
                   placeholder="Select or type your industry"
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white"
+                  className={inputCls}
                 />
                 {showIndustryDropdown && (
                   <div className="absolute z-50 w-full mt-1 bg-white dark:bg-[#0D131F] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg max-h-60 overflow-y-auto">
@@ -391,44 +532,107 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                           {ind}
                         </div>
                       ))
-                    ) : (
-                      industry.trim() ? (
-                        <div className="px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400 italic">
-                          Using custom industry: &quot;{industry}&quot;
-                        </div>
-                      ) : null
-                    )}
+                    ) : industry.trim() ? (
+                      <div className="px-4 py-2.5 text-sm text-slate-500 dark:text-slate-400 italic">
+                        Using custom industry: &quot;{industry}&quot;
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                  Professional Summary <span className="text-slate-400">(optional)</span>
+                  Professional Summary <span className="text-red-500">*</span>
                 </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                  The single biggest factor in how personal your posts read. What do you actually do,
+                  how long have you done it, and what have you learned that others get wrong?
+                </p>
                 <textarea
                   value={summary}
                   onChange={(e) => setSummary(e.target.value)}
-                  rows={3}
-                  placeholder="Briefly describe your expertise and what you do..."
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={5}
+                  placeholder="e.g. I've spent 9 years in B2B SaaS product, the last 4 leading a 12-person team at Acme. I've shipped three platform rewrites and killed two of my own features. Most teams I meet over-index on roadmap theatre and under-invest in talking to churned customers..."
+                  className={`${inputCls} resize-none`}
                 />
+                <Counter value={summary.trim().length} min={MIN_SUMMARY_CHARS} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Skills &amp; Topics You Can Speak On <span className="text-red-500">*</span>
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1.5">
+                  These become your weekly content pillars. Add at least {MIN_SKILLS} - be specific
+                  (&quot;pricing experiments&quot; beats &quot;marketing&quot;).
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={skillInput}
+                    onChange={(e) => setSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addSkill();
+                      }
+                    }}
+                    placeholder="Add a skill or topic..."
+                    className={inputCls}
+                  />
+                  <button
+                    type="button"
+                    onClick={addSkill}
+                    className="flex items-center gap-1 px-4 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors dark:text-slate-300 flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </button>
+                </div>
+                {skills.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {skills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="flex items-center gap-1 text-sm px-3 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full"
+                      >
+                        {skill}
+                        <button
+                          type="button"
+                          onClick={() => setSkills(skills.filter((s) => s !== skill))}
+                          className="hover:text-blue-900 dark:hover:text-blue-200"
+                          aria-label={`Remove ${skill}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <Counter value={skills.length} min={MIN_SKILLS} />
               </div>
             </div>
           )}
 
-          {/* Step 2: Positioning */}
+          {/* ── Step 2: Positioning & Voice ─────────────────────────────── */}
           {step === 2 && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">How do you want to show up?</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Choose the content positioning that fits your personal brand</p>
+                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
+                  How do you want to show up?
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                  Your positioning sets the writing stance; your tone sets the voice. Both are applied
+                  to every post as hard constraints.
+                </p>
               </div>
 
               <div className="space-y-3">
                 {POSITIONING_OPTIONS.map((option) => (
                   <button
                     key={option.value}
+                    type="button"
                     onClick={() => setPositioning(option.value)}
                     className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 text-left transition-all ${
                       positioning === option.value
@@ -438,7 +642,13 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                   >
                     <span className="text-2xl">{option.icon}</span>
                     <div>
-                      <p className={`font-semibold text-sm ${positioning === option.value ? "text-blue-600 dark:text-blue-400" : "text-slate-800 dark:text-slate-200"}`}>
+                      <p
+                        className={`font-semibold text-sm ${
+                          positioning === option.value
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-slate-800 dark:text-slate-200"
+                        }`}
+                      >
                         {option.value}
                       </p>
                       <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{option.description}</p>
@@ -449,23 +659,64 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                   </button>
                 ))}
               </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Your writing voice <span className="text-red-500">*</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Pick how your posts should sound. You can change this any time in Settings.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {TONES.map((t) => (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => setTone(t.value)}
+                      className={`p-4 rounded-xl border-2 text-left transition-all ${
+                        tone === t.value
+                          ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/10 bg-white dark:bg-white/[0.06]"
+                      }`}
+                    >
+                      <p
+                        className={`font-medium text-sm ${
+                          tone === t.value
+                            ? "text-blue-600 dark:text-blue-400"
+                            : "text-slate-800 dark:text-slate-200"
+                        }`}
+                      >
+                        {t.label}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Step 3: Goals & Styles */}
+          {/* ── Step 3: Goals & Styles ──────────────────────────────────── */}
           {step === 3 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">Goals & Content Style</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Select all that apply - we&apos;ll personalize your content strategy</p>
+                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
+                  Goals &amp; Content Style
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                  Select all that apply - we&apos;ll personalize your content strategy
+                </p>
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">What are your LinkedIn goals?</h3>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
+                  What are your LinkedIn goals? <span className="text-red-500">*</span>
+                </h3>
                 <div className="flex flex-wrap gap-2">
                   {CONTENT_GOALS.map((goal) => (
                     <button
                       key={goal}
+                      type="button"
                       onClick={() => toggleMulti(goal, contentGoals, setContentGoals)}
                       className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
                         contentGoals.includes(goal)
@@ -480,11 +731,18 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
               </div>
 
               <div>
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Preferred content styles</h3>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                  Preferred content styles <span className="text-red-500">*</span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                  Each post in a batch is written in a different style, so pick at least{" "}
+                  {MIN_CONTENT_STYLES} - otherwise all five posts come out the same shape.
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {CONTENT_STYLES.map((style) => (
                     <button
                       key={style}
+                      type="button"
                       onClick={() => toggleMulti(style, contentStyles, setContentStyles)}
                       className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
                         contentStyles.includes(style)
@@ -496,47 +754,110 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
                     </button>
                   ))}
                 </div>
+                <Counter value={contentStyles.length} min={MIN_CONTENT_STYLES} />
               </div>
             </div>
           )}
 
-          {/* Step 4: Target Audience */}
+          {/* ── Step 4: Target Audience ─────────────────────────────────── */}
           {step === 4 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">Who are you writing for?</h2>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Describe your ideal LinkedIn audience - this powers the AI strategy</p>
+                <h2 className="text-xl font-bold font-display text-slate-900 dark:text-white">
+                  Who are you writing for?
+                </h2>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">
+                  Answer these three and we&apos;ll assemble the description the AI writes against.
+                  The more specific you are, the less generic your posts.
+                </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
-                  Target Audience Description
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  1. Who exactly are they?
+                </label>
+                <input
+                  type="text"
+                  value={audienceWho}
+                  onChange={(e) => {
+                    setAudienceWho(e.target.value);
+                    setAudienceTouched(true);
+                  }}
+                  placeholder="e.g. Seed-stage B2B SaaS founders with 5-20 employees"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  2. What are they stuck on right now?
+                </label>
+                <input
+                  type="text"
+                  value={audiencePain}
+                  onChange={(e) => {
+                    setAudiencePain(e.target.value);
+                    setAudienceTouched(true);
+                  }}
+                  placeholder="e.g. they keep shipping features nobody asked for and churn is climbing"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  3. What do they actually want?
+                </label>
+                <input
+                  type="text"
+                  value={audienceOutcome}
+                  onChange={(e) => {
+                    setAudienceOutcome(e.target.value);
+                    setAudienceTouched(true);
+                  }}
+                  placeholder="e.g. a repeatable way to decide what to build next without guessing"
+                  className={inputCls}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Final description <span className="text-slate-400">(edit freely)</span>
                 </label>
                 <textarea
-                  value={targetAudience}
-                  onChange={(e) => setTargetAudience(e.target.value.slice(0, 300))}
-                  rows={5}
-                  placeholder="e.g. Early-stage startup founders and CTOs in the SaaS space, struggling with team scaling and product-market fit..."
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-white rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={audienceText}
+                  onChange={(e) => setAudienceText(e.target.value.slice(0, MAX_AUDIENCE_CHARS))}
+                  rows={4}
+                  placeholder="Fill in the three questions above, or write your own description here."
+                  className={`${inputCls} resize-none`}
                 />
-                <p className="text-xs text-slate-400 dark:text-slate-500 text-right mt-1">{targetAudience.length}/300</p>
-                <button
-                  type="button"
-                  onClick={handleGenerateAudience}
-                  className="mt-2 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50/60 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/20 transition-colors"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Generate from Profile
-                </button>
+                <Counter
+                  value={audienceText.trim().length}
+                  min={MIN_AUDIENCE_CHARS}
+                  max={MAX_AUDIENCE_CHARS}
+                />
               </div>
 
               {/* Summary of choices */}
               <div className="bg-blue-50 dark:bg-blue-500/10 rounded-xl p-4 space-y-2">
                 <p className="text-sm font-semibold text-slate-700 dark:text-slate-300">Your content setup:</p>
                 <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                  <p><span className="font-medium">Positioning:</span> {positioning || "Not selected"}</p>
-                  <p><span className="font-medium">Goals:</span> {contentGoals.join(", ") || "None selected"}</p>
-                  <p><span className="font-medium">Styles:</span> {contentStyles.join(", ") || "None selected"}</p>
+                  <p>
+                    <span className="font-medium">Positioning:</span> {positioning || "Not selected"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Voice:</span>{" "}
+                    {TONES.find((t) => t.value === tone)?.label || "Not selected"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Pillars:</span> {skills.join(", ") || "None added"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Goals:</span> {contentGoals.join(", ") || "None selected"}
+                  </p>
+                  <p>
+                    <span className="font-medium">Styles:</span> {contentStyles.join(", ") || "None selected"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -546,6 +867,7 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
         {/* Footer navigation */}
         <div className="px-8 py-5 bg-[#F6F8FB] dark:bg-white/[0.06] border-t border-slate-100 dark:border-white/10 flex justify-between items-center">
           <button
+            type="button"
             onClick={() => setStep((s) => Math.max(1, s - 1))}
             disabled={step === 1}
             className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
@@ -559,7 +881,11 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
               <div
                 key={i}
                 className={`h-2 rounded-full transition-all ${
-                  i + 1 === step ? "w-6 bg-blue-600" : i + 1 < step ? "w-2 bg-blue-600/60" : "w-2 bg-slate-300 dark:bg-white/10"
+                  i + 1 === step
+                    ? "w-6 bg-blue-600"
+                    : i + 1 < step
+                    ? "w-2 bg-blue-600/60"
+                    : "w-2 bg-slate-300 dark:bg-white/10"
                 }`}
               />
             ))}
@@ -567,11 +893,9 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
 
           {step < totalSteps ? (
             <button
+              type="button"
               onClick={() => setStep((s) => s + 1)}
-              disabled={
-                (step === 1 && (!headline.trim() || !industry.trim())) ||
-                (step === 2 && !positioning)
-              }
+              disabled={!stepOk[step - 1]}
               className="flex items-center gap-2 text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Next
@@ -579,11 +903,12 @@ export default function OnboardingWizard({ user }: OnboardingWizardProps) {
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleSubmit}
-              disabled={submitting || !targetAudience.trim()}
+              disabled={submitting || !step4Ok}
               className="flex items-center gap-2 text-sm font-semibold text-white bg-blue-600 px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? "Setting up..." : "Start Creating"}
+              {submitting ? "Saving..." : isTopUp ? "Save and continue" : "Start Creating"}
               <CheckCircle className="w-4 h-4" />
             </button>
           )}

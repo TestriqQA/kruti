@@ -448,24 +448,178 @@ Output ONLY the research brief under the headings above. Do not add commentary b
 // the post at a glance (structure + icons + organized labels + a prominent headline).
 // Returns JSON: { style, structure, headline, subheadline, visual, nodes, cards, palette }.
 
+/**
+ * Brief for a CODE-RENDERED designed image (lib/render-card.tsx).
+ *
+ * Deliberately a fraction of the size of buildImageBriefPrompt's designed
+ * branch, which this replaces for every non-photographic format.
+ *
+ * That old prompt spent roughly ninety lines briefing an art director: the
+ * aesthetic register, a named information-design structure, an art-director
+ * paragraph describing icons and connectors, and a prose palette ("a dark ink
+ * ground with one bright accent and light text"). All of it existed because a
+ * diffusion model has to be *talked* into a layout.
+ *
+ * Nothing renders from prose any more. The layout comes from the format, the
+ * colours come from tokens the model picks by id, and the type scale is CSS. So
+ * the only thing left worth asking a language model for is the thing it is
+ * actually good at: the WORDS. Everything here is text that will appear on the
+ * image verbatim, which also means the model no longer has any way to misspell
+ * a label - it is not drawing it.
+ *
+ * Side effect worth having: the prompt is a few hundred tokens instead of a few
+ * thousand, on every single image generation.
+ */
+export function buildDesignBriefPrompt(
+  title: string,
+  body: string,
+  postType: string,
+  category: ImageCategory,
+  themeMenu: string,
+  themeIds: string,
+  userProfile?: UserVisualProfile
+): string {
+  const role = userProfile?.headline || "professional";
+
+  return `You are a senior editorial designer writing the TEXT for one square (1:1) LinkedIn graphic. Every string you return is rendered on the image exactly as written - you are not describing a picture, you are writing the words that will appear.
+
+FORMAT: ${category.label} - ${category.briefGuidance}
+
+POST TITLE (hook): ${title}
+POST BODY: ${body}
+POST TYPE: ${postType}
+AUTHOR'S ROLE: ${role}
+
+Read the post, find its single most important point, and write the graphic.
+
+THEME - pick the ONE id whose mood matches this post's subject and tone:
+${themeMenu}
+Vary this across posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
+
+Return ONLY this JSON object:
+{
+  "themeId": "${themeIds}",
+  "headline": "string",
+  "subheadline": "string",
+  "bodyText": "string",
+  "nodes": ["string"],
+  "cards": ["string"]
+}
+
+FIELDS:
+- "headline": the graphic's title, stating the post's core point in your own words. 2 to 6 words, at most 34 characters, Title Case. Specific and concrete ("Ads vs SEO", "Where To Start With Python"), never a vague label, and never the post title copied verbatim. No quotation marks, no hashtags.
+- "subheadline": ONE supporting line drawn from the post, at most 70 characters, plain sentence case, no ending period. Use "" if the post genuinely needs none.
+- "bodyText": the hero words for formats that are built around one piece of text - the quote line for a quote card, the single figure for a big-stat hero, the verbatim key line for a social screenshot. At most 160 characters. Use "" for every other format.
+- "nodes": the short labels that make up this format's content - the steps, the stages, the checklist items, or the two sides of a comparison. Each 1 to 4 words, at most 28 characters. Use 3 to 5 for a list, diagram, timeline or checklist; EXACTLY 2 for a comparison (first = the myth or the before, second = the fact or the after); and [] for a quote card, big-stat hero or screenshot. Drawn strictly from the post, never invented, never a full sentence.
+- "cards": 0 to 4 very short supporting chips ("Instant Traffic", "Better ROI"), each 1 to 3 words and at most 22 characters, from the post. Use [] when the post does not call for them. For a banner, the FIRST card is used as the call-to-action button.
+
+RULES:
+- Everything must come from the post. Invent no facts, figures, statistics, claims or brand names.
+- Spell every word correctly. These strings are rendered as-is, so a typo ships.
+- Prefer fewer, larger words over many small ones: if a label needs more than 4 words, cut it down.
+- Plain hyphens only, never em-dashes or en-dashes. No emojis. No markdown.
+- Single-line plain text in every string, with no double-quote characters inside any value. No trailing commas. The output must parse with JSON.parse.
+
+Return ONLY the JSON. No fences, no explanation.`;
+}
+
+/**
+ * Plan for a CODE-RENDERED carousel (lib/render-card.tsx).
+ *
+ * The companion to buildDesignBriefPrompt, and it replaces buildCarouselPlanPrompt
+ * for the same reason: every slide of a carousel was already specified as a
+ * "designed infographic", so none of them were ever a job for a diffusion model.
+ *
+ * The old plan prompt was the single most expensive text call in the app - around
+ * a hundred lines asking for a shared aesthetic style, a shared prose palette, an
+ * information-display pattern, and a per-slide art-director paragraph, all to
+ * talk an image model into a layout four separate times.
+ *
+ * Here the layout is code and the palette is one token id shared by the whole
+ * set, which is what actually makes a carousel look like a set. What is left is
+ * the part that matters: a real narrative arc, in words, with the hook and the
+ * takeaway carrying no labels so they render as statement slides.
+ */
+export function buildCarouselDesignPrompt(
+  title: string,
+  body: string,
+  postType: string,
+  count: number,
+  themeMenu: string,
+  themeIds: string,
+  userProfile?: UserVisualProfile
+): string {
+  const role = userProfile?.headline || "professional";
+
+  return `You are a senior editorial designer writing the TEXT for a ${count}-slide square (1:1) LinkedIn carousel. Every string you return is rendered on a slide exactly as written - you are not describing pictures, you are writing the words that appear.
+
+THE POST:
+Title (hook): ${title}
+Body: ${body}
+Post type: ${postType}
+Author's role: ${role}
+
+Read the post, then plan the ${count} slides as ONE continuous argument.
+
+SLIDE ARC (follow this order):
+- Slide 1 is the HOOK: the post's single most important claim, stated flat and hard. No labels on this slide.
+- The middle slides are the post's key points, in the order the body makes them, ONE point per slide, each with its own supporting labels.
+- The LAST slide is the TAKEAWAY or call to action that closes the post. No labels on this slide.
+Produce EXACTLY ${count} slides. If the post has fewer distinct points than that, split the most important point into a "what" slide and a "how" slide rather than repeating one or padding with invented material.
+
+ONE SHARED THEME for the whole carousel - pick the ONE id whose mood matches this post's subject and tone:
+${themeMenu}
+Every slide uses this one theme, which is what makes the set cohere. Vary it across different posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
+
+Return ONLY this JSON object, with EXACTLY ${count} entries in "slides", in carousel order:
+{
+  "themeId": "${themeIds}",
+  "slides": [
+    { "headline": "string", "subheadline": "string", "nodes": ["string"] }
+  ]
+}
+
+FIELDS, per slide:
+- "headline": that slide's one point, in your own words. 2 to 6 words, at most 34 characters, Title Case. Specific and concrete, never a vague label, and never the post title copied verbatim. No quotation marks, no hashtags.
+- "subheadline": ONE supporting line for that slide, at most 70 characters, plain sentence case, no ending period. Use "" if the slide needs none.
+- "nodes": 2 to 4 short labels carrying that slide's detail, each 1 to 4 words and at most 28 characters, drawn strictly from the post. Use [] for the first and last slides so they render as clean statement slides.
+
+RULES:
+- Every slide must follow from the one before it and set up the one after it. A reader swiping through should feel one argument, not four separate posts.
+- Everything must come from the post. Invent no facts, figures, statistics, claims or brand names.
+- Spell every word correctly. These strings are rendered as-is, so a typo ships.
+- No slide may repeat another slide's headline or point.
+- Plain hyphens only, never em-dashes or en-dashes. No emojis. No markdown.
+- Single-line plain text in every string, with no double-quote characters inside any value. No trailing commas. The output must parse with JSON.parse.
+
+Return ONLY the JSON. No fences, no explanation.`;
+}
+
+/**
+ * Brief for a PHOTOGRAPHIC image - the one meme format and the four realistic
+ * scenes, which are the only categories still sent to an image model.
+ *
+ * It used to carry a second, much larger branch briefing a designed infographic.
+ * Those formats are laid out in code now (lib/render-card.tsx) and take
+ * buildDesignBriefPrompt instead, so the branch - and the `industry` parameter
+ * only it used - are gone.
+ */
 export function buildImageBriefPrompt(
   title: string,
   body: string,
   postType: string,
-  industry: string,
   category: ImageCategory,
   userProfile?: UserVisualProfile
 ): string {
   const visualStyle = userProfile ? deriveVisualStyle(userProfile) : "";
   const profileBlock = visualStyle ? `\nROLE GROUNDING (keep the imagery true to this person's real work):\n${visualStyle}\n` : "";
   const role = userProfile?.headline || "professional";
-  const scene = category.genApproach === "realistic-scene" || category.genApproach === "meme";
 
-  if (scene) {
-    const personalRule = category.personal
-      ? `This is a human/relatable format, but do NOT fabricate a portrait of a specific real person. Show a tasteful REPRESENTATIVE professional (over-the-shoulder, hands-only, a side or back angle, or no face at all) or just the real objects and workspace.`
-      : `Carry the idea through one clear focal subject or metaphor, with atmosphere and depth; no implied specific person.`;
-    return `You are a senior art director at a top agency. For the post below, brief ONE premium, believable, photoreal square (1:1) LinkedIn image in this exact FORMAT: ${category.label} - ${category.briefGuidance}.
+  const personalRule = category.personal
+    ? `This is a human/relatable format, but do NOT fabricate a portrait of a specific real person. Show a tasteful REPRESENTATIVE professional (over-the-shoulder, hands-only, a side or back angle, or no face at all) or just the real objects and workspace.`
+    : `Carry the idea through one clear focal subject or metaphor, with atmosphere and depth; no implied specific person.`;
+
+  return `You are a senior art director at a top agency. For the post below, brief ONE premium, believable, photoreal square (1:1) LinkedIn image in this exact FORMAT: ${category.label} - ${category.briefGuidance}.
 
 POST TITLE (hook): ${title}
 POST BODY: ${body}
@@ -491,157 +645,6 @@ GUARDRAILS:
 - Use plain hyphens only, never em-dashes or en-dashes.
 
 ${NO_EMOJI_RULES}
-
-All string values must be single-line plain text with no line breaks and no double-quote characters inside them. Do not include trailing commas. The response must be a single JSON object parseable by JSON.parse with no preprocessing.
-
-Return ONLY valid JSON. No markdown fences. No explanation. No emojis. Use plain hyphens, never em-dashes.`;
-  }
-
-  const formatNoun =
-    category.genApproach === "text-card"
-      ? "text-forward card"
-      : category.genApproach === "banner"
-      ? "promo banner"
-      : category.genApproach === "comparison"
-      ? "two-panel comparison graphic"
-      : category.genApproach === "diagram"
-      ? "diagram"
-      : "infographic";
-
-  return `You are a senior marketing designer at a top agency. For the post below, brief ONE premium, professionally designed square (1:1) LinkedIn ${formatNoun} in this exact FORMAT: ${category.label} - ${category.briefGuidance}. It is a designed graphic a viewer instantly understands - NOT a plain photo and NOT a bare 3D object on an empty background.
-
-Read the whole post, find its core idea and the few key points that support it, then design the one graphic that best represents it in the format above.
-
-POST TITLE (hook): ${title}
-POST BODY: ${body}
-POST TYPE: ${postType}
-ROLE (ground the imagery in what THIS person actually does): ${role}
-${profileBlock}
-Base this image ONLY on the post content above and this person's profile (their role, positioning, and content-style preferences). Do NOT use their industry or field as a driver of the imagery.
-
-Return a brief as a JSON object with this EXACT structure:
-{
-  "style": "string",
-  "structure": "string",
-  "headline": "string",
-  "subheadline": "string",
-  "bodyText": "string",
-  "visual": "string",
-  "nodes": ["string", "string", "string"],
-  "cards": ["string"],
-  "palette": "string",
-  "theme": "string"
-}
-
-FIELD DEFINITIONS:
-- "style": The aesthetic register for THIS infographic, DERIVED from this post's specific subject and dominant emotional tone - not a house style or a fixed template. Pick ONE point on a wide spectrum: light editorial (off-white/paper ground, one grounded accent, charcoal text), deep or dark editorial with NO glow (near-black or ink ground, one bright grounded accent, light text, matte not neon), bold colour-block (two or three confident flat colours), muted minimal, warm illustrated, editorial photo-led (real photographic surfaces, natural light), high-contrast mono plus one accent, earthy/natural (sage, clay, sand, stone), or cool/crisp for technical topics (clean slate, steel, or deep teal, flat and matte, never glowing blue). Do NOT default to warm off-white/sand/paper unless the post genuinely calls for it. Name the chosen look concretely, 3 to 9 words. Modern, premium, hand-crafted - NO neon glow, NO glowing outlines, NO circuit-board cliche, never a bare stock photo or a lone floating object.
-- "structure": The information-design LAYOUT that maps this post - the backbone of the graphic. Name a concrete structure that fits the content, for example "a left-to-right roadmap of connected step nodes", "a central hub with a ring of labeled icon spokes", "a side-by-side comparison split with a central balance scale", "an ascending staircase of labeled steps", "a labeled dashboard of panels", "a top-down pipeline of stages", or "a grid of labeled feature cards". Choose the one that best represents THIS post's shape. 4 to 14 words.
-- "headline": A PROMINENT, bold headline stating the post's core point in your own words - the confident title of the graphic, read first. 2 to 6 words and at most 34 characters. State a specific point or outcome (for example "Ads vs SEO" or "Where To Start With Python"), not a vague label, and never copy the title verbatim. Use Title Case. No quotation marks, no hashtags. This exact text is rendered on the image, so spell every word correctly.
-- "subheadline": ONE short supporting line under the headline (like the subheadings the best LinkedIn graphics use), drawn from the post - at most 70 characters, plain sentence case, no ending period needed. Use an empty string "" only if the post genuinely needs none.
-- "bodyText": For a QUOTE CARD, BIG-STAT, or SCREENSHOT format, the hero words shown LARGE (the quote line, the single number, or the key sentence), drawn strictly from the post, at most 160 characters. Use an empty string "" for formats that do not need it (most infographics and diagrams).
-- "visual": A rich art-director's brief for the designed graphic itself - describe how the STRUCTURE is laid out, the clean modern icons and imagery on each part, the connectors or flow lines, the panels or cards, and the overall composition, so it reads as one cohesive premium infographic. Built strictly from THIS post's content and this person's role, genuinely unique to this post. Do not restate the headline or list the node text here - describe the design. 40 to 90 words, one single-line sentence. If the graphic shows a real brand, product, tool, or logo that the post actually names, say so here and require its genuine, recognizable real-world form in that brand's true official colours - never invented, never recoloured to fit the palette; if the post names no brand, add none.
-- "nodes": An array of 3 to 5 SHORT real labels - the key parts of the structure (the roadmap steps, the hub spokes, the two comparison sides, the staircase rungs, the dashboard panels) - drawn STRICTLY from the post and never invented. Each is its own string, 1 to 4 words, at most 24 characters, Title Case or a short real figure, spelled exactly. Use an empty array [] for quote-card, big-stat, banner, or screenshot formats that do not need labels. Never a sentence.
-- "cards": An OPTIONAL array of 0 to 4 very short feature or benefit labels for a bottom row of cards (like "Instant Traffic" or "Better ROI"), each 1 to 3 words and at most 20 characters, drawn strictly from the post. Use an empty array [] when the post does not call for a feature row. Never invented.
-- "palette": A rich, distinctive colour and light direction chosen for THIS post from anywhere across that spectrum, named as concrete colours with a light direction (for example a dark ink ground with one bright accent and light text, or two bold flat colour blocks, or an earthy sage-and-clay scheme). Do NOT default to warm off-white or sand - pick the colours THIS subject and tone call for, with strong text-to-background contrast so headlines stay readable. Every post gets a clearly DIFFERENT palette. NO neon, NO glow, no glowing all-blue tech palette. At most 30 words, one single-line sentence.
-- "theme": one short line naming the overall theme and modern visual direction, from your read of the post.
-
-GUARDRAILS:
-- The image must be a DESIGNED graphic in the chosen format that represents the post - never a plain photo, a lone object on an empty background, or a bare gradient.
-- Make it visually UNIQUE to THIS post - a different structure, icons, labels, and palette - so it never looks like a template or a repeat of another post's image.
-- All on-image text (headline, subheadline, nodes, cards) must be real, correctly spelled, and meaningful - and everything shown must come strictly from the post. Invent no facts, statistics, numbers, or claims.
-- Real brands only when the post names them: render any real brand, product, tool, or logo the post references in its genuine form and true official colours - never invented, recoloured, or added when unmentioned.
-- Choose the structure and style from THIS post's content and this person's profile (role, positioning, preferences), NOT their industry.
-- Professional, premium, agency quality. Use plain hyphens only, never em-dashes or en-dashes.
-
-${NO_EMOJI_RULES}
-
-All string values must be single-line plain text with no line breaks and no double-quote characters inside them. Do not include trailing commas. The response must be a single JSON object parseable by JSON.parse with no preprocessing.
-
-Return ONLY valid JSON. No markdown fences. No explanation. No emojis. Use plain hyphens, never em-dashes.`;
-}
-
-// ─── Carousel Slide Plan Prompt ───────────────────────────────────────────────
-// Breaks ONE post into a cohesive multi-slide walkthrough (hook -> points -> CTA),
-// visual-first with a short supporting headline per slide.
-// Returns JSON: { style, palette, slides: [{ headline, visual, label }] }.
-
-export function buildCarouselPlanPrompt(
-  title: string,
-  body: string,
-  postType: string,
-  industry: string,
-  count: number = 4,
-  userProfile?: UserVisualProfile
-): string {
-  const visualStyle = userProfile ? deriveVisualStyle(userProfile) : "";
-  const profileBlock = visualStyle ? `\nROLE GROUNDING (keep the imagery true to this person's real work):\n${visualStyle}\n` : "";
-
-  return `You are a senior marketing designer and content strategist at a top agency. Turn ONE LinkedIn post into a cohesive set of EXACTLY ${count} premium, designed square (1:1) INFOGRAPHIC slides that walk the reader through THIS post's actual content. Every slide is a rich, polished designed graphic that explains its point at a glance - clean modern icons, a clear layout, organized labels, and a prominent headline - never a plain photo or a bare object on emptiness.
-
-THE POST:
-Title (hook): ${title}
-Body: ${body}
-Post type: ${postType}
-${profileBlock}
-Base every slide ONLY on the post content and this person's profile (role, positioning, and content-style preferences) - NOT their industry or field.
-
-ANALYSE THE POST FIRST (do this thinking before you write anything):
-- What is this post REALLY about - its core topic, its single most important message, and the concrete key points or data it makes?
-- Who is the audience and what is the tone (educational, bold, contrarian, story, celebratory)?
-- Given that, decide the THEME and modern visual direction that would make THIS specific post land as a premium LinkedIn carousel - the kind a top brand's in-house design team would ship today: clean, contemporary, professional, on-trend, and matched to the subject, never a generic or dated template.
-State that decision once in "theme", then carry it consistently through the shared "style", the "palette", and every slide's design.
-- Also decide ONE overall INFORMATION-DISPLAY PATTERN for this carousel from the post's shape, and make it clearly differ from post to post. Choose the arrangement that fits THIS post, for example: big-number-led panels, a modular card grid, a left-to-right timeline or flow, split-screen before/after comparisons, a central hub with labeled spokes, stacked editorial text over imagery, or a labeled step-ladder. A how-to must not use the same pattern as a contrarian opinion or a data breakdown. Carry this one chosen pattern's logic through every slide's "structure" field (do NOT add a new JSON field for it) so the whole set reads in one distinctive, post-specific layout system rather than a generic template.
-
-YOUR JOB - build EXACTLY ${count} slide "packets". For EACH slide, work in this exact order:
-1. FIRST decide the slide's TEXT CONTENT from the post: its headline, an optional subheadline, and its short labels (nodes). This is the real information the slide teaches.
-2. THEN write the slide's VISUAL PROMPT (the "structure" and "visual" fields) so it visually REPRESENTS THAT text content - the visual must be built from and match the headline, subheadline, and nodes you just chose, never a random or generic scene.
-Do not invent a generic or unrelated metaphor - every slide must represent something the post actually says.
-
-SLIDE ARC (must follow in this order across the ${count} slides):
-- Slide 1 is the HOOK: the single most important highlight or opening idea of the post.
-- The middle slides are the key points from the post, in the SAME ORDER they appear in the body (one distinct point per slide).
-- The LAST slide is the TAKEAWAY or CALL TO ACTION that closes the post.
-
-HOW MANY SLIDES:
-- Produce EXACTLY ${count} slides - no more, no fewer. If the post has fewer than ${count} distinct points, expand the most important points into their own slides (for example split a point into a "what" slide and a "how" slide, or add a supporting example slide). Never repeat a slide, never leave one empty, and never invent facts, stats, or claims that are not in the post. If the body is empty or very short, build the ${count} slides from the title's idea alone without inventing facts.
-
-RELATABILITY (each slide must connect to its neighbours - IMPORTANT):
-- The ${count} slides tell ONE continuous story. Every slide must clearly follow from the previous slide and lead into the next.
-- For each slide give a short "connectsFrom" (how this slide follows from the previous one) and "connectsTo" (how it sets up the next one). Slide 1's connectsFrom and the last slide's connectsTo may be "".
-- Carry a visual through-line across the slides (a recurring motif, consistent characters or objects, or a progressing element such as a filling bar or a moving marker) so adjacent slides obviously belong to the same set.
-
-ONE SHARED LOOK (this is what makes it a cohesive set):
-- DERIVE the look from THIS post - do NOT apply a house style or a fixed template. Read this post's specific subject and dominant emotional tone, then pick ONE aesthetic style and ONE colour-and-light mood a human art director would match to THAT subject and feeling, and commit to both across every slide. A blunt contrarian take, a warm personal story, a technical how-to, a celebratory win, and a data breakdown must each land on a VISIBLY DIFFERENT look; if the style and palette you write could be pasted onto an unrelated post, redo them. PICK ONE POINT ON THIS WIDE SPECTRUM (the option that fits THIS post - do not always pick the light warm one): (a) light editorial - off-white or paper ground, one grounded accent, charcoal text; (b) deep or dark editorial with NO glow - near-black charcoal or ink ground, one bright grounded accent, light text, soft real shadows, matte not neon; (c) bold colour-block - two or three confident flat colours in large blocks, high contrast; (d) muted minimal - low-saturation palette, generous space, one quiet accent; (e) warm illustrated - textured hand-drawn feel; (f) editorial photo-led - real photographic surfaces or objects set into the layout, natural light; (g) high-contrast mono plus one accent; (h) earthy or natural - sage, clay, sand, stone for grounded human topics; (i) cool or crisp for technical topics - clean slate, steel, or deep teal, flat and matte, never glowing blue or circuit-board. These are a MENU to choose ONE from, not a target; different posts must land on different points, and you must NOT default to a warm off-white, sand, or paper background unless this post genuinely calls for it. Name the chosen style once in "style" (concrete, 3 to 9 words) and the chosen colours once in "palette" as concrete colours with a light direction and strong text-to-background contrast. Whatever you pick, keep it tasteful, hand-crafted and editorial: NO neon glow, NO glowing outlines, NO heavy sci-fi blue, NO circuit-board or digital-grid cliche.
-- Keep the same layout system, headline placement, margins, and type treatment on every slide; vary only the per-slide structure, imagery, and labels so the set feels like one series.
-- On each slide the designed graphic is the hero, filling the frame; the headline is prominent and the labels are clean and organized.
-
-EACH SLIDE PACKET NEEDS:
-- "headline": a PROMINENT headline for that slide (TEXT CONTENT), always present and legible, communicating that slide's one point. Between 2 and 6 words and at most 34 characters. Punchy, spelled exactly, Title Case. Prefer short common words; avoid words longer than 12 letters and avoid long numbers, decimals, multi-digit percentages, currency, and dates. No quotation marks, no hashtags, no emojis.
-- "subheadline": ONE optional short supporting line for the slide (TEXT CONTENT, at most 45 characters so it fits comfortably on one line inside the image, plain sentence case), or an empty string "".
-- "nodes": an array of 0 to 4 SHORT real labels (TEXT CONTENT) for the key parts of this slide, drawn strictly from the post (never invented). Prefer just 2 or 3 so the slide's text stays large and easy to read on a phone - only use 4 when the point genuinely needs it. Each 1 to 4 words, at most 24 characters, spelled exactly. Use an empty array [] if the slide needs none.
-- "structure": the information-design layout for THIS slide (for example "a single big labeled stat", "three labeled icon cards in a row", "a two-step before-and-after", or "a labeled diagram of connected parts"), chosen to hold that slide's text content. 3 to 12 words.
-- "visual": ONE single-line VISUAL PROMPT for THIS slide's designed graphic, written to REPRESENT this slide's headline, subheadline, and nodes - how the structure is laid out, the clean modern icons and imagery, the connectors and panels - built strictly from the post's content and this person's role. Describe only the design; do not restate the headline or list the node text. At most 60 words. If this slide shows a real brand, product, tool, company, or logo that the post actually names, say so explicitly here and require it to appear as its genuine, recognizable real-world form in that brand's true official colours - never invented, never recoloured to fit the palette; if the post names no brand, add none.
-- "connectsFrom": a short line (at most 90 characters) on how this slide follows from the previous slide, or "" for slide 1.
-- "connectsTo": a short line (at most 90 characters) on how this slide leads into the next slide, or "" for the last slide.
-
-GUARDRAILS:
-- Every slide is a DESIGNED, information-rich infographic - never a plain photo, a bare object on emptiness, or a wall of text.
-- Every slide's visual must match its own text content, and the ${count} slides must read as one connected story in one shared look.
-- Invent no facts, statistics, or claims - everything shown must come from the post, correctly spelled.
-- Real brands only when the post names them: if the post references a real brand, product, tool, company, or logo, the slide showing it must call for that brand's genuine, recognizable real-world form and its true official colours (never invented, never recoloured to fit the palette). Never add a brand, logo, or product the post does not mention.
-- Use plain hyphens only, never em-dashes or en-dashes.
-
-${NO_EMOJI_RULES}
-
-Return a JSON object with this EXACT structure (the "slides" array holds EXACTLY ${count} objects, in carousel order):
-{
-  "theme": "string (one short line naming the carousel's overall theme and modern visual direction, from your analysis of the post)",
-  "style": "string (the one shared aesthetic style, chosen from the content, reused by every slide)",
-  "palette": "string (the one shared colour and light mood, reused by every slide)",
-  "slides": [
-    { "headline": "string (2-6 words, max 34 chars, prominent)", "subheadline": "string (one supporting line, or empty)", "nodes": ["string (short real label)"], "structure": "string (this slide's layout)", "visual": "string (visual prompt representing this slide's text content, in the carousel's chosen style)", "connectsFrom": "string (how this follows the previous slide, or empty)", "connectsTo": "string (how this leads to the next slide, or empty)" }
-  ]
-}
 
 All string values must be single-line plain text with no line breaks and no double-quote characters inside them. Do not include trailing commas. The response must be a single JSON object parseable by JSON.parse with no preprocessing.
 

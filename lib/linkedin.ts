@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/prisma";
+import { safeJsonParse } from "@/lib/utils";
+import { resolveToneKey } from "@/lib/profile-completeness";
 
 export interface LinkedInProfile {
   sub: string;
@@ -26,23 +28,28 @@ export async function syncLinkedInProfile(
     if (!profileRes.ok) return;
     const profile = await profileRes.json();
 
-    // Try to fetch extended profile (requires r_basicprofile scope)
-    let headline: string | undefined;
-    let industry: string | undefined;
-
-    try {
-      const meRes = await fetch(
-        "https://api.linkedin.com/v2/me?projection=(id,localizedHeadline,industryName)",
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      if (meRes.ok) {
-        const me = await meRes.json();
-        headline = me.localizedHeadline;
-        industry = me.industryName?.localized?.en_US;
-      }
-    } catch {
-      // Extended profile not available with this token scope
-    }
+    // ── What LinkedIn actually gives us, and what it does not ────────────────
+    //
+    // /v2/userinfo is an OpenID endpoint, and the scope this app requests
+    // (`openid profile email w_member_social`, see lib/auth.ts) returns exactly:
+    // sub, name, given_name, family_name, picture, email, email_verified, locale.
+    //
+    // It does NOT return headline, summary, industry or skills. Those live
+    // behind r_basicprofile / r_liteprofile, which require LinkedIn Marketing
+    // Developer Platform approval and are not in our scope.
+    //
+    // There used to be a second call here to
+    //   /v2/me?projection=(id,localizedHeadline,industryName)
+    // wrapped in `try { } catch { }` with an empty handler. With our scope that
+    // call can only ever answer 403, so it was a guaranteed-failing network
+    // round-trip on every single sign-in that silently resolved to "no
+    // headline, no industry" - and because it failed quietly, it read like the
+    // app was populating those fields when nothing ever did.
+    //
+    // headline / industry / summary / skills are therefore USER-OWNED: collected
+    // in onboarding and editable in Settings. Do not re-add a profile fetch for
+    // them unless the LinkedIn app is actually granted r_basicprofile, and if it
+    // ever is, surface the failure instead of swallowing it.
 
     // Check if another user already owns this linkedinId
     const existingWithSub = await prisma.user.findUnique({
@@ -51,14 +58,13 @@ export async function syncLinkedInProfile(
     });
     const canSetLinkedinId = !existingWithSub || existingWithSub.id === userId;
 
-    // Only overwrite headline/industry if LinkedIn actually returned them.
-    // This prevents blanking out user-edited values on every login.
+    // Only identity fields are synced. headline/industry/summary/skills are
+    // user-owned (see the note above) and must never be touched here - writing
+    // them would blank out what the user typed in onboarding.
     const profileUpdate: Record<string, unknown> = {
       ...(canSetLinkedinId ? { linkedinId: profile.sub } : {}),
       profileUrl: `https://www.linkedin.com/in/${profile.sub}`,
     };
-    if (headline) profileUpdate.headline = headline;
-    if (industry) profileUpdate.industry = industry;
     // Refresh the avatar URL on every login - LinkedIn picture URLs are signed and
     // expire, so re-storing the fresh one keeps avatars from breaking over time.
     if (profile.picture) profileUpdate.image = profile.picture;
@@ -82,12 +88,6 @@ export async function syncLinkedInProfile(
   }
 }
 
-/** Safe JSON.parse with fallback - prevents crashes from corrupt DB data */
-function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
-  if (!json) return fallback;
-  try { return JSON.parse(json); } catch { return fallback; }
-}
-
 // ─── Tone direction (turns the stored tone preference into voice guidance) ─────
 
 const TONE_DIRECTION: Record<string, string> = {
@@ -105,26 +105,25 @@ const TONE_DIRECTION: Record<string, string> = {
  * double-encoded rows (e.g. a value that parses to a still-quoted string).
  */
 function resolveTone(tonePrefs: string | null | undefined): { label: string; direction: string } {
-  const parsed = safeJsonParse<unknown>(tonePrefs, tonePrefs ?? null);
+  // Key normalisation (bare string, object, double-encoded) lives in
+  // lib/profile-completeness.ts so the completeness check and the prompt agree
+  // on what counts as a set tone.
+  const key = resolveToneKey(tonePrefs);
 
-  let key = "";
+  // A tone stored as an object may also carry free-text voice notes. Those are
+  // not a known key but are still real user direction, so they stand in as the
+  // voice guidance when no key matches.
   let extra = "";
-
-  if (typeof parsed === "string") {
-    key = parsed.trim().toLowerCase();
-  } else if (parsed && typeof parsed === "object") {
+  const parsed = safeJsonParse<unknown>(tonePrefs, tonePrefs ?? null);
+  if (parsed && typeof parsed === "object") {
     const obj = parsed as Record<string, unknown>;
-    key = String(obj.tone ?? obj.voice ?? obj.style ?? obj.value ?? "").trim().toLowerCase();
     const notes = [obj.voice, obj.style, obj.notes, obj.description]
       .filter((v): v is string => typeof v === "string" && v.trim().length > 0);
     if (notes.length > 0) extra = notes.join("; ");
   }
 
-  // Guard against double-encoded rows whose value parses to a still-quoted string.
-  key = key.replace(/^"+|"+$/g, "").trim();
-
   const direction =
-    TONE_DIRECTION[key] ||
+    (key ? TONE_DIRECTION[key] : "") ||
     extra ||
     "Professional, clear, and authentic - the natural voice of a real expert in this field.";
   const label = key
@@ -161,33 +160,107 @@ export function buildProfileContext(user: {
   contentStyles?: string | null;
   targetAudience?: string | null;
 }): string {
-  const skills = safeJsonParse(user.skills, []);
-  const goals = safeJsonParse(user.contentGoals, []);
-  const styles = safeJsonParse(user.contentStyles, []);
+  const skills = safeJsonParse<string[]>(user.skills, []);
+  const goals = safeJsonParse<string[]>(user.contentGoals, []);
+  const styles = safeJsonParse<string[]>(user.contentStyles, []);
   const tone = resolveTone(user.tonePrefs);
   const posKey = (user.positioning || "").trim().toLowerCase();
   const posStance = POSITIONING_VOICE[posKey] || "";
 
-  return `
-WHO THIS PERSON IS
-Name: ${user.name || "Professional"}
-Headline: ${user.headline || "Professional"}
-Industry: ${user.industry || "Not specified"}
-About / Summary: ${user.summary || "Not provided"}
-Core expertise and skills: ${skills.length > 0 ? skills.join(", ") : "Not specified"}
+  // ── Missing fields are OMITTED, never padded ─────────────────────────────
+  //
+  // Every line here used to carry a fallback: "Industry: Not specified",
+  // "About / Summary: Not provided", "Core expertise and skills: Not
+  // specified", plus invented defaults like positioning "Industry Expert" and
+  // audience "LinkedIn professionals in my industry".
+  //
+  // That was actively harmful in two ways. The invented defaults told the model
+  // things the user never said, and the "Not specified" padding taught it, four
+  // lines in a row, that this was a generic profile with nothing specific to
+  // say - so it wrote generic posts, exactly as instructed.
+  //
+  // Now an absent field simply is not in the prompt, and the unknowns are named
+  // once at the end with an explicit instruction not to invent them. Routes
+  // guard on lib/profile-completeness.ts before generating, so in practice a
+  // real generation never reaches here with important fields empty.
+  /** Fields with no value, described the way the prompt should refer to them. */
+  const unknown: string[] = [];
 
-HOW THEY SHOW UP ON LINKEDIN
-Content positioning: ${user.positioning || "Industry Expert"}
-LinkedIn goals: ${goals.length > 0 ? goals.join(", ") : "Brand Awareness, Network Building"}
-Preferred content styles: ${styles.length > 0 ? styles.join(", ") : "Narrative, How-to"}
+  /** `Label: value` when there is a value; otherwise records the gap and skips. */
+  function field(
+    label: string,
+    value: string | null | undefined,
+    describeIfMissing?: string
+  ): string | null {
+    const v = (value ?? "").trim();
+    if (v) return `${label}: ${v}`;
+    if (describeIfMissing) unknown.push(describeIfMissing);
+    return null;
+  }
 
-VOICE AND TONE (write every post in this voice - this is non-negotiable)
-Tone preference: ${tone.label}
-Voice direction: ${tone.direction}${posStance ? `\nPositioning stance (how this person must come across): ${posStance}.` : ""}
+  /** `Label: a, b, c` when the list has entries; otherwise records the gap. */
+  function listField(
+    label: string,
+    values: string[],
+    describeIfMissing?: string
+  ): string | null {
+    const clean = values.filter((v) => typeof v === "string" && v.trim());
+    if (clean.length > 0) return `${label}: ${clean.join(", ")}`;
+    if (describeIfMissing) unknown.push(describeIfMissing);
+    return null;
+  }
 
-WHO THEY ARE WRITING FOR
-Target audience: ${user.targetAudience || "LinkedIn professionals in my industry"}
+  const identity = [
+    field("Name", user.name),
+    field("Headline", user.headline, "their headline"),
+    field("Industry", user.industry, "their industry"),
+    field("About / Summary", user.summary, "their background and experience"),
+    listField("Core expertise and skills", skills, "their specific areas of expertise"),
+  ].filter((l): l is string => l !== null);
 
-Write as THIS person, in THIS voice, for THIS audience. The reader should believe a real expert in ${user.industry || "this field"} wrote it personally.
-  `.trim();
+  const presence = [
+    field("Content positioning", user.positioning, "how they want to be positioned"),
+    listField("LinkedIn goals", goals),
+    listField("Preferred content styles", styles),
+  ].filter((l): l is string => l !== null);
+
+  const voice = [
+    "VOICE AND TONE (write every post in this voice - this is non-negotiable)",
+    `Tone preference: ${tone.label}`,
+    `Voice direction: ${tone.direction}`,
+    posStance ? `Positioning stance (how this person must come across): ${posStance}.` : null,
+  ].filter((l): l is string => l !== null);
+
+  const audience = (user.targetAudience ?? "").trim();
+  if (!audience) unknown.push("who their audience is");
+
+  const sections: string[] = [`WHO THIS PERSON IS\n${identity.join("\n")}`];
+
+  if (presence.length > 0) {
+    sections.push(`HOW THEY SHOW UP ON LINKEDIN\n${presence.join("\n")}`);
+  }
+
+  sections.push(voice.join("\n"));
+
+  if (audience) {
+    sections.push(`WHO THEY ARE WRITING FOR\n${audience}`);
+  }
+
+  if (unknown.length > 0) {
+    sections.push(
+      "NOT PROVIDED - do NOT invent any of this. Write only from what is stated above, and never imply " +
+        "experience, credentials, employers, results, or an audience that is not given here. Unknown: " +
+        `${unknown.join("; ")}.`
+    );
+  }
+
+  const industry = (user.industry ?? "").trim();
+  sections.push(
+    "Write as THIS person, in THIS voice, for THIS audience. " +
+      (industry
+        ? `The reader should believe a real expert in ${industry} wrote it personally.`
+        : "The reader should believe a real, practising expert wrote it personally.")
+  );
+
+  return sections.join("\n\n").trim();
 }

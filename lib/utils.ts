@@ -6,6 +6,27 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/**
+ * JSON.parse that never throws.
+ *
+ * Half the User columns store JSON in a TEXT field (skills, contentGoals,
+ * contentStyles, tonePrefs, postingSchedule, ...), and a corrupt or
+ * double-encoded row used to take the whole page down - SettingsClient parsed
+ * `user.skills` inline with no guard, so one bad row 500'd /settings and the
+ * user had no way to fix the very field that was broken.
+ *
+ * Every read of those columns must go through this.
+ */
+export function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+  if (!json) return fallback;
+  try {
+    const parsed = JSON.parse(json);
+    return (parsed ?? fallback) as T;
+  } catch {
+    return fallback;
+  }
+}
+
 export function formatDate(date: Date | string, timezone?: string): string {
   if (timezone) {
     return formatInTimeZone(new Date(date), timezone, "MMM d, yyyy");
