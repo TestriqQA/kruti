@@ -65,6 +65,7 @@ const CHECK_LABELS: Record<string, string> = {
   subscription: "Subscription active",
   ratelimit: "Rate limit",
   user: "Profile loaded",
+  profile: "Profile complete",
   plan: "Content plan",
   schedule: "Posting schedule",
   quota: "Monthly quota",

@@ -5,8 +5,18 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
 import Avatar from "@/components/Avatar";
-import { cn } from "@/lib/utils";
+import { cn, safeJsonParse } from "@/lib/utils";
 import { parsePostingSchedule, type PostingSchedule } from "@/lib/posting-schedule";
+import {
+  resolveToneKey,
+  MIN_HEADLINE_CHARS,
+  MIN_SUMMARY_CHARS,
+  MIN_SKILLS,
+  MIN_CONTENT_STYLES,
+  MIN_AUDIENCE_CHARS,
+  MAX_AUDIENCE_CHARS,
+  type ProfileGap,
+} from "@/lib/profile-completeness";
 
 interface Subscription {
   status: string;
@@ -77,6 +87,53 @@ const CONTENT_STYLES = [
 
 const DAYS_OF_WEEK = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+/**
+ * Below-field note: the server's reason when a save was rejected, otherwise a
+ * live count against the minimum the AI prompts need.
+ *
+ * Thresholds come from lib/profile-completeness.ts, the same module the profile
+ * route validates with, so this can never promise a value the save will refuse.
+ */
+function FieldNote({
+  error,
+  count,
+  min,
+  max,
+  hint,
+}: {
+  error?: string;
+  count?: number;
+  min?: number;
+  max?: number;
+  hint?: string;
+}) {
+  if (error) {
+    return (
+      <p className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400 mt-1">
+        <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+        {error}
+      </p>
+    );
+  }
+  if (count === undefined) {
+    return hint ? <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{hint}</p> : null;
+  }
+  const short = min !== undefined && count < min;
+  return (
+    <div className="flex items-start justify-between gap-3 mt-1">
+      {hint ? <p className="text-xs text-slate-400 dark:text-slate-500">{hint}</p> : <span />}
+      <p
+        className={`text-xs flex-shrink-0 ${
+          short ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"
+        }`}
+      >
+        {max !== undefined ? `${count}/${max}` : count}
+        {short ? ` - ${min - count} more needed` : ""}
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsClient({ user }: { user: User | null }) {
   const router = useRouter();
 
@@ -84,21 +141,25 @@ export default function SettingsClient({ user }: { user: User | null }) {
   const [headline, setHeadline] = useState(user?.headline ?? "");
   const [summary, setSummary] = useState(user?.summary ?? "");
   const [industry, setIndustry] = useState(user?.industry ?? "");
-  const [skills, setSkills] = useState<string[]>(
-    user?.skills ? JSON.parse(user.skills) : []
+  // safeJsonParse, not a bare JSON.parse. These columns hold JSON in a TEXT
+  // field, and one corrupt or double-encoded row used to throw during render -
+  // which 500'd the entire Settings page, leaving the user no way to fix the
+  // very field that was broken.
+  const [skills, setSkills] = useState<string[]>(() =>
+    safeJsonParse<string[]>(user?.skills, [])
   );
   const [skillInput, setSkillInput] = useState("");
-  const [tone, setTone] = useState(
-    user?.tonePrefs ? JSON.parse(user.tonePrefs) : "professional"
+  const [tone, setTone] = useState<string>(
+    () => resolveToneKey(user?.tonePrefs) ?? "professional"
   );
 
   // Content positioning
   const [positioning, setPositioning] = useState(user?.positioning ?? "");
-  const [contentGoals, setContentGoals] = useState<string[]>(
-    user?.contentGoals ? JSON.parse(user.contentGoals) : []
+  const [contentGoals, setContentGoals] = useState<string[]>(() =>
+    safeJsonParse<string[]>(user?.contentGoals, [])
   );
-  const [contentStyles, setContentStyles] = useState<string[]>(
-    user?.contentStyles ? JSON.parse(user.contentStyles) : []
+  const [contentStyles, setContentStyles] = useState<string[]>(() =>
+    safeJsonParse<string[]>(user?.contentStyles, [])
   );
   const [targetAudience, setTargetAudience] = useState(user?.targetAudience ?? "");
 
@@ -125,6 +186,10 @@ export default function SettingsClient({ user }: { user: User | null }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** Per-field reasons returned by the profile route on a 400. */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  /** Completeness gaps on the SAVED row - what still blocks generation. */
+  const [profileGaps, setProfileGaps] = useState<ProfileGap[]>([]);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [invoices, setInvoices] = useState<Array<{
@@ -189,6 +254,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
+    setFieldErrors({});
     try {
       const res = await fetch("/api/profile", {
         method: "PATCH",
@@ -209,10 +275,19 @@ export default function SettingsClient({ user }: { user: User | null }) {
           timezone,
         }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
+        // The profile route answers 400 with per-field reasons when a
+        // content-critical field is too thin to generate from. Surface them
+        // against the fields rather than as one opaque banner.
+        if (data.fieldErrors && typeof data.fieldErrors === "object") {
+          setFieldErrors(data.fieldErrors as Record<string, string>);
+        }
         throw new Error(data.error || `Save failed (${res.status})`);
       }
+      // The saved row's completeness verdict, so the user learns here that
+      // generation is still blocked instead of on their next Generate click.
+      setProfileGaps(Array.isArray(data.profile?.gaps) ? data.profile.gaps : []);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
@@ -271,6 +346,23 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
       )}
 
+      {/* What still blocks content generation, as of the last successful save. */}
+      {profileGaps.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            Saved - but content generation is still blocked
+          </div>
+          <ul className="mt-2 space-y-1">
+            {profileGaps.map((g) => (
+              <li key={g.key} className="text-xs text-amber-700 dark:text-amber-300/90">
+                <span className="font-medium">{g.label}:</span> {g.hint}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Profile Overview */}
       <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
         <div className="flex items-center gap-4 mb-6">
@@ -312,8 +404,14 @@ export default function SettingsClient({ user }: { user: User | null }) {
             <input
               value={headline}
               onChange={(e) => setHeadline(e.target.value)}
-              placeholder="e.g. Senior Product Manager at Acme Corp"
+              placeholder="e.g. Senior Product Manager at Acme - I help B2B teams ship faster"
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] dark:text-white"
+            />
+            <FieldNote
+              error={fieldErrors.headline}
+              count={headline.trim().length}
+              min={MIN_HEADLINE_CHARS}
+              hint="Say what you do and who you do it for."
             />
           </div>
 
@@ -338,9 +436,15 @@ export default function SettingsClient({ user }: { user: User | null }) {
             <textarea
               value={summary}
               onChange={(e) => setSummary(e.target.value)}
-              rows={3}
-              placeholder="Describe your expertise..."
+              rows={5}
+              placeholder="e.g. I've spent 9 years in B2B SaaS product, the last 4 leading a 12-person team. I've shipped three platform rewrites and killed two of my own features. Most teams I meet over-index on roadmap theatre and under-invest in talking to churned customers..."
               className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+            />
+            <FieldNote
+              error={fieldErrors.summary}
+              count={summary.trim().length}
+              min={MIN_SUMMARY_CHARS}
+              hint="The single biggest driver of how personal your posts read."
             />
           </div>
         </div>
@@ -374,6 +478,12 @@ export default function SettingsClient({ user }: { user: User | null }) {
               </span>
             ))}
           </div>
+          <FieldNote
+            error={fieldErrors.skills}
+            count={skills.length}
+            min={MIN_SKILLS}
+            hint="These become your weekly content pillars - be specific."
+          />
         </div>
       </div>
 
@@ -470,18 +580,30 @@ export default function SettingsClient({ user }: { user: User | null }) {
               </button>
             ))}
           </div>
+          <FieldNote
+            error={fieldErrors.contentStyles}
+            count={contentStyles.length}
+            min={MIN_CONTENT_STYLES}
+            hint="Each post in a batch uses a different style, so fewer than three makes them all read the same."
+          />
         </div>
 
         <div>
           <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Target Audience</h2>
           <textarea
             value={targetAudience}
-            onChange={(e) => setTargetAudience(e.target.value.slice(0, 300))}
-            rows={3}
-            placeholder="e.g. Early-stage startup founders and CTOs in the SaaS space..."
+            onChange={(e) => setTargetAudience(e.target.value.slice(0, MAX_AUDIENCE_CHARS))}
+            rows={4}
+            placeholder="e.g. Seed-stage B2B SaaS founders with 5-20 employees. Their biggest challenge right now: they keep shipping features nobody asked for and churn is climbing. What they actually want: a repeatable way to decide what to build next without guessing."
             className="w-full mt-2 px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500 text-right">{targetAudience.length}/300</p>
+          <FieldNote
+            error={fieldErrors.targetAudience}
+            count={targetAudience.trim().length}
+            min={MIN_AUDIENCE_CHARS}
+            max={MAX_AUDIENCE_CHARS}
+            hint="Who they are, what they are stuck on, and what they want."
+          />
         </div>
       </div>
 

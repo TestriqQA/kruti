@@ -6,6 +6,7 @@ import DashboardClient from "@/components/DashboardClient";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
+import { assessProfile } from "@/lib/profile-completeness";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -16,7 +17,13 @@ export default async function DashboardPage() {
   const [user, recentPlan, allPostCounts, newsletters, upcomingPosts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { name: true, headline: true, industry: true, image: true, postingSchedule: true, role: true, positioning: true, contentStyles: true, timezone: true },
+      select: {
+        name: true, headline: true, industry: true, image: true, postingSchedule: true,
+        role: true, positioning: true, contentStyles: true, timezone: true,
+        // Added for the profile-completeness banner. The select already carried
+        // most of what assessProfile() reads, so the banner costs no extra query.
+        summary: true, skills: true, contentGoals: true, targetAudience: true, tonePrefs: true,
+      },
     }),
     // Get most recent week's plan
     prisma.contentPlan.findFirst({
@@ -129,9 +136,15 @@ export default async function DashboardPage() {
     });
   }
 
+  // What still blocks generation. Rendered as a banner right above the Generate
+  // button, because that is where the user finds out otherwise - the generation
+  // preflight refuses with the same gaps.
+  const profileGaps = assessProfile(user).gaps;
+
   return (
     <DashboardClient
       user={user}
+      profileGaps={profileGaps}
       recentPlan={
         recentPlan
           ? { id: recentPlan.id, strategy: recentPlan.strategy, weekStart: recentPlan.weekStart }

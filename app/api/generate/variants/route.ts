@@ -6,6 +6,7 @@ import { generateTextWithConfig, parseJSON } from "@/lib/gemini";
 import { buildVariantPostPrompt, VARIANT_STYLE_NAMES } from "@/lib/prompts";
 import { buildProfileContext } from "@/lib/linkedin";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 interface GeneratedVariant {
@@ -26,6 +27,18 @@ export async function POST(req: NextRequest) {
   const { allowed, reason } = await checkActiveSubscription(session.user.id);
   if (!allowed) {
     return NextResponse.json({ error: reason, subscriptionRequired: true }, { status: 403 });
+  }
+
+  // Content-quality gate. This route writes from buildProfileContext(), so a
+  // thin profile just produces another generic draft - the same complaint the
+  // user already has. Blocked with the specific gaps so the client can link
+  // straight to the fix.
+  const profile = await checkProfileReady(session.user.id);
+  if (!profile.ready) {
+    return NextResponse.json(
+      { error: profile.message, profileIncomplete: true, gaps: profile.gaps },
+      { status: 403 }
+    );
   }
 
   const rl = checkRateLimit(session.user.id, "generate", RATE_LIMITS.generation);

@@ -6,6 +6,7 @@ import { generateText, parseJSON } from "@/lib/gemini";
 import { buildStrategyPrompt, PreviousWeekSummary, deriveAllowedPostTypes } from "@/lib/prompts";
 import { buildProfileContext } from "@/lib/linkedin";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { assessProfile, profileGapMessage } from "@/lib/profile-completeness";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule } from "@/lib/posting-schedule";
@@ -54,6 +55,19 @@ export async function POST(req: NextRequest) {
         return;
       }
       send({ type: "preflight", key: "user", status: "done" });
+
+      // Content-quality gate. Everything the model knows about this person comes
+      // from buildProfileContext(), so generating from a thin profile burns five
+      // of the user's 30 monthly posts producing output that could have been
+      // written for anybody. `user` is the full row, so this costs no extra query.
+      const profile = assessProfile(user);
+      if (!profile.complete) {
+        const message = profileGapMessage(profile.gaps);
+        send({ type: "preflight", key: "profile", status: "error", message });
+        send({ type: "error", message, profileIncomplete: true, gaps: profile.gaps });
+        return;
+      }
+      send({ type: "preflight", key: "profile", status: "done" });
 
       // Determine the start date: the first day this batch will actually be scheduled
       // on - the next free day matching the posting schedule. Uses the same helper as
