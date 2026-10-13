@@ -52,6 +52,8 @@ export interface ImageBrief {
   visualStyle?: string;
   /** Art-directed only: the single focal object or character. */
   subject?: string;
+  /** Art-directed only: real products the post names, drawn as genuine logos. */
+  brands?: string[];
   /** True when the model was unavailable and this brief knows only the title. */
   degraded?: boolean;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
@@ -475,6 +477,7 @@ async function getArtBrief(
           cards: [],
           scene,
           subject: clampHeadline(String(parsed.subject ?? ""), 40),
+          brands: clampLabels(parsed.brands, 4, 30),
           visualStyle: String(parsed.visualStyle ?? "").trim().toLowerCase() || undefined,
           themeId: clampThemeId(parsed.themeId),
           heroIcon: "",

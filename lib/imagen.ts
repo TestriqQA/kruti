@@ -403,6 +403,8 @@ export function buildArtImagePrompt(opts: {
   headline: string;
   labels: string[];
   subject?: string;
+  /** Real products, tools or platforms the post itself names. */
+  brands?: string[];
   styleDirection: string;
   styleName: string;
   textLoad: "low" | "medium" | "high";
@@ -411,6 +413,7 @@ export function buildArtImagePrompt(opts: {
 }): string {
   const { palette: p } = opts;
   const labels = opts.labels.filter(Boolean);
+  const brands = (opts.brands ?? []).filter(Boolean);
 
   const textBlock =
     opts.textLoad === "low" && labels.length === 0 && !opts.headline
@@ -434,13 +437,24 @@ export function buildArtImagePrompt(opts: {
           } piece${(opts.headline ? 1 : 0) + labels.length === 1 ? "" : "s"} of text in the entire image, and there must be no others. Count them as you compose.`,
           `Letter the words inside the quote marks and not the quote marks themselves, and do not letter any wording from these instructions. Each string appears once and only once - never repeat a label, never echo the headline a second time, and never invent an extra caption to fill a gap.`,
           // Invented text is where this falls down. Asked for a monitor, a
-          // whiteboard or a code editor, the model fills it with words, and
-          // those words come out as nonsense - real images shipped with
-          // "FID Coractionts" on a dashboard and a label reading
-          // "Chertications". An empty-looking surface is better than a
-          // misspelt one, so every depicted surface is specified as unreadable
-          // by design rather than merely undesired.
-          `Every screen, monitor, phone, whiteboard, document, book, sign and code editor in the scene is deliberately UNREADABLE: show soft blurred bars, blocks and shapes where words would be, or throw the surface out of focus. Do not write sentences, labels, metric names, axis values, percentages or code on any of them - not even small, not even in the background. A surface with no legible words is correct; a surface with invented or misspelt words ruins the image.`,
+          // whiteboard or a code editor, the model fills it with words of its
+          // own - and those come out as nonsense: real images shipped with
+          // "FID Coractionts" on a dashboard and a whiteboard reading "Lrade to
+          // use architecturity".
+          //
+          // Forbidding all surface text was the first attempt and it costs too
+          // much: an office scene with a blank whiteboard looks staged, and
+          // office scenes are exactly what many of these posts need. The model
+          // garbles words it INVENTS, not words it is given - short labels it
+          // has been handed come out clean. So surfaces may carry text, drawn
+          // only from the list above.
+          `Screens, whiteboards, monitors, documents and code editors may appear, but any writing on them must come ONLY from the list above - never a sentence, heading, metric name, axis value, percentage or line of code of your own invention. Where you would otherwise write something, draw soft blurred bars, blocks, boxes, arrows and shapes instead.`,
+          // The last fix let surfaces carry the listed labels, which worked for
+          // the labels - and the model then filled the REST of a whiteboard with
+          // pseudo-handwriting that garbles on inspection. Office scenes have to
+          // stay, so the surfaces stay too; they are just composed so their
+          // content reads as texture rather than as words.
+          `Compose any large writing surface - a whiteboard, a wall of notes, a full monitor - so its content reads as texture, not as words: turn it to a steep angle, crop it at the frame edge, push it behind the focal subject, or throw it softly out of focus. Never fill one edge to edge with handwriting or body copy. Small real things in sharp focus are fine; large legible blocks of invented writing are what ruin these images.`,
           `If a word is hard to letter cleanly, set it larger rather than adding more words.`,
         ]
           .filter(Boolean)
@@ -455,7 +469,16 @@ FOCAL SUBJECT: ${opts.subject || "the single most important object in the scene"
 
 ${textBlock}
 
-TYPOGRAPHY: set the headline large, bold and perfectly legible on a phone screen - it should occupy a confident share of the frame and sit INSIDE the composition as a designed element, never as a plain bar pasted over the artwork. Clean modern sans-serif. Correct spacing, correct kerning, no broken or duplicated letterforms.
+OBJECTS: build the scene from real, tangible, dimensional things - actual devices, actual tools, actual surfaces, with weight, material and contact shadows - not a sprinkle of flat generic symbols. Where an idea needs an emblem, prefer a believable physical object over a pictogram: a real stopwatch rather than a clock glyph, a real stack of servers rather than a database icon. Objects should look like they could be photographed or held.
+${
+    brands.length > 0
+      ? `REAL PRODUCTS: this post names ${brands.join(
+          ", "
+        )}. Show them as their genuine, instantly recognisable real-world marks and products, in their true official colours and correct proportions - not invented substitutes, not recoloured to match the palette, not distorted. If a mark cannot be drawn cleanly and accurately, show the product itself or leave it out entirely rather than shipping a mangled logo. Add no brand beyond these.`
+      : `REAL PRODUCTS: this post names none, so show no brand marks, logos or wordmarks of any company at all.`
+  }
+
+TYPOGRAPHY: set the headline large, bold and perfectly legible on a phone screen - it should occupy a confident share of the frame and sit INSIDE the composition as a designed element, never as a plain bar pasted over the artwork. Set it as flat graphic type laid over the artwork - never written onto an object inside the scene, never on a phone screen, a monitor, a page or a sign, where it ends up tilted and unreadable. Clean modern sans-serif. Correct spacing, correct kerning, no broken or duplicated letterforms.
 
 COLOUR: ${p.phrase}. ${
     p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
@@ -480,6 +503,7 @@ export async function generateAndStoreArtImage(
     headline?: string;
     nodes?: string[];
     subject?: string;
+    brands?: string[];
     visualStyle?: string;
     themeId?: string;
   },
@@ -498,6 +522,7 @@ export async function generateAndStoreArtImage(
     // the scene. A low-text style gets none, whatever the brief returned.
     labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
     subject: brief.subject,
+    brands: brief.brands,
     styleDirection: style.direction,
     styleName: style.name,
     textLoad: style.textLoad,

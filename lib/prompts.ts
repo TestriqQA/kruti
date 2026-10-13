@@ -980,14 +980,16 @@ Return ONLY this JSON object:
   "scene": "string",
   "headline": "string",
   "labels": ["string"],
-  "subject": "string"
+  "subject": "string",
+  "brands": ["string"]
 }
 
 FIELDS:
-- "scene": the composition, in 45 to 80 words, as an art director would describe it to an illustrator. Name the FOCAL SUBJECT, the supporting elements around it and roughly where they sit, the lighting, the camera angle and the mood. Every element must MEAN something from this post - if the post is about review queues, show a queue; if it is about a 3x cost, show the scale. Concrete nouns only, never "a professional abstract concept". Do not describe text here; the words are specified separately below.
+- "scene": the composition, in 45 to 80 words, as an art director would describe it to an illustrator. Name the FOCAL SUBJECT, the supporting elements around it and roughly where they sit, the lighting, the camera angle and the mood. Build it from real physical things with weight and material - devices, tools, workspaces, printed matter, people at work - rather than a scattering of flat symbols; where the idea needs an emblem, call for a believable object rather than a pictogram. Every element must MEAN something from this post - if the post is about review queues, show a queue; if it is about a 3x cost, show the scale. Concrete nouns only, never "a professional abstract concept". Do not describe text here; the words are specified separately below.
 - "headline": the words to letter onto the image, at most 48 characters. Short, punchy, and the actual point of the post - not the title copied out. Use Title Case or sentence case. No quotation marks, no hashtags, no emojis. If the chosen style carries LOW text, keep this under 30 characters.
 - "labels": 0 to 4 VERY short words or phrases that sit on individual elements in the scene (a bar, an icon, a step, a panel), each at most 18 characters. These are part of the picture, not a list beside it. Use [] when the scene does not need them, and ALWAYS use [] for a style that carries low text.
-- "subject": 2 to 5 words naming the single focal object or character, so the composition has an unmistakable centre.
+- "subject": 2 to 5 words naming the single focal object or character, so the composition has an unmistakable centre. Prefer a real, tangible, dimensional thing - a device, a tool, a surface, a person - over an abstract symbol.
+- "brands": the real products, tools, platforms or companies the POST ITSELF names, copied exactly as the post spells them (for example Next.js, React, Shopify, WhatsApp). These get drawn as their genuine logos and products in the image. Use [] when the post names none - never add a brand the post did not mention.
 
 RULES:
 - Everything comes from the post. Invent no facts, figures, statistics, claims, brand names or logos. If the post names a real product, it may appear; otherwise none.
