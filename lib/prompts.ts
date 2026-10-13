@@ -40,6 +40,14 @@ export interface UserVisualProfile {
   industry?: string | null;
   name?: string | null;
   headline?: string | null; // the person's actual ROLE (e.g. "SEO Analyst") - drives the imagery
+  /**
+   * The person's own account of what they do. The richest grounding there is
+   * for imagery - it names the real tools, screens and problems of their day -
+   * and it was missing from this type entirely, so the image brief never saw it.
+   */
+  summary?: string | null;
+  /** Who the post is for; the image has to land with them, not just the author. */
+  targetAudience?: string | null;
 }
 
 /**
@@ -347,7 +355,7 @@ ${rules}
 
 IMAGE CATEGORY (pick the best-fit visual FORMAT for each post from its OWN content):
 ${imageStyleGuide}
-Choose the "imageStyle" id that best matches THIS post's content and tone - a meme for a relatable or funny take, a quote-card for one punchy line, before-after for a teardown, framework-diagram or timeline-roadmap for a model or sequence, big-stat-hero ONLY when the post has a real stat, and realistic-scene / behind-the-scenes / desk-setup / storytelling-scene for human or story posts (these render a tasteful REPRESENTATIVE scene, never a fabricated portrait). If unsure, use "infographic". VARY the imageStyle across the ${postCount} posts wherever the content genuinely differs - do not label them all "infographic".
+Choose the "imageStyle" id that best matches THIS post's content and tone - a meme for a relatable or funny take, a quote-card for one punchy line, before-after for a teardown, framework-diagram or timeline-roadmap for a model or sequence, big-stat-hero ONLY when the post has a real stat, and realistic-scene / behind-the-scenes / desk-setup / storytelling-scene for human or story posts (these render a tasteful REPRESENTATIVE scene, never a fabricated portrait). SPREAD the choice across the ${postCount} posts. The three groups - Relatable & Human, Educational & Authority, Branded & Quick-Hit - must ALL appear in a batch of ${postCount}, and at least one post must use a Relatable & Human format (a meme or a real scene) unless literally none of the posts is a story, an opinion or a human moment. Never give two posts in the batch the same imageStyle unless their content genuinely calls for the same shape, and never fall back to "infographic" as a default - pick it only when the post really is an explainer with several parts to lay out.
 
 Generate exactly ${postCount} posts as a JSON array. Each post must follow this exact structure:
 [
@@ -477,6 +485,7 @@ export function buildDesignBriefPrompt(
   category: ImageCategory,
   themeMenu: string,
   themeIds: string,
+  iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
   const role = userProfile?.headline || "professional";
@@ -496,6 +505,9 @@ THEME - pick the ONE id whose mood matches this post's subject and tone:
 ${themeMenu}
 Vary this across posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
 
+ICONS - every graphic carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
+${iconMenu}
+
 Return ONLY this JSON object:
 {
   "themeId": "${themeIds}",
@@ -503,7 +515,10 @@ Return ONLY this JSON object:
   "subheadline": "string",
   "bodyText": "string",
   "nodes": ["string"],
-  "cards": ["string"]
+  "icons": ["string"],
+  "cards": ["string"],
+  "heroIcon": "string",
+  "backgroundScene": "string"
 }
 
 FIELDS:
@@ -511,6 +526,9 @@ FIELDS:
 - "subheadline": ONE supporting line drawn from the post, at most 70 characters, plain sentence case, no ending period. Use "" if the post genuinely needs none.
 - "bodyText": the hero words for formats that are built around one piece of text - the quote line for a quote card, the single figure for a big-stat hero, the verbatim key line for a social screenshot. At most 160 characters. Use "" for every other format.
 - "nodes": the short labels that make up this format's content - the steps, the stages, the checklist items, or the two sides of a comparison. Each 1 to 4 words, at most 28 characters. Use 3 to 5 for a list, diagram, timeline or checklist; EXACTLY 2 for a comparison (first = the myth or the before, second = the fact or the after); and [] for a quote card, big-stat hero or screenshot. Drawn strictly from the post, never invented, never a full sentence.
+- "icons": ONE concept from the icon list for EACH entry in "nodes", in the same order and the same length. Choose on meaning - what is that specific step, side or item actually about? Do not repeat the same concept twice on one graphic unless the content genuinely repeats. Use [] when "nodes" is [].
+- "heroIcon": ONE concept from the icon list that represents the post as a whole. Always provide this, every format uses it.
+- "backgroundScene": a short art direction for ONE premium, believable, TEXT-FREE photograph that will sit behind this graphic. Describe the subject, the setting, the light and the mood in 15 to 35 words, grounded in what THIS post is actually about and in the author's real working world - not a stock cliche. It must contain NO words, letters, numbers, charts, screens full of UI, logos or signage of any kind, because the text is drawn on top in code. Leave the frame relatively calm and uncluttered so type stays readable over it. Always provide this.
 - "cards": 0 to 4 very short supporting chips ("Instant Traffic", "Better ROI"), each 1 to 3 words and at most 22 characters, from the post. Use [] when the post does not call for them. For a banner, the FIRST card is used as the call-to-action button.
 
 RULES:
@@ -547,6 +565,7 @@ export function buildCarouselDesignPrompt(
   count: number,
   themeMenu: string,
   themeIds: string,
+  iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
   const role = userProfile?.headline || "professional";
@@ -571,11 +590,14 @@ ONE SHARED THEME for the whole carousel - pick the ONE id whose mood matches thi
 ${themeMenu}
 Every slide uses this one theme, which is what makes the set cohere. Vary it across different posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
 
+ICONS - every slide carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
+${iconMenu}
+
 Return ONLY this JSON object, with EXACTLY ${count} entries in "slides", in carousel order:
 {
   "themeId": "${themeIds}",
   "slides": [
-    { "headline": "string", "subheadline": "string", "nodes": ["string"] }
+    { "headline": "string", "subheadline": "string", "nodes": ["string"], "icons": ["string"], "heroIcon": "string", "backgroundScene": "string" }
   ]
 }
 
@@ -583,6 +605,9 @@ FIELDS, per slide:
 - "headline": that slide's one point, in your own words. 2 to 6 words, at most 34 characters, Title Case. Specific and concrete, never a vague label, and never the post title copied verbatim. No quotation marks, no hashtags.
 - "subheadline": ONE supporting line for that slide, at most 70 characters, plain sentence case, no ending period. Use "" if the slide needs none.
 - "nodes": 2 to 4 short labels carrying that slide's detail, each 1 to 4 words and at most 28 characters, drawn strictly from the post. Use [] for the first and last slides so they render as clean statement slides.
+- "icons": ONE concept from the icon list for EACH entry in that slide's "nodes", in the same order and the same length. Choose on meaning. Use [] when "nodes" is [].
+- "heroIcon": ONE concept from the icon list representing that slide's point. Always provide this on every slide - it is what the hook and takeaway slides are built around.
+- "backgroundScene": a short art direction for ONE premium, believable, TEXT-FREE photograph behind that slide, 15 to 35 words, specific to that slide's point. NO words, letters, numbers, charts, UI or logos - the text is drawn on top in code. Keep the slides visually related to each other: same world, same light, same mood, so the set hangs together.
 
 RULES:
 - Every slide must follow from the one before it and set up the one after it. A reader swiping through should feel one argument, not four separate posts.
@@ -879,4 +904,113 @@ Generate a full newsletter as a JSON object:
 }
 
 Return ONLY valid JSON. No markdown. No explanation. No emojis.`;
+}
+
+/**
+ * Brief for a FULLY ART-DIRECTED post image.
+ *
+ * Replaces the content-only brief that fed the code renderer. That renderer was
+ * built on the belief that an image model cannot be trusted with type, so the
+ * type moved into code - and the result was a headline over a photograph, which
+ * is a caption, not a graphic. A good LinkedIn image carries the whole idea
+ * visually: a 3D scene, a mockup, a character, a cross-section, a data poster,
+ * with a short headline set INSIDE the artwork.
+ *
+ * So this asks for the things an art director would actually specify - a named
+ * visual register, a concrete composition, and the exact few words to letter -
+ * and keeps the word count low enough that the model letters it reliably.
+ */
+export function buildArtBriefPrompt(
+  title: string,
+  body: string,
+  postType: string,
+  category: ImageCategory,
+  styleMenu: string,
+  styleIds: string,
+  layoutMenu: string,
+  layoutIds: string,
+  themeMenu: string,
+  themeIds: string,
+  userProfile?: UserVisualProfile
+): string {
+  // This brief used to see ONE line of profile - the headline - while the
+  // content prompt received the whole thing. That is precisely why the images
+  // felt unrelated to the person: the brief had no idea what they actually do
+  // day to day, who they are writing for, or how they position themselves, so
+  // it defaulted to generic imagery for the field. All of it grounds the
+  // artwork now.
+  const role = (userProfile?.headline || "").trim();
+  const summary = (userProfile?.summary || "").trim().slice(0, 700);
+  const audience = (userProfile?.targetAudience || "").trim().slice(0, 300);
+
+  const profileBlock = [
+    "WHO THIS POST IS BY - ground every object, screen, tool and environment in THIS person's real working world:",
+    role ? `  Their role: ${role}` : null,
+    userProfile?.industry ? `  Field: ${userProfile.industry}` : null,
+    summary ? `  What they actually do, in their own words: ${summary}` : null,
+    userProfile?.positioning ? `  How they come across: ${userProfile.positioning}` : null,
+    audience ? `  Who this post is for: ${audience}` : null,
+    "  Show the specific artifacts of this role and this audience - the real screens, tools, surfaces and moments they would recognise. Never a generic stereotype of the field: no circuit boards, chips or glowing wires just because someone works in technology, no handshakes or skylines just because it is business.",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `You are an award-winning art director briefing ONE square (1:1) image for a LinkedIn post. The image has to carry the post's idea on its own: someone scrolling past should understand the point from the picture before they read a word of the caption.
+
+FORMAT THIS POST ASKED FOR: ${category.label} - ${category.briefGuidance}
+
+THE POST:
+Title (hook): ${title}
+Body: ${body}
+Post type: ${postType}
+
+${profileBlock}
+
+Read the post, find the ONE idea worth picturing, then brief the image.
+
+VISUAL STYLE - pick the one id whose register fits this post's subject and mood:
+${styleMenu}
+Vary this across posts. A security teardown, a hiring joke, a founder lesson and a how-to guide must NOT all land on the same style. Match the style's text capacity to how much the image needs to say.
+
+COLOUR THEME - pick one id for the palette:
+${themeMenu}
+
+LAYOUT - pick how the page is built:
+${layoutMenu}
+
+Return ONLY this JSON object:
+{
+  "visualStyle": "${styleIds}",
+  "layout": "${layoutIds}",
+  "themeId": "${themeIds}",
+  "scene": "string",
+  "statLine": "string",
+  "headline": "string",
+  "subhead": "string",
+  "chips": ["string"],
+  "labels": ["string"],
+  "subject": "string",
+  "brands": ["string"]
+}
+
+FIELDS:
+- "scene": the composition, in 45 to 80 words, as an art director would describe it to an illustrator. Name the FOCAL SUBJECT, the supporting elements around it and roughly where they sit, the lighting, the camera angle and the mood. Build it from real physical things with weight and material - devices, tools, workspaces, printed matter, people at work - rather than a scattering of flat symbols; where the idea needs an emblem, call for a believable object rather than a pictogram. Every element must MEAN something from this post - if the post is about review queues, show a queue; if it is about a 3x cost, show the scale. Concrete nouns only, never "a professional abstract concept". Do not describe text here; the words are specified separately below.
+  Give it a MOMENT, not a setting. Something has to be HAPPENING in the frame - a decision landing, a reaction, a gesture caught mid-air, a contrast fighting itself across the image, a thing at the instant it breaks or clicks into place. "A developer at a desk" is not a scene; "a developer leaning back from two monitors while a colleague jabs a finger at the left one" is. Choose a deliberate camera angle - low across a surface, high looking down, through a doorway, past a foreground object, caught in a reflection - never a flat centred eye-level shot. Light it with intent: hard raking light, a single lamp in a dark room, late sun through a window. If the scene you have written could illustrate any post in this industry, it has failed - rewrite it until it could only belong to THIS one.
+- "statLine": the single biggest thing on the page when the post turns on one figure - a percentage, a multiple, a count. At most 10 characters. Use "" when the post has no real figure; never invent one.
+- "headline": the words that CONTINUE the statLine into a sentence, or carry the point alone when there is no statLine. At most 48 characters. It must never repeat the statLine - "42%" above "42% Conversion Boost" is the same words twice and wastes the page; "42%" above "Average lift after going headless" is a sentence. Title Case or sentence case, no quotation marks, no hashtags, no emojis. If the chosen style carries LOW text, keep this under 30 characters.
+- "subhead": one supporting line under the headline, at most 60 characters, sentence case. Use "" when the page is tight or the style carries low text.
+- "chips": 0 to 3 very short benefit or takeaway phrases that sit in a row as small pills, each at most 22 characters INCLUDING spaces - count them, because a chip over the cap is cut rather than shrunk. Drawn from the post. Use [] when the post does not offer three real ones - padding with filler is worse than none.
+- "labels": 0 to 4 VERY short words or phrases that sit on individual elements in the scene (a bar, an icon, a step, a panel), each at most 18 characters. These are part of the picture, not a list beside it. Use [] when the scene does not need them, and ALWAYS use [] for a style that carries low text.
+- "subject": 2 to 5 words naming the single focal object or character, so the composition has an unmistakable centre. Prefer a real, tangible, dimensional thing - a device, a tool, a surface, a person - over an abstract symbol.
+- "brands": the real products, tools, platforms or companies the POST ITSELF names, copied exactly as the post spells them (for example Next.js, React, Shopify, WhatsApp). These get drawn as their genuine logos and products in the image. Use [] when the post names none - never add a brand the post did not mention.
+
+RULES:
+- Everything comes from the post. Invent no facts, figures, statistics, claims, brand names or logos. If the post names a real product, it may appear; otherwise none.
+- Keep the TOTAL words on the image small. A headline plus a few labels is the ceiling - this is a graphic, not a slide. Fewer, larger words always beat more, smaller ones.
+- Spell every word in "headline" and "labels" correctly; they are lettered onto the image exactly as written.
+- No people's faces rendered as specific real individuals. A representative person, a character or a figure seen from behind is fine.
+- Plain hyphens only, never em-dashes. No emojis anywhere.
+- Single-line plain text in every string, no double-quote characters inside any value, no trailing commas. The output must parse with JSON.parse.
+
+Return ONLY the JSON. No fences, no explanation.`;
 }

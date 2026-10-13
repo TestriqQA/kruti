@@ -2,11 +2,19 @@ import { generateProText, generateTextWithConfig, parseJSON } from "@/lib/gemini
 import {
   buildImageBriefPrompt,
   buildDesignBriefPrompt,
+  buildArtBriefPrompt,
   buildCarouselDesignPrompt,
   UserVisualProfile,
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
 import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
+import {
+  VISUAL_STYLE_IDS,
+  visualStyleMenuBlock,
+  PAGE_LAYOUT_IDS,
+  pageLayoutMenuBlock,
+} from "@/lib/image-styles";
+import { iconMenuBlock } from "@/lib/image-icons";
 
 /**
  * Content-aware image briefs.
@@ -37,6 +45,30 @@ export interface ImageBrief {
   headline: string; // prominent bold headline (2-6 words, <=34 chars)
   subheadline: string; // one supporting subheadline line (<=70 chars), "" if none
   nodes: string[]; // short real labels from the post (steps / stages / comparison sides)
+  /** Code-rendered only: one icon concept per node, same order and length. */
+  icons?: string[];
+  /** Code-rendered only: the icon concept representing the post as a whole. */
+  heroIcon?: string;
+  /** Hybrid only: art direction for the TEXT-FREE picture behind the graphic. */
+  backgroundScene?: string;
+  /** Art-directed only: the full composition the model should draw. */
+  scene?: string;
+  /** Art-directed only: the chosen register from lib/image-styles.ts. */
+  visualStyle?: string;
+  /** Art-directed only: the single focal object or character. */
+  subject?: string;
+  /** Art-directed only: real products the post names, drawn as genuine logos. */
+  brands?: string[];
+  /** Art-directed only: how the page is built. See PAGE_LAYOUTS. */
+  layout?: string;
+  /** Art-directed only: the one big figure, when the post turns on a number. */
+  statLine?: string;
+  /** Art-directed only: supporting line under the headline. */
+  subhead?: string;
+  /** Art-directed only: short benefit pills. */
+  chips?: string[];
+  /** True when the model was unavailable and this brief knows only the title. */
+  degraded?: boolean;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
   bodyText?: string; // hero words for text-card formats (quote / stat / screenshot line)
 
@@ -60,6 +92,10 @@ export interface ImageBrief {
 export interface CarouselSlide {
   headline: string;
   subheadline?: string;
+  icons?: string[];
+  heroIcon?: string;
+  /** Hybrid only: art direction for the TEXT-FREE picture behind this slide. */
+  backgroundScene?: string;
   /** Short labels carrying the slide's detail; [] on the hook and takeaway slides. */
   nodes?: string[];
 
@@ -153,12 +189,11 @@ export function clampLabels(raw: unknown, maxItems: number, maxLen: number): str
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
-    const s = String(item ?? "")
-      .replace(/\s+/g, " ")
-      .replace(/^["'“”]+|["'“”]+$/g, "")
-      .trim()
-      .slice(0, maxLen)
-      .trim();
+    // clampHeadline trims back to a word boundary; this did not, and a chip
+    // one character over the cap shipped onto a real graphic reading
+    // "Optimize Core Web Vita". A label cut mid-word is worse than a label
+    // dropped, so cut at a space when there is a sensible one to cut at.
+    const s = clampHeadline(String(item ?? ""), maxLen);
     const key = s.toLowerCase();
     if (s && !seen.has(key)) {
       seen.add(key);
@@ -253,6 +288,7 @@ async function getDesignBrief(
     category,
     themeMenuBlock(),
     IMAGE_THEME_IDS.join("|"),
+    iconMenuBlock(),
     userProfile
   );
 
@@ -271,6 +307,9 @@ async function getDesignBrief(
           cards: clampLabels(parsed.cards, 4, 22),
           bodyText: clampBodyText(parsed.bodyText),
           themeId: clampThemeId(parsed.themeId),
+          icons: clampLabels(parsed.icons, 5, 24),
+          heroIcon: clampHeadline(String(parsed.heroIcon ?? ""), 24),
+          backgroundScene: clampHeadline(String(parsed.backgroundScene ?? ""), 400),
         };
       }
     } catch (err) {
@@ -327,9 +366,9 @@ export async function getImageBrief(
   category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<ImageBrief> {
-  return usesCodeRender(category)
-    ? getDesignBrief(post, category, userProfile)
-    : getSceneBrief(post, category, userProfile);
+  // Every category is art-directed now. getDesignBrief / getSceneBrief remain
+  // for the code-render fallback path and are no longer the primary route.
+  return getArtBrief(post, category, userProfile);
 }
 
 /**
@@ -373,6 +412,7 @@ export async function getCarouselPlan(
     count,
     themeMenuBlock(),
     IMAGE_THEME_IDS.join("|"),
+    iconMenuBlock(),
     userProfile
   );
 
@@ -389,6 +429,9 @@ export async function getCarouselPlan(
               headline: clampHeadline(s.headline, 34),
               subheadline: clampSubhead((s as { subheadline?: unknown }).subheadline),
               nodes: clampLabels((s as { nodes?: unknown }).nodes, 4, 28),
+              icons: clampLabels((s as { icons?: unknown }).icons, 4, 24),
+              heroIcon: clampHeadline(String((s as { heroIcon?: unknown }).heroIcon ?? ""), 24),
+              backgroundScene: clampHeadline(String((s as { backgroundScene?: unknown }).backgroundScene ?? ""), 400),
             }))
             .filter((s) => !!s.headline)
             .slice(0, count)
@@ -401,4 +444,81 @@ export async function getCarouselPlan(
     }
   }
   return fallbackCarouselPlan(post, count);
+}
+
+/**
+ * Brief for a FULLY ART-DIRECTED image - the model draws the whole graphic,
+ * lettering included.
+ *
+ * This supersedes the content-only design brief for every category. The code
+ * renderer is still here, but only as the fallback for when the image model
+ * fails: an image with plain type beats no image, and it is a long way from
+ * what a good LinkedIn graphic looks like.
+ */
+async function getArtBrief(
+  post: { title: string; body: string; postType: string },
+  category: ImageCategory,
+  userProfile?: UserVisualProfile
+): Promise<ImageBrief> {
+  const prompt = buildArtBriefPrompt(
+    post.title,
+    post.body,
+    post.postType,
+    category,
+    visualStyleMenuBlock(),
+    VISUAL_STYLE_IDS.join("|"),
+    pageLayoutMenuBlock(),
+    PAGE_LAYOUT_IDS.join("|"),
+    themeMenuBlock(),
+    IMAGE_THEME_IDS.join("|"),
+    userProfile
+  );
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await generateTextWithConfig(prompt, { temperature: 1.15 });
+      const parsed = parseJSON<Record<string, unknown>>(raw);
+      const scene = String(parsed.scene ?? "").trim();
+      const headline = clampHeadline(String(parsed.headline ?? ""), 48);
+      // The scene is the one thing the image cannot be built without.
+      if (scene.length > 20) {
+        return {
+          headline,
+          subheadline: "",
+          // `nodes` carries the short labels that sit on elements in the scene,
+          // so the code-render fallback can still use them as a list.
+          nodes: clampLabels(parsed.labels, 4, 18),
+          cards: [],
+          scene,
+          subject: clampHeadline(String(parsed.subject ?? ""), 40),
+          brands: clampLabels(parsed.brands, 4, 30),
+          layout: String(parsed.layout ?? "").trim().toLowerCase() || undefined,
+          statLine: clampHeadline(String(parsed.statLine ?? ""), 10),
+          subhead: clampHeadline(String(parsed.subhead ?? ""), 60),
+          chips: clampLabels(parsed.chips, 3, 22),
+          visualStyle: String(parsed.visualStyle ?? "").trim().toLowerCase() || undefined,
+          themeId: clampThemeId(parsed.themeId),
+          heroIcon: "",
+        };
+      }
+    } catch (err) {
+      console.error(`[ArtBrief] attempt ${attempt + 1} failed:`, (err as Error).message);
+    }
+  }
+
+  // Marked degraded on purpose. When the model is unavailable - a quota cap,
+  // an outage - this fallback knows nothing about the post beyond its title, and
+  // an image built from it is exactly the generic, unrelated picture users
+  // complain about. The route refuses to ship one and reports the real reason
+  // instead; a clear error costs the user a retry, a bad image costs their trust.
+  return {
+    degraded: true,
+    headline: headlineFromTitle(post.title),
+    subheadline: "",
+    nodes: [],
+    cards: [],
+    scene: `A clear, concrete scene representing "${post.title}" in the world of a ${
+      userProfile?.headline ?? "professional"
+    }, with one unmistakable focal subject and real depth.`,
+  };
 }
