@@ -6,6 +6,7 @@ import {
   generatePostImage,
   buildCategoryImagePrompt,
   renderAndStoreDesignedImage,
+  generateAndStoreArtImage,
   lastImageGenError,
 } from "@/lib/imagen";
 import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
@@ -88,18 +89,40 @@ export async function POST(req: NextRequest) {
       userVisualProfile
     );
 
-    if (usesCodeRender(category)) {
-      // Information design: laid out in code, so the text is exact and the
-      // render is free. See lib/render-card.tsx.
+    // A degraded brief means the text model was unavailable, so this brief knows
+    // nothing about the post beyond its title. Generating from it produces the
+    // generic, unrelated image users complain about - and it silently burns an
+    // image-model call doing it. Refuse, and say why.
+    if (brief.degraded) {
+      return NextResponse.json(
+        {
+          error:
+            "AI is temporarily unavailable, so we couldn't read this post properly. Rather than generate a generic image, we've stopped here - please try again shortly.",
+          remaining: IMAGE_GEN_LIMIT_PER_POST - post.imageGenCount,
+          limit: IMAGE_GEN_LIMIT_PER_POST,
+        },
+        { status: 503 }
+      );
+    }
+
+    // Art-directed first: the model draws the whole graphic, lettering included.
+    // The code renderer is the FALLBACK now, not the default - plain type on a
+    // flat field beats no image, but it is nowhere near what a good LinkedIn
+    // graphic looks like, and that is the bar.
+    imageUrl = await generateAndStoreArtImage(brief, post.id, category);
+    savedPrompt = [
+      `[${category.label}]`,
+      brief.visualStyle ?? "auto",
+      brief.headline,
+      brief.scene ?? "",
+    ].join(" | ");
+
+    if (!imageUrl) {
+      console.warn(`[image] art generation failed for ${post.id}, using the code renderer`);
       imageUrl = await renderAndStoreDesignedImage(category, brief, post.id, {
         author: { name: post.plan.user.name, headline: post.plan.user.headline },
       });
       savedPrompt = describeDesignBrief(category, brief);
-    } else {
-      // Photographic: a believable scene is what the image model is for.
-      const prompt = buildCategoryImagePrompt(category, brief);
-      imageUrl = await generatePostImage(prompt, post.id, industry, true);
-      savedPrompt = `${brief.headline || brief.bodyText || category.label} - ${brief.visual ?? ""}`;
     }
   }
 

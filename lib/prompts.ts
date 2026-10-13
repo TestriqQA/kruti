@@ -897,3 +897,76 @@ Generate a full newsletter as a JSON object:
 
 Return ONLY valid JSON. No markdown. No explanation. No emojis.`;
 }
+
+/**
+ * Brief for a FULLY ART-DIRECTED post image.
+ *
+ * Replaces the content-only brief that fed the code renderer. That renderer was
+ * built on the belief that an image model cannot be trusted with type, so the
+ * type moved into code - and the result was a headline over a photograph, which
+ * is a caption, not a graphic. A good LinkedIn image carries the whole idea
+ * visually: a 3D scene, a mockup, a character, a cross-section, a data poster,
+ * with a short headline set INSIDE the artwork.
+ *
+ * So this asks for the things an art director would actually specify - a named
+ * visual register, a concrete composition, and the exact few words to letter -
+ * and keeps the word count low enough that the model letters it reliably.
+ */
+export function buildArtBriefPrompt(
+  title: string,
+  body: string,
+  postType: string,
+  category: ImageCategory,
+  styleMenu: string,
+  styleIds: string,
+  themeMenu: string,
+  themeIds: string,
+  userProfile?: UserVisualProfile
+): string {
+  const role = userProfile?.headline || "professional";
+
+  return `You are an award-winning art director briefing ONE square (1:1) image for a LinkedIn post. The image has to carry the post's idea on its own: someone scrolling past should understand the point from the picture before they read a word of the caption.
+
+FORMAT THIS POST ASKED FOR: ${category.label} - ${category.briefGuidance}
+
+THE POST:
+Title (hook): ${title}
+Body: ${body}
+Post type: ${postType}
+Author's role: ${role}
+
+Read the post, find the ONE idea worth picturing, then brief the image.
+
+VISUAL STYLE - pick the one id whose register fits this post's subject and mood:
+${styleMenu}
+Vary this across posts. A security teardown, a hiring joke, a founder lesson and a how-to guide must NOT all land on the same style. Match the style's text capacity to how much the image needs to say.
+
+COLOUR THEME - pick one id for the palette:
+${themeMenu}
+
+Return ONLY this JSON object:
+{
+  "visualStyle": "${styleIds}",
+  "themeId": "${themeIds}",
+  "scene": "string",
+  "headline": "string",
+  "labels": ["string"],
+  "subject": "string"
+}
+
+FIELDS:
+- "scene": the composition, in 45 to 80 words, as an art director would describe it to an illustrator. Name the FOCAL SUBJECT, the supporting elements around it and roughly where they sit, the lighting, the camera angle and the mood. Every element must MEAN something from this post - if the post is about review queues, show a queue; if it is about a 3x cost, show the scale. Concrete nouns only, never "a professional abstract concept". Do not describe text here; the words are specified separately below.
+- "headline": the words to letter onto the image, at most 48 characters. Short, punchy, and the actual point of the post - not the title copied out. Use Title Case or sentence case. No quotation marks, no hashtags, no emojis. If the chosen style carries LOW text, keep this under 30 characters.
+- "labels": 0 to 4 VERY short words or phrases that sit on individual elements in the scene (a bar, an icon, a step, a panel), each at most 18 characters. These are part of the picture, not a list beside it. Use [] when the scene does not need them, and ALWAYS use [] for a style that carries low text.
+- "subject": 2 to 5 words naming the single focal object or character, so the composition has an unmistakable centre.
+
+RULES:
+- Everything comes from the post. Invent no facts, figures, statistics, claims, brand names or logos. If the post names a real product, it may appear; otherwise none.
+- Keep the TOTAL words on the image small. A headline plus a few labels is the ceiling - this is a graphic, not a slide. Fewer, larger words always beat more, smaller ones.
+- Spell every word in "headline" and "labels" correctly; they are lettered onto the image exactly as written.
+- No people's faces rendered as specific real individuals. A representative person, a character or a figure seen from behind is fine.
+- Plain hyphens only, never em-dashes. No emojis anywhere.
+- Single-line plain text in every string, no double-quote characters inside any value, no trailing commas. The output must parse with JSON.parse.
+
+Return ONLY the JSON. No fences, no explanation.`;
+}

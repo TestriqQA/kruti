@@ -2,11 +2,13 @@ import { generateProText, generateTextWithConfig, parseJSON } from "@/lib/gemini
 import {
   buildImageBriefPrompt,
   buildDesignBriefPrompt,
+  buildArtBriefPrompt,
   buildCarouselDesignPrompt,
   UserVisualProfile,
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
 import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
+import { VISUAL_STYLE_IDS, visualStyleMenuBlock } from "@/lib/image-styles";
 import { iconMenuBlock } from "@/lib/image-icons";
 
 /**
@@ -44,6 +46,14 @@ export interface ImageBrief {
   heroIcon?: string;
   /** Hybrid only: art direction for the TEXT-FREE picture behind the graphic. */
   backgroundScene?: string;
+  /** Art-directed only: the full composition the model should draw. */
+  scene?: string;
+  /** Art-directed only: the chosen register from lib/image-styles.ts. */
+  visualStyle?: string;
+  /** Art-directed only: the single focal object or character. */
+  subject?: string;
+  /** True when the model was unavailable and this brief knows only the title. */
+  degraded?: boolean;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
   bodyText?: string; // hero words for text-card formats (quote / stat / screenshot line)
 
@@ -342,9 +352,9 @@ export async function getImageBrief(
   category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<ImageBrief> {
-  return usesCodeRender(category)
-    ? getDesignBrief(post, category, userProfile)
-    : getSceneBrief(post, category, userProfile);
+  // Every category is art-directed now. getDesignBrief / getSceneBrief remain
+  // for the code-render fallback path and are no longer the primary route.
+  return getArtBrief(post, category, userProfile);
 }
 
 /**
@@ -420,4 +430,74 @@ export async function getCarouselPlan(
     }
   }
   return fallbackCarouselPlan(post, count);
+}
+
+/**
+ * Brief for a FULLY ART-DIRECTED image - the model draws the whole graphic,
+ * lettering included.
+ *
+ * This supersedes the content-only design brief for every category. The code
+ * renderer is still here, but only as the fallback for when the image model
+ * fails: an image with plain type beats no image, and it is a long way from
+ * what a good LinkedIn graphic looks like.
+ */
+async function getArtBrief(
+  post: { title: string; body: string; postType: string },
+  category: ImageCategory,
+  userProfile?: UserVisualProfile
+): Promise<ImageBrief> {
+  const prompt = buildArtBriefPrompt(
+    post.title,
+    post.body,
+    post.postType,
+    category,
+    visualStyleMenuBlock(),
+    VISUAL_STYLE_IDS.join("|"),
+    themeMenuBlock(),
+    IMAGE_THEME_IDS.join("|"),
+    userProfile
+  );
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const raw = await generateTextWithConfig(prompt, { temperature: 1.15 });
+      const parsed = parseJSON<Record<string, unknown>>(raw);
+      const scene = String(parsed.scene ?? "").trim();
+      const headline = clampHeadline(String(parsed.headline ?? ""), 48);
+      // The scene is the one thing the image cannot be built without.
+      if (scene.length > 20) {
+        return {
+          headline,
+          subheadline: "",
+          // `nodes` carries the short labels that sit on elements in the scene,
+          // so the code-render fallback can still use them as a list.
+          nodes: clampLabels(parsed.labels, 4, 18),
+          cards: [],
+          scene,
+          subject: clampHeadline(String(parsed.subject ?? ""), 40),
+          visualStyle: String(parsed.visualStyle ?? "").trim().toLowerCase() || undefined,
+          themeId: clampThemeId(parsed.themeId),
+          heroIcon: "",
+        };
+      }
+    } catch (err) {
+      console.error(`[ArtBrief] attempt ${attempt + 1} failed:`, (err as Error).message);
+    }
+  }
+
+  // Marked degraded on purpose. When the model is unavailable - a quota cap,
+  // an outage - this fallback knows nothing about the post beyond its title, and
+  // an image built from it is exactly the generic, unrelated picture users
+  // complain about. The route refuses to ship one and reports the real reason
+  // instead; a clear error costs the user a retry, a bad image costs their trust.
+  return {
+    degraded: true,
+    headline: headlineFromTitle(post.title),
+    subheadline: "",
+    nodes: [],
+    cards: [],
+    scene: `A clear, concrete scene representing "${post.title}" in the world of a ${
+      userProfile?.headline ?? "professional"
+    }, with one unmistakable focal subject and real depth.`,
+  };
 }

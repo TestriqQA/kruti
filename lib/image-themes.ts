@@ -47,11 +47,22 @@ export interface ImageTheme {
   accent: string;
   /** Text placed on top of `accent`. */
   onAccent: string;
+  /**
+   * The palette described in WORDS.
+   *
+   * The art-directed image prompt uses this instead of the hex values. Hex
+   * codes handed to an image model get lettered onto the artwork - an early
+   * version shipped a graphic with a row of colour swatches reading #0F172A,
+   * #38BDF8 across the bottom, because any literal string in a prompt can end
+   * up as design copy.
+   */
+  palettePhrase: string;
 }
 
 export const IMAGE_THEMES: ImageTheme[] = [
   {
     id: "paper",
+    palettePhrase: "a warm off-white paper field, charcoal type, and a single burnt-amber accent",
     name: "Light editorial",
     when: "measured, credible, analytical posts",
     mode: "light",
@@ -66,6 +77,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "ink",
+    palettePhrase: "a near-black ink field, light type, and one warm amber accent",
     name: "Deep editorial",
     when: "bold, declarative, thought-leadership posts",
     mode: "dark",
@@ -80,6 +92,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "slate",
+    palettePhrase: "a deep navy-slate field, pale type, and one bright sky-blue accent",
     name: "Cool technical",
     when: "engineering, data, and systems posts",
     mode: "dark",
@@ -94,6 +107,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "sage",
+    palettePhrase: "a soft pale-green field, deep forest-green type, and a muted sage accent",
     name: "Earthy natural",
     when: "grounded, human, people-and-culture posts",
     mode: "light",
@@ -108,6 +122,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "clay",
+    palettePhrase: "a warm cream field, dark brown type, and a terracotta accent",
     name: "Warm craft",
     when: "personal stories and lessons learned",
     mode: "light",
@@ -122,6 +137,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "mono",
+    palettePhrase: "a clean white field, near-black type, and a single crimson accent",
     name: "High contrast mono",
     when: "sharp, contrarian, single-point posts",
     mode: "light",
@@ -136,6 +152,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "teal",
+    palettePhrase: "a pale mint field, deep teal type, and a strong teal accent",
     name: "Crisp clinical",
     when: "process, operations, and how-to posts",
     mode: "light",
@@ -150,6 +167,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "indigo",
+    palettePhrase: "a deep indigo field, pale lilac type, and a bright lime accent",
     name: "Bold statement",
     when: "launches, wins, and celebratory posts",
     mode: "dark",
@@ -164,6 +182,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "block",
+    palettePhrase: "a rich dark-teal field, mint type, and a warm apricot accent",
     name: "Colour block",
     when: "energetic, opinionated, high-contrast posts",
     mode: "dark",
@@ -178,6 +197,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "plum",
+    palettePhrase: "a dark plum field, pale lavender type, and a soft violet accent",
     name: "Muted minimal",
     when: "reflective, nuanced, quieter posts",
     mode: "dark",

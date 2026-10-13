@@ -2,6 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import { put } from "@vercel/blob";
 import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
+import { resolveVisualStyle } from "@/lib/image-styles";
+import { resolveTheme } from "@/lib/image-themes";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -382,4 +384,122 @@ export async function generateImageBuffer(
     lastImageGenError = "Image generation didn't return an image. Please try again in a moment.";
   }
   return null;
+}
+
+// ─── Art-directed generation (the whole image, from the model) ───────────────
+
+/**
+ * Assemble the final image prompt for a fully art-directed graphic.
+ *
+ * The structure matters as much as the words. Current image models letter short
+ * strings reliably when they are quoted verbatim and the total is kept small,
+ * and they drift when a prompt describes text in the abstract ("a prominent
+ * headline stating the core point"). So the exact strings go in, with an
+ * explicit instruction that nothing else may appear - which is also what keeps
+ * stray lorem-ipsum and invented sub-captions out of the frame.
+ */
+export function buildArtImagePrompt(opts: {
+  scene: string;
+  headline: string;
+  labels: string[];
+  subject?: string;
+  styleDirection: string;
+  styleName: string;
+  textLoad: "low" | "medium" | "high";
+  palette: { phrase: string; mode: "light" | "dark" };
+  formatLabel: string;
+}): string {
+  const { palette: p } = opts;
+  const labels = opts.labels.filter(Boolean);
+
+  const textBlock =
+    opts.textLoad === "low" && labels.length === 0 && !opts.headline
+      ? `TEXT: this image carries NO text at all. Not one letter, number, caption, watermark or sign.`
+      : [
+          // Guillemets, and no shouty instruction words anywhere near the
+          // strings. An earlier version opened with "letter EXACTLY these
+          // words" and the model dutifully lettered "EXACTLY:" onto the
+          // artwork - instruction vocabulary set in caps reads as design copy.
+          // Plain quotes, no shouty instruction words, and nothing in this block
+          // that would look like design copy. Two earlier versions leaked
+          // straight onto the artwork: one opened with "letter EXACTLY these
+          // words" and the model lettered "EXACTLY:" into the headline, and a
+          // guillemet-delimited version lettered the guillemets themselves.
+          // Any literal string in a prompt can end up as rendered type.
+          `Words to letter onto the image, and no others anywhere in the frame:`,
+          opts.headline ? `  the headline reads "${opts.headline}"` : null,
+          ...labels.map((l) => `  one element is labelled "${l}"`),
+          `Letter the words inside the quote marks and not the quote marks themselves. Do not letter any wording from these instructions. Each of those strings appears once and only once - never repeat a label, never echo the headline a second time. Add nothing else: no sub-captions, no body copy, no placeholder or lorem-ipsum lines, no watermark, no logo, no signature, no page numbers, no colour codes or swatches, no readable interface copy in the background. If a word is hard to letter cleanly, set it larger rather than adding more words.`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+  return `Create ONE premium, square (1:1) graphic for a LinkedIn feed. A person scrolling past should understand the idea from the picture alone, before reading anything.
+
+VISUAL STYLE - ${opts.styleName}: ${opts.styleDirection}
+
+THE SCENE: ${opts.scene}
+FOCAL SUBJECT: ${opts.subject || "the single most important object in the scene"}
+
+${textBlock}
+
+TYPOGRAPHY: set the headline large, bold and perfectly legible on a phone screen - it should occupy a confident share of the frame and sit INSIDE the composition as a designed element, never as a plain bar pasted over the artwork. Clean modern sans-serif. Correct spacing, correct kerning, no broken or duplicated letterforms.
+
+COLOUR: ${p.phrase}. ${
+    p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
+  } Keep to that family - one accent, used sparingly, is what makes a graphic look designed rather than generated. Describe colour only through the artwork; never letter a colour name, hex code or swatch row onto the image.
+
+QUALITY BAR: this must look like it came from a senior designer at a top studio - deliberate composition, real depth, believable materials and light, generous margins, nothing crowded against the edges. Full-bleed square, artwork running to every edge, with NO drawn border, frame or outer keyline.
+
+NEVER: garbled or misspelled lettering, duplicated words, random glyphs, neon glow, circuit-board cliche, plastic AI sheen, warped hands or extra limbs, a fabricated portrait of a real identifiable person, stock-photo cheesiness, or any brand logo the post did not name.`;
+}
+
+/**
+ * Generate the full image from the model and store it.
+ *
+ * Returns null on failure, with `lastImageGenError` set, so the caller can fall
+ * back to the code renderer rather than leaving the user with nothing.
+ */
+export async function generateAndStoreArtImage(
+  brief: {
+    scene?: string;
+    headline?: string;
+    nodes?: string[];
+    subject?: string;
+    visualStyle?: string;
+    themeId?: string;
+  },
+  postId: string,
+  category: ImageCategory
+): Promise<string | null> {
+  lastImageGenError = null;
+
+  const style = resolveVisualStyle(brief.visualStyle, postId);
+  const theme = resolveTheme(brief.themeId, postId);
+
+  const prompt = buildArtImagePrompt({
+    scene: brief.scene || `A clear, concrete scene representing: ${brief.headline ?? category.label}`,
+    headline: brief.headline ?? "",
+    // The art brief reuses `nodes` for the short labels that sit on elements in
+    // the scene. A low-text style gets none, whatever the brief returned.
+    labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
+    subject: brief.subject,
+    styleDirection: style.direction,
+    styleName: style.name,
+    textLoad: style.textLoad,
+    palette: { phrase: theme.palettePhrase, mode: theme.mode },
+    formatLabel: category.label,
+  });
+
+  console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
+  const result = await generateImageBuffer(prompt, "2K");
+  if (!result) return null;
+
+  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
+  const blob = await put(`generated/${filename}`, result.buffer, {
+    access: "public",
+    contentType: result.contentType,
+  });
+  console.log(`[ArtImage] stored:`, blob.url);
+  return blob.url;
 }

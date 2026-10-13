@@ -94,12 +94,12 @@ export interface RenderOptions {
 // at 34 characters, so this keeps a short headline genuinely large without
 // letting a long one wrap to three lines.
 
-function headlineSize(text: string): number {
+function headlineSize(text: string, compact = false): number {
   const n = text.trim().length;
-  if (n <= 16) return 112;
-  if (n <= 24) return 94;
-  if (n <= 34) return 80;
-  return 66;
+  const base = n <= 16 ? 112 : n <= 24 ? 94 : n <= 34 ? 80 : 66;
+  // In a split the picture already takes a third of the frame, so a headline
+  // that wraps to two lines at full size pushes the chips off the bottom edge.
+  return compact ? Math.min(base, 76) : base;
 }
 
 function heroSize(text: string): number {
@@ -136,12 +136,12 @@ function AccentRule({ t }: { t: ImageTheme }) {
   );
 }
 
-function Headline({ text, t, align = "left" }: { text: string; t: ImageTheme; align?: "left" | "center" }) {
+function Headline({ text, t, align = "left", compact = false }: { text: string; t: ImageTheme; align?: "left" | "center"; compact?: boolean }) {
   return (
     <div
       style={{
         display: "flex",
-        fontSize: headlineSize(text),
+        fontSize: headlineSize(text, compact),
         fontWeight: 800,
         lineHeight: 1.04,
         letterSpacing: -2,
@@ -320,11 +320,11 @@ function Body({ children, gap = 18 }: { children: React.ReactNode; gap?: number 
   );
 }
 
-function Header({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Header({ brief, t, compact = false }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 22, flexShrink: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 16 : 22, flexShrink: 0 }}>
       <AccentRule t={t} />
-      <Headline text={brief.headline} t={t} />
+      <Headline text={brief.headline} t={t} compact={compact} />
       <Subhead text={brief.subheadline ?? ""} t={t} />
     </div>
   );
@@ -356,7 +356,7 @@ function Statement({ brief, t, align = "left" }: { brief: DesignBrief; t: ImageT
 // ─── Layouts ─────────────────────────────────────────────────────────────────
 
 /** designed-infographic, carousel-hint, and the fallback for anything unmapped. */
-function Infographic({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Infographic({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
   if (nodes.length === 0) return <Statement brief={brief} t={t} />;
@@ -365,7 +365,7 @@ function Infographic({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   const tile = nodes.length >= 5 ? 56 : 64;
   return (
     <>
-      <Header brief={brief} t={t} />
+      <Header brief={brief} t={t} compact={compact} />
       <Body gap={nodes.length >= 5 ? 14 : 20}>
         {nodes.map((n, i) => (
           <div
@@ -395,7 +395,7 @@ function Infographic({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
 }
 
 /** framework-diagram, timeline-roadmap - ordered steps on one connected spine. */
-function Diagram({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Diagram({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
   if (nodes.length === 0) return <Statement brief={brief} t={t} />;
@@ -403,7 +403,7 @@ function Diagram({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
 
   return (
     <>
-      <Header brief={brief} t={t} />
+      <Header brief={brief} t={t} compact={compact} />
       <Body gap={0}>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {nodes.map((n, i) => {
@@ -472,7 +472,7 @@ function IconComposed({ concept, seed, t }: { concept?: string; seed?: string; t
 }
 
 /** myth-vs-fact, before-after - two panels, the right one carrying the accent. */
-function Comparison({ brief, t, category }: { brief: DesignBrief; t: ImageTheme; category: ImageCategory }) {
+function Comparison({ brief, t, category, compact }: { brief: DesignBrief; t: ImageTheme; category: ImageCategory; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
   const isMyth = category.id === "myth-vs-fact";
@@ -549,7 +549,7 @@ function Comparison({ brief, t, category }: { brief: DesignBrief; t: ImageTheme;
 
   return (
     <>
-      <Header brief={brief} t={t} />
+      <Header brief={brief} t={t} compact={compact} />
       <Body gap={24}>
         {/* flexGrow so the two panels fill the middle of the frame. Sized to
             their text alone they sat as two short boxes with dead space above
@@ -640,14 +640,14 @@ function QuoteCard({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
 }
 
 /** checklist-card - save-bait. The nodes ARE the checklist. */
-function Checklist({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Checklist({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const items = brief.nodes ?? [];
   const icons = brief.icons ?? [];
   if (items.length === 0) return <Statement brief={brief} t={t} />;
 
   return (
     <>
-      <Header brief={brief} t={t} />
+      <Header brief={brief} t={t} compact={compact} />
       <Body gap={items.length >= 5 ? 14 : 18}>
         {items.map((item, i) => (
           <div
@@ -839,12 +839,12 @@ function Banner({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
 
 // ─── Dispatch + render ───────────────────────────────────────────────────────
 
-function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme }) {
+function Layout({ category, brief, t, author, compact }: RenderOptions & { t: ImageTheme; compact?: boolean }) {
   switch (category.genApproach) {
     case "diagram":
-      return <Diagram brief={brief} t={t} />;
+      return <Diagram brief={brief} t={t} compact={compact} />;
     case "comparison":
-      return <Comparison brief={brief} t={t} category={category} />;
+      return <Comparison brief={brief} t={t} category={category} compact={compact} />;
     case "banner":
       return <Banner brief={brief} t={t} />;
     case "text-card":
@@ -853,11 +853,11 @@ function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme 
       if (category.id === "big-stat-hero") return <StatHero brief={brief} t={t} />;
       if (category.id === "quote-card") return <QuoteCard brief={brief} t={t} />;
       if (category.id === "x-screenshot") return <SocialCard brief={brief} t={t} author={author} />;
-      return <Checklist brief={brief} t={t} />;
+      return <Checklist brief={brief} t={t} compact={compact} />;
     case "designed-infographic":
     case "carousel-hint":
     default:
-      return <Infographic brief={brief} t={t} />;
+      return <Infographic brief={brief} t={t} compact={compact} />;
   }
 }
 
@@ -911,9 +911,9 @@ const SPLIT_GAP = 16;
 
 /** How much of the frame the picture gets in a split, by how long the list is. */
 function imageBandHeight(nodeCount: number): number {
-  if (nodeCount <= 3) return Math.round(IMAGE_SIZE * 0.36);
-  if (nodeCount === 4) return Math.round(IMAGE_SIZE * 0.3);
-  return Math.round(IMAGE_SIZE * 0.25);
+  if (nodeCount <= 3) return Math.round(IMAGE_SIZE * 0.3);
+  if (nodeCount === 4) return Math.round(IMAGE_SIZE * 0.26);
+  return Math.round(IMAGE_SIZE * 0.22);
 }
 
 /**
@@ -967,7 +967,7 @@ export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> 
         zIndex: 1,
       }}
     >
-      <Layout {...opts} t={t} />
+      <Layout {...opts} t={t} compact={composition === "split"} />
     </div>
   );
 
