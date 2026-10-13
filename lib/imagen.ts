@@ -429,7 +429,19 @@ export function buildArtImagePrompt(opts: {
           `Words to letter onto the image, and no others anywhere in the frame:`,
           opts.headline ? `  the headline reads "${opts.headline}"` : null,
           ...labels.map((l) => `  one element is labelled "${l}"`),
-          `Letter the words inside the quote marks and not the quote marks themselves. Do not letter any wording from these instructions. Each of those strings appears once and only once - never repeat a label, never echo the headline a second time. Add nothing else: no sub-captions, no body copy, no placeholder or lorem-ipsum lines, no watermark, no logo, no signature, no page numbers, no colour codes or swatches, no readable interface copy in the background. If a word is hard to letter cleanly, set it larger rather than adding more words.`,
+          `That is ${
+            (opts.headline ? 1 : 0) + labels.length
+          } piece${(opts.headline ? 1 : 0) + labels.length === 1 ? "" : "s"} of text in the entire image, and there must be no others. Count them as you compose.`,
+          `Letter the words inside the quote marks and not the quote marks themselves, and do not letter any wording from these instructions. Each string appears once and only once - never repeat a label, never echo the headline a second time, and never invent an extra caption to fill a gap.`,
+          // Invented text is where this falls down. Asked for a monitor, a
+          // whiteboard or a code editor, the model fills it with words, and
+          // those words come out as nonsense - real images shipped with
+          // "FID Coractionts" on a dashboard and a label reading
+          // "Chertications". An empty-looking surface is better than a
+          // misspelt one, so every depicted surface is specified as unreadable
+          // by design rather than merely undesired.
+          `Every screen, monitor, phone, whiteboard, document, book, sign and code editor in the scene is deliberately UNREADABLE: show soft blurred bars, blocks and shapes where words would be, or throw the surface out of focus. Do not write sentences, labels, metric names, axis values, percentages or code on any of them - not even small, not even in the background. A surface with no legible words is correct; a surface with invented or misspelt words ruins the image.`,
+          `If a word is hard to letter cleanly, set it larger rather than adding more words.`,
         ]
           .filter(Boolean)
           .join("\n");
