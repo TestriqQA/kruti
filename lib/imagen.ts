@@ -468,6 +468,12 @@ export function buildArtImagePrompt(opts: {
           // stay, so the surfaces stay too; they are just composed so their
           // content reads as texture rather than as words.
           `Compose any large writing surface - a whiteboard, a wall of notes, a full monitor - so its content reads as texture, not as words: turn it to a steep angle, crop it at the frame edge, push it behind the focal subject, or throw it softly out of focus. Never fill one edge to edge with handwriting or body copy. Small real things in sharp focus are fine; large legible blocks of invented writing are what ruin these images.`,
+          // Code editors are the worst offender for this audience, and they
+          // need their own rule: told only "no invented text", the model still
+          // writes code, and it comes out as "import React from 'nextt'" and
+          // "<mekease>". Giving it the idiom designers actually use - coloured
+          // bars - replaces the behaviour instead of just forbidding it.
+          `A code editor, terminal or IDE in the scene is drawn as syntax-coloured BARS, never as characters: short rounded rectangles in editor colours - purple, blue, green, amber - laid out in indented lines of varying length, with a gutter of plain dots or dashes where line numbers would be, and a sidebar of small blank icons. No letterforms anywhere in it - no keywords, no tags, no brackets, no quotes, no file names beyond the ones listed above. This is how a designer depicts code in a graphic: it reads as code instantly without a single readable character, and it cannot misspell anything.`,
           `If a word is hard to letter cleanly, set it larger rather than adding more words.`,
         ]
           .filter(Boolean)
