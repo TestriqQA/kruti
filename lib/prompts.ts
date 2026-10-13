@@ -40,6 +40,14 @@ export interface UserVisualProfile {
   industry?: string | null;
   name?: string | null;
   headline?: string | null; // the person's actual ROLE (e.g. "SEO Analyst") - drives the imagery
+  /**
+   * The person's own account of what they do. The richest grounding there is
+   * for imagery - it names the real tools, screens and problems of their day -
+   * and it was missing from this type entirely, so the image brief never saw it.
+   */
+  summary?: string | null;
+  /** Who the post is for; the image has to land with them, not just the author. */
+  targetAudience?: string | null;
 }
 
 /**
@@ -923,7 +931,27 @@ export function buildArtBriefPrompt(
   themeIds: string,
   userProfile?: UserVisualProfile
 ): string {
-  const role = userProfile?.headline || "professional";
+  // This brief used to see ONE line of profile - the headline - while the
+  // content prompt received the whole thing. That is precisely why the images
+  // felt unrelated to the person: the brief had no idea what they actually do
+  // day to day, who they are writing for, or how they position themselves, so
+  // it defaulted to generic imagery for the field. All of it grounds the
+  // artwork now.
+  const role = (userProfile?.headline || "").trim();
+  const summary = (userProfile?.summary || "").trim().slice(0, 700);
+  const audience = (userProfile?.targetAudience || "").trim().slice(0, 300);
+
+  const profileBlock = [
+    "WHO THIS POST IS BY - ground every object, screen, tool and environment in THIS person's real working world:",
+    role ? `  Their role: ${role}` : null,
+    userProfile?.industry ? `  Field: ${userProfile.industry}` : null,
+    summary ? `  What they actually do, in their own words: ${summary}` : null,
+    userProfile?.positioning ? `  How they come across: ${userProfile.positioning}` : null,
+    audience ? `  Who this post is for: ${audience}` : null,
+    "  Show the specific artifacts of this role and this audience - the real screens, tools, surfaces and moments they would recognise. Never a generic stereotype of the field: no circuit boards, chips or glowing wires just because someone works in technology, no handshakes or skylines just because it is business.",
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   return `You are an award-winning art director briefing ONE square (1:1) image for a LinkedIn post. The image has to carry the post's idea on its own: someone scrolling past should understand the point from the picture before they read a word of the caption.
 
@@ -933,7 +961,8 @@ THE POST:
 Title (hook): ${title}
 Body: ${body}
 Post type: ${postType}
-Author's role: ${role}
+
+${profileBlock}
 
 Read the post, find the ONE idea worth picturing, then brief the image.
 

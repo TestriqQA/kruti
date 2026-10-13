@@ -451,7 +451,9 @@ COLOUR: ${p.phrase}. ${
 
 QUALITY BAR: this must look like it came from a senior designer at a top studio - deliberate composition, real depth, believable materials and light, generous margins, nothing crowded against the edges. Full-bleed square, artwork running to every edge, with NO drawn border, frame or outer keyline.
 
-NEVER: garbled or misspelled lettering, duplicated words, random glyphs, neon glow, circuit-board cliche, plastic AI sheen, warped hands or extra limbs, a fabricated portrait of a real identifiable person, stock-photo cheesiness, or any brand logo the post did not name.`;
+SCREENS, CHARTS AND DIALS: draw them as clean abstract shapes - lines, bars, curves, segments, blocks - carrying NO numbers, axis values, percentages or interface wording of any kind. A model asked for a dashboard fills it with invented half-legible figures, and tiny garbled numbers inside a screen undo an otherwise good graphic. Only the headline and the labels listed above may be readable; a chart shows its shape, never its data.
+
+NEVER: garbled or misspelled lettering, duplicated words, random glyphs, invented statistics, neon glow, circuit-board cliche, plastic AI sheen, warped hands or extra limbs, a fabricated portrait of a real identifiable person, stock-photo cheesiness, or any brand logo the post did not name.`;
 }
 
 /**

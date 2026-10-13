@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
               select: {
                 industry: true,
                 positioning: true,
-                contentStyles: true,
+                contentStyles: true, summary: true, targetAudience: true,
                 name: true,
                 headline: true,
               },
@@ -118,6 +118,8 @@ export async function POST(req: NextRequest) {
           industry,
           name: post.plan.user.name,
           headline: post.plan.user.headline,
+      summary: post.plan.user.summary,
+      targetAudience: post.plan.user.targetAudience,
         };
         const category = resolveImageCategory(post.imageStyle);
         send({ ...base, status: "brief", category: category.label });

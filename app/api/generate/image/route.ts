@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
     industry,
     name: post.plan.user.name,
     headline: post.plan.user.headline, // the actual ROLE that drives the imagery
+      summary: post.plan.user.summary,
+      targetAudience: post.plan.user.targetAudience,
   };
 
   let imageUrl: string | null;
