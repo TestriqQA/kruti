@@ -1,8 +1,9 @@
 import satori from "satori";
 import sharp from "sharp";
 import type { ImageCategory } from "@/lib/image-categories";
-import { resolveTheme, type ImageTheme } from "@/lib/image-themes";
+import { resolveTheme, withAlpha, type ImageTheme } from "@/lib/image-themes";
 import { getRenderFonts, FONT_FAMILY } from "@/lib/og-fonts";
+import { resolveIcon } from "@/lib/image-icons";
 
 /**
  * ─── Code-rendered post images ───────────────────────────────────────────────
@@ -63,6 +64,12 @@ export interface DesignBrief {
   nodes?: string[];
   cards?: string[];
   themeId?: string;
+  /** One icon concept per node, same order. See lib/image-icons.ts. */
+  icons?: string[];
+  /** The icon representing the whole graphic. */
+  heroIcon?: string;
+  /** Art direction for the picture behind the graphic (hybrid mode). */
+  backgroundScene?: string;
 }
 
 export interface RenderOptions {
@@ -74,6 +81,12 @@ export interface RenderOptions {
   author?: { name?: string | null; headline?: string | null };
   /** Set for carousel slides so the set gets a position indicator. */
   slide?: { index: number; total: number };
+  /**
+   * A TEXT-FREE picture to composite the text layer over. Omit it (or pass
+   * nothing when the image model failed) and the same layouts render on a
+   * solid themed field instead.
+   */
+  background?: Buffer;
 }
 
 // ─── Type scale ──────────────────────────────────────────────────────────────
@@ -81,12 +94,12 @@ export interface RenderOptions {
 // at 34 characters, so this keeps a short headline genuinely large without
 // letting a long one wrap to three lines.
 
-function headlineSize(text: string): number {
+function headlineSize(text: string, compact = false): number {
   const n = text.trim().length;
-  if (n <= 16) return 112;
-  if (n <= 24) return 94;
-  if (n <= 34) return 80;
-  return 66;
+  const base = n <= 16 ? 112 : n <= 24 ? 94 : n <= 34 ? 80 : 66;
+  // In a split the picture already takes a third of the frame, so a headline
+  // that wraps to two lines at full size pushes the chips off the bottom edge.
+  return compact ? Math.min(base, 76) : base;
 }
 
 function heroSize(text: string): number {
@@ -123,12 +136,12 @@ function AccentRule({ t }: { t: ImageTheme }) {
   );
 }
 
-function Headline({ text, t, align = "left" }: { text: string; t: ImageTheme; align?: "left" | "center" }) {
+function Headline({ text, t, align = "left", compact = false }: { text: string; t: ImageTheme; align?: "left" | "center"; compact?: boolean }) {
   return (
     <div
       style={{
         display: "flex",
-        fontSize: headlineSize(text),
+        fontSize: headlineSize(text, compact),
         fontWeight: 800,
         lineHeight: 1.04,
         letterSpacing: -2,
@@ -224,155 +237,244 @@ function Tick({ t }: { t: ImageTheme }) {
   );
 }
 
+/** A rounded tile carrying one icon, in the accent colour. */
+function IconTile({
+  concept,
+  seed,
+  t,
+  size = 60,
+  radius = 18,
+}: {
+  concept?: string;
+  seed?: string;
+  t: ImageTheme;
+  size?: number;
+  radius?: number;
+}) {
+  const Icon = resolveIcon(concept, seed);
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: t.accent,
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={Math.round(size * 0.56)} color={t.onAccent} strokeWidth={2.4} />
+    </div>
+  );
+}
+
+/**
+ * The large icon that anchors a slide with no list to show.
+ *
+ * This is what keeps a hook, takeaway or announcement from being a headline
+ * floating in an empty frame - the first version of these layouts had exactly
+ * that problem, and it read as broken rather than minimal.
+ */
+function HeroIcon({ concept, seed, t, size = 150 }: { concept?: string; seed?: string; t: ImageTheme; size?: number }) {
+  const Icon = resolveIcon(concept, seed);
+  return (
+    <div
+      style={{
+        display: "flex",
+        width: size,
+        height: size,
+        borderRadius: Math.round(size * 0.28),
+        backgroundColor: t.accent,
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      <Icon size={Math.round(size * 0.52)} color={t.onAccent} strokeWidth={2.2} />
+    </div>
+  );
+}
+
+/**
+ * The middle region of a layout.
+ *
+ * flexGrow + centred, never `justifyContent: space-between` on the frame. The
+ * earlier version spaced the header and the list to opposite edges, so a slide
+ * with three short rows left a huge dead band through the middle of the image.
+ */
+function Body({ children, gap = 18 }: { children: React.ReactNode; gap?: number }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        justifyContent: "center",
+        gap,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function Header({ brief, t, compact = false }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 16 : 22, flexShrink: 0 }}>
+      <AccentRule t={t} />
+      <Headline text={brief.headline} t={t} compact={compact} />
+      <Subhead text={brief.subheadline ?? ""} t={t} />
+    </div>
+  );
+}
+
+/** Shared by every layout with nothing to list: one big icon carries the frame. */
+function Statement({ brief, t, align = "left" }: { brief: DesignBrief; t: ImageTheme; align?: "left" | "center" }) {
+  const centre = align === "center";
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        justifyContent: "center",
+        alignItems: centre ? "center" : "flex-start",
+        gap: 46,
+      }}
+    >
+      <HeroIcon concept={brief.heroIcon} seed={brief.headline} t={t} size={160} />
+      <div style={{ display: "flex", flexDirection: "column", gap: 22, alignItems: centre ? "center" : "flex-start" }}>
+        <Headline text={brief.headline} t={t} align={align} />
+        <Subhead text={brief.subheadline ?? ""} t={t} align={align} />
+      </div>
+    </div>
+  );
+}
+
 // ─── Layouts ─────────────────────────────────────────────────────────────────
 
 /** designed-infographic, carousel-hint, and the fallback for anything unmapped. */
-function Infographic({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Infographic({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
+  const icons = brief.icons ?? [];
+  if (nodes.length === 0) return <Statement brief={brief} t={t} />;
+
   const size = nodeSize(nodes.length);
+  const tile = nodes.length >= 5 ? 56 : 64;
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
-        <AccentRule t={t} />
-        <Headline text={brief.headline} t={t} />
-        <Subhead text={brief.subheadline ?? ""} t={t} />
-      </div>
-
-      {nodes.length > 0 && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          {nodes.map((n, i) => (
-            <div
-              key={n}
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 24,
-                backgroundColor: t.surface,
-                border: `2px solid ${t.border}`,
-                borderRadius: 24,
-                paddingTop: 22,
-                paddingBottom: 22,
-                paddingLeft: 24,
-                paddingRight: 30,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  width: 60,
-                  height: 60,
-                  borderRadius: 999,
-                  backgroundColor: t.accent,
-                  color: t.onAccent,
-                  fontSize: 30,
-                  fontWeight: 800,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {i + 1}
-              </div>
-              <div style={{ display: "flex", fontSize: size, fontWeight: 600, color: t.text }}>{n}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
+      <Header brief={brief} t={t} compact={compact} />
+      <Body gap={nodes.length >= 5 ? 14 : 20}>
+        {nodes.map((n, i) => (
+          <div
+            key={n}
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 24,
+              backgroundColor: t.surface,
+              border: `2px solid ${t.border}`,
+              borderRadius: 24,
+              paddingTop: 20,
+              paddingBottom: 20,
+              paddingLeft: 22,
+              paddingRight: 30,
+            }}
+          >
+            <IconTile concept={icons[i]} seed={n} t={t} size={tile} />
+            <div style={{ display: "flex", fontSize: size, fontWeight: 600, color: t.text }}>{n}</div>
+          </div>
+        ))}
+      </Body>
       <CardChips cards={brief.cards ?? []} t={t} />
     </>
   );
 }
 
 /** framework-diagram, timeline-roadmap - ordered steps on one connected spine. */
-function Diagram({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Diagram({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
-  if (nodes.length === 0) return <Infographic brief={brief} t={t} />;
+  const icons = brief.icons ?? [];
+  if (nodes.length === 0) return <Statement brief={brief} t={t} />;
   const size = nodeSize(nodes.length);
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
-        <AccentRule t={t} />
-        <Headline text={brief.headline} t={t} />
-        <Subhead text={brief.subheadline ?? ""} t={t} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {nodes.map((n, i) => {
-          const last = i === nodes.length - 1;
-          return (
-            <div key={n} style={{ display: "flex", flexDirection: "row", alignItems: "stretch" }}>
-              {/* The spine: marker, then a connector that stretches to the next row. */}
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 84 }}>
-                <div
-                  style={{
-                    display: "flex",
-                    width: 66,
-                    height: 66,
-                    borderRadius: 999,
-                    backgroundColor: t.accent,
-                    color: t.onAccent,
-                    fontSize: 32,
-                    fontWeight: 800,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {i + 1}
+      <Header brief={brief} t={t} compact={compact} />
+      <Body gap={0}>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {nodes.map((n, i) => {
+            const last = i === nodes.length - 1;
+            return (
+              <div key={n} style={{ display: "flex", flexDirection: "row", alignItems: "stretch" }}>
+                {/* The spine: step marker, then a connector stretching to the next row. */}
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 84 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      width: 66,
+                      height: 66,
+                      borderRadius: 999,
+                      backgroundColor: t.accent,
+                      color: t.onAccent,
+                      fontSize: 32,
+                      fontWeight: 800,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {i + 1}
+                  </div>
+                  {!last && <div style={{ display: "flex", width: 5, flexGrow: 1, backgroundColor: t.border }} />}
                 </div>
-                {!last && (
-                  <div style={{ display: "flex", width: 5, flexGrow: 1, backgroundColor: t.border }} />
-                )}
-              </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  flexGrow: 1,
-                  paddingBottom: last ? 0 : 26,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    backgroundColor: t.surface,
-                    border: `2px solid ${t.border}`,
-                    borderRadius: 22,
-                    paddingTop: 20,
-                    paddingBottom: 20,
-                    paddingLeft: 28,
-                    paddingRight: 28,
-                    fontSize: size,
-                    fontWeight: 600,
-                    color: t.text,
-                  }}
-                >
-                  {n}
+                <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, paddingBottom: last ? 0 : 24 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 20,
+                      backgroundColor: t.surface,
+                      border: `2px solid ${t.border}`,
+                      borderRadius: 22,
+                      paddingTop: 18,
+                      paddingBottom: 18,
+                      paddingLeft: 24,
+                      paddingRight: 28,
+                    }}
+                  >
+                    <IconComposed concept={icons[i]} seed={n} t={t} />
+                    <div style={{ display: "flex", fontSize: size, fontWeight: 600, color: t.text }}>{n}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-
+            );
+          })}
+        </div>
+      </Body>
       <CardChips cards={brief.cards ?? []} t={t} />
     </>
   );
 }
 
+/** A bare icon in the accent colour, for rows that already carry a step number. */
+function IconComposed({ concept, seed, t }: { concept?: string; seed?: string; t: ImageTheme }) {
+  const Icon = resolveIcon(concept, seed);
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <Icon size={38} color={t.accent} strokeWidth={2.4} />
+    </div>
+  );
+}
+
 /** myth-vs-fact, before-after - two panels, the right one carrying the accent. */
-function Comparison({
-  brief,
-  t,
-  category,
-}: {
-  brief: DesignBrief;
-  t: ImageTheme;
-  category: ImageCategory;
-}) {
+function Comparison({ brief, t, category, compact }: { brief: DesignBrief; t: ImageTheme; category: ImageCategory; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
+  const icons = brief.icons ?? [];
   const isMyth = category.id === "myth-vs-fact";
   const leftLabel = isMyth ? "MYTH" : "BEFORE";
   const rightLabel = isMyth ? "FACT" : "AFTER";
@@ -381,15 +483,19 @@ function Comparison({
   // nodes that is exactly one line each, and more nodes stack without breaking.
   const left = nodes.filter((_, i) => i % 2 === 0);
   const right = nodes.filter((_, i) => i % 2 === 1);
+  const leftIcon = icons[0];
+  const rightIcon = icons[1];
   const body = (brief.bodyText ?? "").trim();
 
   const Panel = ({
     label,
     items,
+    icon,
     accent,
   }: {
     label: string;
     items: string[];
+    icon?: string;
     accent: boolean;
   }) => (
     <div
@@ -398,38 +504,37 @@ function Comparison({
         flexDirection: "column",
         flexGrow: 1,
         flexBasis: 0,
-        gap: 22,
+        gap: 24,
         backgroundColor: t.surface,
         border: `3px solid ${accent ? t.accent : t.border}`,
         borderRadius: 30,
         padding: 34,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignSelf: "flex-start",
-          paddingTop: 10,
-          paddingBottom: 10,
-          paddingLeft: 22,
-          paddingRight: 22,
-          borderRadius: 999,
-          backgroundColor: accent ? t.accent : t.bgAlt,
-          color: accent ? t.onAccent : t.textMuted,
-          fontSize: 25,
-          fontWeight: 800,
-          letterSpacing: 2,
-        }}
-      >
-        {label}
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 16 }}>
+        <IconTile concept={icon} seed={label} t={t} size={54} radius={16} />
+        <div
+          style={{
+            display: "flex",
+            fontSize: 25,
+            fontWeight: 800,
+            letterSpacing: 2,
+            color: accent ? t.accent : t.textMuted,
+          }}
+        >
+          {label}
+        </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* The panel stretches to fill the frame, so its text centres inside it.
+          Left at the top it just moved the dead space from outside the panels
+          to inside them. */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, flexGrow: 1, justifyContent: "center" }}>
         {items.map((item) => (
           <div
             key={item}
             style={{
               display: "flex",
-              fontSize: items.length > 2 ? 32 : 38,
+              fontSize: items.length > 2 ? 32 : 37,
               fontWeight: 600,
               lineHeight: 1.25,
               color: accent ? t.text : t.textMuted,
@@ -444,29 +549,27 @@ function Comparison({
 
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <AccentRule t={t} />
-        <Headline text={brief.headline} t={t} />
-        <Subhead text={brief.subheadline ?? ""} t={t} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "row", gap: 24, alignItems: "stretch" }}>
-        <Panel label={leftLabel} items={left} accent={false} />
-        <Panel label={rightLabel} items={right} accent />
-      </div>
-
-      {body ? (
-        <div style={{ display: "flex", fontSize: 32, fontWeight: 400, lineHeight: 1.3, color: t.textMuted }}>
-          {body}
+      <Header brief={brief} t={t} compact={compact} />
+      <Body gap={24}>
+        {/* flexGrow so the two panels fill the middle of the frame. Sized to
+            their text alone they sat as two short boxes with dead space above
+            and below, which is what made the first version look unfinished. */}
+        <div style={{ display: "flex", flexDirection: "row", gap: 24, alignItems: "stretch", flexGrow: 1 }}>
+          <Panel label={leftLabel} items={left} icon={leftIcon} accent={false} />
+          <Panel label={rightLabel} items={right} icon={rightIcon} accent />
         </div>
-      ) : (
-        <CardChips cards={brief.cards ?? []} t={t} />
-      )}
+        {body && (
+          <div style={{ display: "flex", fontSize: 31, fontWeight: 400, lineHeight: 1.3, color: t.textMuted }}>
+            {body}
+          </div>
+        )}
+      </Body>
+      {!body && <CardChips cards={brief.cards ?? []} t={t} />}
     </>
   );
 }
 
-/** big-stat-hero - one dominant figure. */
+/** big-stat-hero - one dominant figure, with the icon that gives it context. */
 function StatHero({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   const hero = (brief.bodyText || brief.headline).trim();
   const showHeadline = hero !== brief.headline.trim();
@@ -481,6 +584,7 @@ function StatHero({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
         gap: 34,
       }}
     >
+      <HeroIcon concept={brief.heroIcon} seed={brief.headline} t={t} size={124} />
       <div
         style={{
           display: "flex",
@@ -506,17 +610,12 @@ function QuoteCard({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   const quote = (brief.bodyText || brief.headline).trim();
   const attribution = (brief.subheadline ?? "").trim();
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        flexGrow: 1,
-        justifyContent: "center",
-        gap: 40,
-      }}
-    >
-      <div style={{ display: "flex", fontSize: 150, fontWeight: 800, lineHeight: 0.7, color: t.accent }}>
-        &ldquo;
+    <div style={{ display: "flex", flexDirection: "column", flexGrow: 1, justifyContent: "center", gap: 40 }}>
+      <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 28 }}>
+        <IconTile concept={brief.heroIcon} seed={quote} t={t} size={72} radius={22} />
+        <div style={{ display: "flex", fontSize: 130, fontWeight: 800, lineHeight: 0.62, color: t.accent }}>
+          &ldquo;
+        </div>
       </div>
       <div
         style={{
@@ -533,9 +632,7 @@ function QuoteCard({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
       {attribution && (
         <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 22 }}>
           <div style={{ display: "flex", width: 72, height: 6, borderRadius: 999, backgroundColor: t.accent }} />
-          <div style={{ display: "flex", fontSize: 32, fontWeight: 600, color: t.textMuted }}>
-            {attribution}
-          </div>
+          <div style={{ display: "flex", fontSize: 32, fontWeight: 600, color: t.textMuted }}>{attribution}</div>
         </div>
       )}
     </div>
@@ -543,47 +640,53 @@ function QuoteCard({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
 }
 
 /** checklist-card - save-bait. The nodes ARE the checklist. */
-function Checklist({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
+function Checklist({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const items = brief.nodes ?? [];
-  if (items.length === 0) return <Infographic brief={brief} t={t} />;
+  const icons = brief.icons ?? [];
+  if (items.length === 0) return <Statement brief={brief} t={t} />;
+
   return (
     <>
-      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <AccentRule t={t} />
-        <Headline text={brief.headline} t={t} />
-        <Subhead text={brief.subheadline ?? ""} t={t} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-        {items.map((item) => (
-          <div key={item} style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 26 }}>
+      <Header brief={brief} t={t} compact={compact} />
+      <Body gap={items.length >= 5 ? 14 : 18}>
+        {items.map((item, i) => (
+          <div
+            key={item}
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 22,
+              backgroundColor: t.surface,
+              border: `2px solid ${t.border}`,
+              borderRadius: 22,
+              paddingTop: 18,
+              paddingBottom: 18,
+              paddingLeft: 22,
+              paddingRight: 28,
+            }}
+          >
             <div
               style={{
                 display: "flex",
-                width: 58,
-                height: 58,
+                width: 56,
+                height: 56,
                 borderRadius: 16,
                 backgroundColor: t.accent,
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0,
               }}
             >
               <Tick t={t} />
             </div>
-            <div
-              style={{
-                display: "flex",
-                fontSize: nodeSize(items.length) + 2,
-                fontWeight: 600,
-                color: t.text,
-              }}
-            >
+            <div style={{ display: "flex", flexGrow: 1, fontSize: nodeSize(items.length), fontWeight: 600, color: t.text }}>
               {item}
             </div>
+            <IconComposed concept={icons[i]} seed={item} t={t} />
           </div>
         ))}
-      </div>
-
+      </Body>
       <CardChips cards={brief.cards ?? []} t={t} />
     </>
   );
@@ -642,27 +745,16 @@ function SocialCard({
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <div style={{ display: "flex", fontSize: 38, fontWeight: 800, color: t.text }}>{name}</div>
-            {sub && (
-              <div style={{ display: "flex", fontSize: 26, fontWeight: 400, color: t.textMuted }}>
-                {sub.slice(0, 54)}
-              </div>
-            )}
+            {sub && <div style={{ display: "flex", fontSize: 26, fontWeight: 400, color: t.textMuted }}>{sub.slice(0, 54)}</div>}
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            fontSize: body.length > 110 ? 40 : 50,
-            fontWeight: 600,
-            lineHeight: 1.26,
-            color: t.text,
-          }}
-        >
+        <div style={{ display: "flex", fontSize: body.length > 110 ? 40 : 50, fontWeight: 600, lineHeight: 1.26, color: t.text }}>
           {body}
         </div>
 
         <div style={{ display: "flex", flexDirection: "row", alignItems: "center", gap: 18 }}>
+          <IconComposed concept={brief.heroIcon} seed={body} t={t} />
           <div style={{ display: "flex", flexGrow: 1, height: 2, backgroundColor: t.border }} />
           <div style={{ display: "flex", fontSize: 24, fontWeight: 400, color: t.textMuted }}>
             {brief.subheadline?.trim() || "Post"}
@@ -675,8 +767,9 @@ function SocialCard({
 
 /** event-banner, announcement-card - one centred, confident statement. */
 function Banner({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
-  const cta = (brief.cards ?? [])[0] || (brief.nodes ?? [])[0] || "";
+  const cta = (brief.cards ?? [])[0] || "";
   const detail = (brief.nodes ?? []).filter((n) => n !== cta);
+  const icons = brief.icons ?? [];
   return (
     <div
       style={{
@@ -685,34 +778,36 @@ function Banner({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
         flexGrow: 1,
         justifyContent: "center",
         alignItems: "center",
-        gap: 38,
+        gap: 36,
       }}
     >
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <AccentRule t={t} />
-      </div>
+      <HeroIcon concept={brief.heroIcon} seed={brief.headline} t={t} size={140} />
       <Headline text={brief.headline} t={t} align="center" />
       <Subhead text={brief.subheadline ?? ""} t={t} align="center" />
 
       {detail.length > 0 && (
         <div style={{ display: "flex", flexDirection: "row", flexWrap: "wrap", gap: 16, justifyContent: "center" }}>
-          {detail.map((d) => (
+          {detail.map((d, i) => (
             <div
               key={d}
               style={{
                 display: "flex",
-                paddingTop: 14,
-                paddingBottom: 14,
-                paddingLeft: 28,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+                paddingTop: 13,
+                paddingBottom: 13,
+                paddingLeft: 24,
                 paddingRight: 28,
                 borderRadius: 999,
                 border: `2px solid ${t.border}`,
                 backgroundColor: t.surface,
                 color: t.text,
-                fontSize: 29,
+                fontSize: 28,
                 fontWeight: 600,
               }}
             >
+              <IconComposed concept={icons[i]} seed={d} t={t} />
               {d}
             </div>
           ))}
@@ -741,14 +836,15 @@ function Banner({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   );
 }
 
+
 // ─── Dispatch + render ───────────────────────────────────────────────────────
 
-function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme }) {
+function Layout({ category, brief, t, author, compact }: RenderOptions & { t: ImageTheme; compact?: boolean }) {
   switch (category.genApproach) {
     case "diagram":
-      return <Diagram brief={brief} t={t} />;
+      return <Diagram brief={brief} t={t} compact={compact} />;
     case "comparison":
-      return <Comparison brief={brief} t={t} category={category} />;
+      return <Comparison brief={brief} t={t} category={category} compact={compact} />;
     case "banner":
       return <Banner brief={brief} t={t} />;
     case "text-card":
@@ -757,11 +853,11 @@ function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme 
       if (category.id === "big-stat-hero") return <StatHero brief={brief} t={t} />;
       if (category.id === "quote-card") return <QuoteCard brief={brief} t={t} />;
       if (category.id === "x-screenshot") return <SocialCard brief={brief} t={t} author={author} />;
-      return <Checklist brief={brief} t={t} />;
+      return <Checklist brief={brief} t={t} compact={compact} />;
     case "designed-infographic":
     case "carousel-hint":
     default:
-      return <Infographic brief={brief} t={t} />;
+      return <Infographic brief={brief} t={t} compact={compact} />;
   }
 }
 
@@ -771,25 +867,109 @@ function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme 
  * Deterministic for a given brief: the same input always produces the same image,
  * which is what makes a carousel look like one set.
  */
+// ─── Hybrid composition ──────────────────────────────────────────────────────
+//
+// A code-rendered graphic has exact text but no imagery, and a purely generated
+// one has imagery but unreliable text. The hybrid takes both: the image model
+// draws a TEXT-FREE picture, and the text layer is composited on top in code.
+//
+// Two compositions, chosen by how much text the format carries:
+//
+//   "scrim" - the picture fills the frame and the text sits over a gradient of
+//     the theme's own background colour. Used where there are only a few words
+//     (a quote, a stat, a banner, a hook or takeaway slide), because that is
+//     where a full-bleed photograph genuinely lifts the design.
+//
+//   "split" - the picture occupies a band at the top and the content sits below
+//     it on a solid field. Used for lists and comparisons: a five-row checklist
+//     over a photograph is unreadable no matter how heavy the scrim, and
+//     readability is not something to trade away for atmosphere.
+//
+// The band shrinks as the list grows, so a five-item layout still breathes.
+
+type Composition = "solid" | "scrim" | "split";
+
+function compositionFor(opts: RenderOptions): Composition {
+  if (!opts.background) return "solid";
+  const nodes = opts.brief.nodes?.length ?? 0;
+  const { genApproach, id } = opts.category;
+
+  // Text-light formats, and any slide with nothing to list, carry a full picture.
+  if (genApproach === "banner") return "scrim";
+  if (genApproach === "text-card" && id !== "checklist-card" && id !== "x-screenshot") return "scrim";
+  if (nodes === 0) return "scrim";
+
+  // A social screenshot is meant to look like a real UI card; a photograph
+  // behind it breaks the illusion, so it keeps a plain field.
+  if (id === "x-screenshot") return "solid";
+
+  return "split";
+}
+
+/** Breathing room between the picture and the content below it. */
+const SPLIT_GAP = 16;
+
+/** How much of the frame the picture gets in a split, by how long the list is. */
+function imageBandHeight(nodeCount: number): number {
+  if (nodeCount <= 3) return Math.round(IMAGE_SIZE * 0.3);
+  if (nodeCount === 4) return Math.round(IMAGE_SIZE * 0.26);
+  return Math.round(IMAGE_SIZE * 0.22);
+}
+
+/**
+ * Render one designed post image to a PNG buffer.
+ *
+ * With `background`, the text layer is drawn with transparent regions and
+ * composited over that picture. Without it - no background was requested, or
+ * the image model failed - the same layouts render on a solid themed field, so
+ * a picture that never arrives costs quality, never the whole image.
+ *
+ * Deterministic for a given brief and background, which is what makes a
+ * carousel look like one set.
+ */
 export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> {
   const t = resolveTheme(opts.brief.themeId, opts.seed);
-
-  // Layouts that centre their own content manage the whole column; the rest get
-  // headline-at-top with the body spaced beneath.
-  //
-  // The last clause matters for carousels: the plan deliberately gives the hook
-  // and takeaway slides no labels, and a lone headline pinned to the top of an
-  // otherwise empty slide reads as a mistake. With nothing to space against,
-  // centring turns it into a deliberate statement slide instead.
-  const hasBody = (opts.brief.nodes?.length ?? 0) > 0 || (opts.brief.cards?.length ?? 0) > 0;
-  const centred =
-    opts.category.genApproach === "banner" ||
-    (opts.category.genApproach === "text-card" && opts.category.id !== "checklist-card") ||
-    !hasBody;
+  const composition = compositionFor(opts);
 
   // Reserve a strip at the bottom when the carousel indicator is present, so it
   // never collides with the layout's own content.
   const dotStrip = opts.slide ? 52 : 0;
+  const band = composition === "split" ? imageBandHeight(opts.brief.nodes?.length ?? 0) : 0;
+  const fade = 90;
+
+  const content = (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        // Satori follows the CSS default of content-box, NOT border-box. Sizing
+        // the content box explicitly and spacing it with a margin is what keeps
+        // the layout inside the frame - with `width: 100%` plus padding, every
+        // child was laid out 152px too wide and clipped at the right edge.
+        width: IMAGE_SIZE - PAD * 2,
+        // In a split the content owns everything below the picture, so its box
+        // is measured from the band rather than from the whole frame - computing
+        // it from the frame left the chips crowded against the bottom edge.
+        height:
+          composition === "split"
+            ? IMAGE_SIZE - band - PAD - dotStrip - SPLIT_GAP
+            : IMAGE_SIZE - PAD * 2 - dotStrip,
+        marginLeft: PAD,
+        marginRight: PAD,
+        marginTop: composition === "split" ? SPLIT_GAP : PAD,
+        marginBottom: PAD,
+        flexShrink: 0,
+        // Positioned so it paints ABOVE the scrim. Both are in the same stacking
+        // context and CSS paints positioned elements over in-flow ones no matter
+        // what the document order is - without this the gradient washed straight
+        // over the type and the words vanished into the photograph.
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      <Layout {...opts} t={t} compact={composition === "split"} />
+    </div>
+  );
 
   const svg = await satori(
     (
@@ -797,32 +977,73 @@ export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> 
         style={{
           position: "relative",
           display: "flex",
-          // Full-bleed by construction: the background IS the root element, so
-          // there is no frame, keyline or inset panel to accidentally draw.
+          flexDirection: "column",
           width: IMAGE_SIZE,
           height: IMAGE_SIZE,
-          backgroundColor: t.bg,
+          // Transparent in hybrid mode so the picture underneath shows through;
+          // the solid field is painted by the panels below instead.
+          backgroundColor: composition === "solid" ? t.bg : "rgba(0,0,0,0)",
           fontFamily: FONT_FAMILY,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            // Satori follows the CSS default of content-box, NOT border-box.
-            // Sizing the content box explicitly and spacing it with a margin is
-            // what keeps the layout inside the frame - with `width: 100%` plus
-            // padding, the content box was the full 1080 and the padding was
-            // added OUTSIDE it, so every child was laid out 152px too wide and
-            // the right edge of each card was clipped off.
-            width: IMAGE_SIZE - PAD * 2,
-            height: IMAGE_SIZE - PAD * 2 - dotStrip,
-            margin: PAD,
-            justifyContent: centred ? "center" : "space-between",
-          }}
-        >
-          <Layout {...opts} t={t} />
-        </div>
+        {composition === "scrim" && (
+          // One gradient across the whole frame: light at the top so the picture
+          // reads, almost opaque lower down where the words are.
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: IMAGE_SIZE,
+              height: IMAGE_SIZE,
+              display: "flex",
+              // Weighted hard towards the bottom two thirds, where the type
+              // actually sits. A gentler ramp left a light theme's charcoal text
+              // sitting on a sunlit photograph with almost no contrast - the
+              // picture is atmosphere, legibility is not negotiable.
+              backgroundImage: `linear-gradient(180deg, ${withAlpha(t.bg, 0.4)} 0%, ${withAlpha(
+                t.bg,
+                0.88
+              )} 38%, ${withAlpha(t.bg, 0.97)} 70%, ${t.bg} 100%)`,
+            }}
+          />
+        )}
+
+        {composition === "split" && (
+          <>
+            {/* The picture shows through this band untouched. */}
+            <div style={{ display: "flex", width: IMAGE_SIZE, height: band - fade, flexShrink: 0 }} />
+            {/* Then it dissolves into the solid field rather than cutting hard. */}
+            <div
+              style={{
+                display: "flex",
+                width: IMAGE_SIZE,
+                height: fade,
+                backgroundImage: `linear-gradient(180deg, ${withAlpha(t.bg, 0)} 0%, ${withAlpha(
+                  t.bg,
+                  0.86
+                )} 55%, ${t.bg} 100%)`,
+              }}
+            />
+            {/* Solid field for the content, kept in normal flow. As an absolute
+                panel it painted over the content underneath it and the layout
+                came out blank below the picture. */}
+            <div
+              style={{
+                display: "flex",
+                width: IMAGE_SIZE,
+                height: IMAGE_SIZE - band,
+                backgroundColor: t.bg,
+                position: "absolute",
+                top: band,
+                left: 0,
+                zIndex: 0,
+              }}
+            />
+          </>
+        )}
+
+        {content}
 
         {/* Pinned to the frame, not to the content: a centred layout would
             otherwise pull the indicator up next to the headline. */}
@@ -852,5 +1073,14 @@ export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> 
     }
   );
 
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  const overlay = await sharp(Buffer.from(svg)).png().toBuffer();
+  if (!opts.background) return overlay;
+
+  // `cover` so a model that returns a slightly off-square image still fills the
+  // frame rather than letterboxing into it.
+  return sharp(opts.background)
+    .resize(IMAGE_SIZE, IMAGE_SIZE, { fit: "cover", position: "centre" })
+    .composite([{ input: overlay }])
+    .png()
+    .toBuffer();
 }

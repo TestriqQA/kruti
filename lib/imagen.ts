@@ -2,6 +2,8 @@ import { GoogleGenAI } from "@google/genai";
 import { put } from "@vercel/blob";
 import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
+import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
+import { resolveTheme } from "@/lib/image-themes";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -10,6 +12,14 @@ function getAI(): GoogleGenAI {
   }
   return _ai;
 }
+
+/**
+ * Nano Banana 2 (Gemini 3.1 Flash Image) - Google's high-efficiency image model,
+ * a fraction of Nano Banana Pro's per-image cost. Single stable model id (no
+ * preview/GA split); if it is unavailable, generation returns no image rather
+ * than silently degrading to a different model.
+ */
+const IMAGE_MODELS = ["gemini-3.1-flash-image"];
 
 // Track last generation error (user-facing message). The raw technical error is
 // always logged separately via console.error for debugging.
@@ -131,6 +141,29 @@ export function buildCategoryImagePrompt(
  * Returns null on failure and sets `lastImageGenError`, matching
  * generatePostImage() so callers need no new error path.
  */
+/**
+ * The prompt for the TEXT-FREE picture that sits behind a designed graphic.
+ *
+ * Every instruction here exists because the text layer is composited on top in
+ * code: any word the model draws would collide with real type, and a busy frame
+ * makes that type unreadable. This is the one job diffusion is genuinely good
+ * at - atmosphere - so it is asked for atmosphere and nothing else.
+ */
+export function buildBackgroundPrompt(scene: string): string {
+  return `Create ONE premium, believable, photoREAL square (1:1) editorial photograph for a LinkedIn graphic.
+
+WHAT TO SHOW: ${scene}
+
+This picture is a BACKGROUND. Headlines and labels will be laid over it afterwards, so:
+- It must contain ZERO text of any kind - no words, letters, numbers, captions, labels, watermarks, signage, logos, charts, graphs, diagrams, or screens showing readable interface. Not one character.
+- Keep the composition calm and uncluttered, with generous areas of even tone, soft focus or open space where type can sit. One clear subject, not a busy collage.
+- No heavy vignettes, no borders, no frames, no text placeholders or lorem-ipsum shapes.
+
+QUALITY: a real photograph taken by a professional - correct proportions, genuine materials and surface texture, natural directional light, true-to-life colour, real depth of field. NO neon glow, NO plastic AI sheen, NO circuit-board or digital-grid cliche, NO warped hands or extra limbs, NO fabricated portrait of a specific real person (a representative person shot over-the-shoulder, hands-only or from behind is fine).
+
+Square 1:1, full-bleed edge to edge, high resolution.`;
+}
+
 export async function renderAndStoreDesignedImage(
   category: ImageCategory,
   brief: DesignBrief,
@@ -138,24 +171,41 @@ export async function renderAndStoreDesignedImage(
   opts?: {
     author?: { name?: string | null; headline?: string | null };
     slide?: { index: number; total: number };
+    /** Pre-generated background, for callers that fetch them in parallel. */
+    background?: Buffer | null;
   }
 ): Promise<string | null> {
   lastImageGenError = null;
   try {
+    // Hybrid: a generated picture underneath, exact type on top. If the model
+    // fails - quota, safety, a timeout - the layout still renders on a solid
+    // field, so a missing picture costs atmosphere rather than the whole image.
+    let background = opts?.background ?? undefined;
+    if (!background && brief.backgroundScene) {
+      const bg = await generateImageBuffer(buildBackgroundPrompt(brief.backgroundScene), "2K");
+      if (bg) background = bg.buffer;
+      else console.warn(`[RenderCard] ${category.id}: no background, rendering on a solid field`);
+    }
+
     const buffer = await renderDesignedImage({
       category,
       brief,
       seed: postId,
       author: opts?.author,
       slide: opts?.slide,
+      background,
     });
+
+    // A failed background must not surface as an error when the image itself
+    // came out fine.
+    lastImageGenError = null;
 
     // Filename shape is load-bearing twice over. lib/usage-analytics.ts recovers
     // an image's generation DATE from the 13-digit epoch embedded here (there is
-    // no event table), and it tells code-rendered images from model-generated
-    // ones by this "card-" prefix - which is the only way the admin cost figure
-    // can know these were free. Keep `generated/card-<id>-<ts>.png`.
-    const filename = `card-${postId}-${Date.now()}.png`;
+    // no event table), and it tells paid from free images by the prefix: a
+    // hybrid called the image model, so it is costed like one ("post-"), while
+    // a pure code render costs nothing ("card-"). Keep both shapes intact.
+    const filename = `${background ? "post" : "card"}-${postId}-${Date.now()}.png`;
     const blob = await put(`generated/${filename}`, buffer, {
       access: "public",
       contentType: "image/png",
@@ -201,15 +251,32 @@ export async function renderCarouselFromPlan(
   const total = plan.slides.length;
   const urls: string[] = [];
 
+  // Backgrounds first, and in PARALLEL. Each image call takes 10-20s, so four in
+  // sequence would run past the 60s function limit on its own; the renders that
+  // follow are about 200ms each, so they stay sequential for ordered progress
+  // events and flat memory. A slide whose picture fails simply renders on the
+  // solid field.
+  plan.slides.forEach((_, i) => onSlideEvent?.({ index: i, status: "start" }));
+  const backgrounds = await Promise.all(
+    plan.slides.map(async (s) => {
+      if (!s.backgroundScene) return null;
+      try {
+        const bg = await generateImageBuffer(buildBackgroundPrompt(s.backgroundScene), "2K");
+        return bg?.buffer ?? null;
+      } catch {
+        return null;
+      }
+    })
+  );
+
   for (let i = 0; i < total; i++) {
-    onSlideEvent?.({ index: i, status: "start" });
     const url = await renderAndStoreDesignedImage(
       category,
       // The plan's theme wins over anything a slide carries: one palette across
       // the set is the whole point.
       { ...plan.slides[i], themeId: plan.themeId },
       `${postId}-c${i}`,
-      { slide: { index: i, total } }
+      { slide: { index: i, total }, background: backgrounds[i] }
     );
     if (url) {
       urls.push(url);
@@ -257,16 +324,31 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
 
   console.log(`[Imagen] Prompt: ${prompt.slice(0, 80)}...`);
 
-  // Nano Banana 2 (Gemini 3.1 Flash Image) - Google's high-efficiency image model:
-  // strong at on-image text rendering, optimized for speed and high-volume use, at a
-  // much lower per-image cost than Nano Banana Pro. Single stable model id (no
-  // preview/GA split); if it is unavailable, generation returns no image rather than
-  // silently degrading to a different model.
-  const imageModels = [
-    "gemini-3.1-flash-image",
-  ];
 
-  for (const model of imageModels) {
+  const result = await generateImageBuffer(prompt, imageSize);
+  if (!result) return null;
+
+  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
+  const blob = await put(`generated/${filename}`, result.buffer, {
+    access: "public",
+    contentType: result.contentType,
+  });
+  console.log(`[Imagen] Generated:`, blob.url);
+  return blob.url;
+}
+
+/**
+ * Call the image model and return the raw bytes, without storing anything.
+ *
+ * Split out from generatePostImage so the hybrid renderer can take the picture
+ * as a buffer, composite the text layer onto it, and upload once - rather than
+ * uploading a background nobody will ever see and then fetching it back.
+ */
+export async function generateImageBuffer(
+  prompt: string,
+  imageSize: "1K" | "2K" = "2K"
+): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
+  for (const model of IMAGE_MODELS) {
     try {
       console.log(`[Imagen] Trying ${model}...`);
       const response = await getAI().models.generateContent({
@@ -274,11 +356,6 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
         contents: prompt,
         config: {
           responseModalities: ["IMAGE", "TEXT"],
-          // Square LinkedIn format. Single images default to 2K; carousels pass 1K (still
-          // crisp at LinkedIn's ~1080px display). 1K stays legible because the prompt sizes
-          // the headline at ~12-18% of image height and caps labels per slide - do NOT raise
-          // carousels to 2K to "fix" small text (2K timed out the 60s limit); text size is
-          // prompt-controlled, not pixel-controlled.
           imageConfig: { aspectRatio: "1:1", imageSize },
         },
       });
@@ -286,16 +363,12 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
       const parts = response.candidates?.[0]?.content?.parts ?? [];
       for (const part of parts) {
         if (part.inlineData?.mimeType?.startsWith("image/") && part.inlineData.data) {
-          const buffer = Buffer.from(part.inlineData.data, "base64");
-          const ext = part.inlineData.mimeType === "image/jpeg" ? "jpg" : "png";
-          const contentType = part.inlineData.mimeType === "image/jpeg" ? "image/jpeg" : "image/png";
-          const filename = `post-${postId}-${Date.now()}.${ext}`;
-          const blob = await put(`generated/${filename}`, buffer, {
-            access: "public",
-            contentType,
-          });
-          console.log(`[Imagen] Generated via ${model}:`, blob.url);
-          return blob.url;
+          const jpeg = part.inlineData.mimeType === "image/jpeg";
+          return {
+            buffer: Buffer.from(part.inlineData.data, "base64"),
+            ext: jpeg ? "jpg" : "png",
+            contentType: jpeg ? "image/jpeg" : "image/png",
+          };
         }
       }
       console.warn(`[Imagen] ${model} returned no image data, trying next model`);
@@ -311,4 +384,191 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
     lastImageGenError = "Image generation didn't return an image. Please try again in a moment.";
   }
   return null;
+}
+
+// ─── Art-directed generation (the whole image, from the model) ───────────────
+
+/**
+ * Assemble the final image prompt for a fully art-directed graphic.
+ *
+ * The structure matters as much as the words. Current image models letter short
+ * strings reliably when they are quoted verbatim and the total is kept small,
+ * and they drift when a prompt describes text in the abstract ("a prominent
+ * headline stating the core point"). So the exact strings go in, with an
+ * explicit instruction that nothing else may appear - which is also what keeps
+ * stray lorem-ipsum and invented sub-captions out of the frame.
+ */
+export function buildArtImagePrompt(opts: {
+  scene: string;
+  /** The one big figure, when the post turns on a number. */
+  statLine?: string;
+  headline: string;
+  subhead?: string;
+  /** Short benefit pills. */
+  chips?: string[];
+  /** How the page is built - see PAGE_LAYOUTS. */
+  layoutDirection: string;
+  labels: string[];
+  subject?: string;
+  /** Real products, tools or platforms the post itself names. */
+  brands?: string[];
+  styleDirection: string;
+  styleName: string;
+  textLoad: "low" | "medium" | "high";
+  palette: { phrase: string; mode: "light" | "dark" };
+  formatLabel: string;
+}): string {
+  const { palette: p } = opts;
+  const labels = opts.labels.filter(Boolean);
+  const brands = (opts.brands ?? []).filter(Boolean);
+  const chips = (opts.chips ?? []).filter(Boolean);
+  const stat = (opts.statLine ?? "").trim();
+  const sub = (opts.subhead ?? "").trim();
+  const pieces =
+    (stat ? 1 : 0) + (opts.headline ? 1 : 0) + (sub ? 1 : 0) + chips.length + labels.length;
+
+  const textBlock =
+    opts.textLoad === "low" && labels.length === 0 && !opts.headline
+      ? `TEXT: this image carries NO text at all. Not one letter, number, caption, watermark or sign.`
+      : [
+          // Guillemets, and no shouty instruction words anywhere near the
+          // strings. An earlier version opened with "letter EXACTLY these
+          // words" and the model dutifully lettered "EXACTLY:" onto the
+          // artwork - instruction vocabulary set in caps reads as design copy.
+          // Plain quotes, no shouty instruction words, and nothing in this block
+          // that would look like design copy. Two earlier versions leaked
+          // straight onto the artwork: one opened with "letter EXACTLY these
+          // words" and the model lettered "EXACTLY:" into the headline, and a
+          // guillemet-delimited version lettered the guillemets themselves.
+          // Any literal string in a prompt can end up as rendered type.
+          `Words to letter onto the image, and no others anywhere in the frame:`,
+          stat ? `  the single largest thing on the page reads "${stat}"` : null,
+          opts.headline ? `  the headline reads "${opts.headline}"` : null,
+          sub ? `  the supporting line beneath it reads "${sub}"` : null,
+          ...chips.map((c) => `  one small pill reads "${c}"`),
+          ...labels.map((l) => `  one element in the artwork is labelled "${l}"`),
+          `That is ${pieces} piece${pieces === 1 ? "" : "s"} of text in the entire image, and there must be no others. Count them as you compose. No string may appear twice - if the figure above already says it, the headline must not say it again.`,
+          `Letter the words inside the quote marks and not the quote marks themselves, and do not letter any wording from these instructions. Each string appears once and only once - never repeat a label, never echo the headline a second time, and never invent an extra caption to fill a gap.`,
+          // Invented text is where this falls down. Asked for a monitor, a
+          // whiteboard or a code editor, the model fills it with words of its
+          // own - and those come out as nonsense: real images shipped with
+          // "FID Coractionts" on a dashboard and a whiteboard reading "Lrade to
+          // use architecturity".
+          //
+          // Forbidding all surface text was the first attempt and it costs too
+          // much: an office scene with a blank whiteboard looks staged, and
+          // office scenes are exactly what many of these posts need. The model
+          // garbles words it INVENTS, not words it is given - short labels it
+          // has been handed come out clean. So surfaces may carry text, drawn
+          // only from the list above.
+          `Screens, whiteboards, monitors, documents and code editors may appear, but any writing on them must come ONLY from the list above, set large - never a sentence, heading, metric name, axis value, percentage, line of code or paragraph of your own invention, at any size. Where you would otherwise write something, draw bold blocks, bars, boxes, arrows and shapes instead. Fine print is the giveaway: if a viewer has to zoom to tell whether it is real writing, it should not be there at all.`,
+          // The last fix let surfaces carry the listed labels, which worked for
+          // the labels - and the model then filled the REST of a whiteboard with
+          // pseudo-handwriting that garbles on inspection. Office scenes have to
+          // stay, so the surfaces stay too; they are just composed so their
+          // content reads as texture rather than as words.
+          `Compose any large writing surface - a whiteboard, a wall of notes, a full monitor - so its content reads as texture, not as words: turn it to a steep angle, crop it at the frame edge, push it behind the focal subject, or throw it softly out of focus. Never fill one edge to edge with handwriting or body copy. Small real things in sharp focus are fine; large legible blocks of invented writing are what ruin these images.`,
+          // Code editors are the worst offender for this audience, and they
+          // need their own rule: told only "no invented text", the model still
+          // writes code, and it comes out as "import React from 'nextt'" and
+          // "<mekease>". Giving it the idiom designers actually use - coloured
+          // bars - replaces the behaviour instead of just forbidding it.
+          `A code editor, terminal or IDE in the scene is drawn as syntax-coloured BARS, never as characters: short rounded rectangles in editor colours - purple, blue, green, amber - laid out in indented lines of varying length, with a gutter of plain dots or dashes where line numbers would be, and a sidebar of small blank icons. No letterforms anywhere in it - no keywords, no tags, no brackets, no quotes, no file names beyond the ones listed above. This is how a designer depicts code in a graphic: it reads as code instantly without a single readable character, and it cannot misspell anything.`,
+          `If a word is hard to letter cleanly, set it larger rather than adding more words.`,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+  return `Create ONE premium, square (1:1) graphic for a LinkedIn feed. A person scrolling past should understand the idea from the picture alone, before reading anything.
+
+LAYOUT - this is a designed page, not a picture with words dropped onto it. Build it on this structure: ${opts.layoutDirection} Hold a generous, even margin on all four sides, align everything to that structure, and leave one clear area to breathe rather than filling every corner.
+
+VISUAL STYLE - ${opts.styleName}: ${opts.styleDirection}
+
+THE SCENE: ${opts.scene}
+FOCAL SUBJECT: ${opts.subject || "the single most important object in the scene"}
+
+${textBlock}
+
+OBJECTS: build the scene from real, tangible, dimensional things - actual devices, actual tools, actual surfaces, with weight, material and contact shadows - not a sprinkle of flat generic symbols. Where an idea needs an emblem, prefer a believable physical object over a pictogram: a real stopwatch rather than a clock glyph, a real stack of servers rather than a database icon. Objects should look like they could be photographed or held.
+${
+    brands.length > 0
+      ? `REAL PRODUCTS: this post names ${brands.join(
+          ", "
+        )}. Show them as their genuine, instantly recognisable real-world marks and products, in their true official colours and correct proportions - not invented substitutes, not recoloured to match the palette, not distorted. If a mark cannot be drawn cleanly and accurately, show the product itself or leave it out entirely rather than shipping a mangled logo. Add no brand beyond these.`
+      : `REAL PRODUCTS: this post names none, so show no brand marks, logos or wordmarks of any company at all.`
+  }
+
+TYPOGRAPHY: set the headline large, bold and perfectly legible on a phone screen - it should occupy a confident share of the frame and sit INSIDE the composition as a designed element, never as a plain bar pasted over the artwork. Set it as flat graphic type laid over the artwork - never written onto an object inside the scene, never on a phone screen, a monitor, a page or a sign, where it ends up tilted and unreadable. Clean modern sans-serif. Correct spacing, correct kerning, no broken or duplicated letterforms.
+
+COLOUR: ${p.phrase}. ${
+    p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
+  } Keep to that family - one accent, used sparingly, is what makes a graphic look designed rather than generated. Describe colour only through the artwork; never letter a colour name, hex code or swatch row onto the image.
+
+QUALITY BAR: this must look like it came from a senior designer at a top studio - deliberate composition, real depth, believable materials and light, generous margins, nothing crowded against the edges. Full-bleed square, artwork running to every edge, with NO drawn border, frame or outer keyline.
+
+SCREENS, CHARTS AND DIALS: draw them as clean abstract shapes - lines, bars, curves, segments, blocks - carrying NO numbers, axis values, percentages or interface wording of any kind. A model asked for a dashboard fills it with invented half-legible figures, and tiny garbled numbers inside a screen undo an otherwise good graphic. Only the headline and the labels listed above may be readable; a chart shows its shape, never its data.
+
+NEVER: garbled or misspelled lettering, duplicated words, random glyphs, invented statistics, neon glow, circuit-board cliche, plastic AI sheen, warped hands or extra limbs, a fabricated portrait of a real identifiable person, stock-photo cheesiness, or any brand logo the post did not name.`;
+}
+
+/**
+ * Generate the full image from the model and store it.
+ *
+ * Returns null on failure, with `lastImageGenError` set, so the caller can fall
+ * back to the code renderer rather than leaving the user with nothing.
+ */
+export async function generateAndStoreArtImage(
+  brief: {
+    scene?: string;
+    headline?: string;
+    nodes?: string[];
+    subject?: string;
+    brands?: string[];
+    visualStyle?: string;
+    themeId?: string;
+    layout?: string;
+    statLine?: string;
+    subhead?: string;
+    chips?: string[];
+  },
+  postId: string,
+  category: ImageCategory
+): Promise<string | null> {
+  lastImageGenError = null;
+
+  const style = resolveVisualStyle(brief.visualStyle, postId);
+  const theme = resolveTheme(brief.themeId, postId);
+  const layout = resolvePageLayout(brief.layout, postId);
+
+  const prompt = buildArtImagePrompt({
+    scene: brief.scene || `A clear, concrete scene representing: ${brief.headline ?? category.label}`,
+    headline: brief.headline ?? "",
+    // The art brief reuses `nodes` for the short labels that sit on elements in
+    // the scene. A low-text style gets none, whatever the brief returned.
+    labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
+    statLine: brief.statLine,
+    subhead: brief.subhead,
+    chips: brief.chips,
+    layoutDirection: layout.direction,
+    subject: brief.subject,
+    brands: brief.brands,
+    styleDirection: style.direction,
+    styleName: style.name,
+    textLoad: style.textLoad,
+    palette: { phrase: theme.palettePhrase, mode: theme.mode },
+    formatLabel: category.label,
+  });
+
+  console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
+  const result = await generateImageBuffer(prompt, "2K");
+  if (!result) return null;
+
+  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
+  const blob = await put(`generated/${filename}`, result.buffer, {
+    access: "public",
+    contentType: result.contentType,
+  });
+  console.log(`[ArtImage] stored:`, blob.url);
+  return blob.url;
 }

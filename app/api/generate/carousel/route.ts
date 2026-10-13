@@ -105,6 +105,8 @@ export async function POST(req: NextRequest) {
           industry,
           name: post.plan.user.name,
           headline: post.plan.user.headline, // the actual ROLE that drives the imagery
+      summary: post.plan.user.summary,
+      targetAudience: post.plan.user.targetAudience,
         };
 
         // Stage 1 - Planner: send the full post, get back the narrative arc as
