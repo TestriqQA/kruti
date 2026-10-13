@@ -448,7 +448,7 @@ export function buildArtImagePrompt(opts: {
           // garbles words it INVENTS, not words it is given - short labels it
           // has been handed come out clean. So surfaces may carry text, drawn
           // only from the list above.
-          `Screens, whiteboards, monitors, documents and code editors may appear, but any writing on them must come ONLY from the list above - never a sentence, heading, metric name, axis value, percentage or line of code of your own invention. Where you would otherwise write something, draw soft blurred bars, blocks, boxes, arrows and shapes instead.`,
+          `Screens, whiteboards, monitors, documents and code editors may appear, but any writing on them must come ONLY from the list above, set large - never a sentence, heading, metric name, axis value, percentage, line of code or paragraph of your own invention, at any size. Where you would otherwise write something, draw bold blocks, bars, boxes, arrows and shapes instead. Fine print is the giveaway: if a viewer has to zoom to tell whether it is real writing, it should not be there at all.`,
           // The last fix let surfaces carry the listed labels, which worked for
           // the labels - and the model then filled the REST of a whiteboard with
           // pseudo-handwriting that garbles on inspection. Office scenes have to

@@ -76,7 +76,7 @@ export const VISUAL_STYLES: VisualStyle[] = [
     when: "a contrast, a trade-off, a before and after, or a big-picture metaphor",
     textLoad: "low",
     direction:
-      "One cinematic, photorealistic conceptual image that carries the whole idea on its own - a real scene, a cross-section, or two halves of a split frame compared side by side. Dramatic natural light, genuine materials and texture, deep focus, magazine-cover production value. The picture should explain the point before any words are read.",
+      "One cinematic, photorealistic conceptual image that carries the whole idea on its own and stops a thumb mid-scroll - a cutaway revealing what is underneath, two halves of a split frame set against each other, an object caught at the moment it gives way, a scale so exaggerated it reads instantly. Dramatic directional light, genuine materials and texture, deep focus, magazine-cover production value. It should explain the point before a single word is read, and be strange enough to be worth looking at twice.",
   },
   {
     id: "photoreal-documentary",
@@ -84,7 +84,7 @@ export const VISUAL_STYLES: VisualStyle[] = [
     when: "process, teamwork, culture and behind-the-scenes moments",
     textLoad: "low",
     direction:
-      "A candid, natural-light documentary photograph of real people at work - a whiteboard session, hands on a keyboard, a team mid-discussion - shot over the shoulder or from the side. Authentic office textures, no posed stock-photo smiles, shallow depth of field.",
+      "A candid documentary photograph caught mid-MOMENT, not a picture of an office. Something is happening in the frame: a decision landing, someone leaning back from a screen, two people disagreeing over a diagram, a hand frozen mid-gesture, a room reacting. Shoot it like a photojournalist - a deliberate angle rather than eye-level centre: low from the desk, high looking down, through a doorway, past a foreground object, caught in a reflection. Hard directional light, deep shadow, real texture, shallow depth of field. Turn every monitor away from camera or catch it at a steep angle so it reads as glow and colour, never as an interface. No posed smiles, no flat overhead fluorescent, no stock-photo calm.",
   },
   {
     id: "pixar-character",
