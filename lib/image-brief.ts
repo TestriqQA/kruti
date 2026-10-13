@@ -8,7 +8,12 @@ import {
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
 import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
-import { VISUAL_STYLE_IDS, visualStyleMenuBlock } from "@/lib/image-styles";
+import {
+  VISUAL_STYLE_IDS,
+  visualStyleMenuBlock,
+  PAGE_LAYOUT_IDS,
+  pageLayoutMenuBlock,
+} from "@/lib/image-styles";
 import { iconMenuBlock } from "@/lib/image-icons";
 
 /**
@@ -54,6 +59,14 @@ export interface ImageBrief {
   subject?: string;
   /** Art-directed only: real products the post names, drawn as genuine logos. */
   brands?: string[];
+  /** Art-directed only: how the page is built. See PAGE_LAYOUTS. */
+  layout?: string;
+  /** Art-directed only: the one big figure, when the post turns on a number. */
+  statLine?: string;
+  /** Art-directed only: supporting line under the headline. */
+  subhead?: string;
+  /** Art-directed only: short benefit pills. */
+  chips?: string[];
   /** True when the model was unavailable and this brief knows only the title. */
   degraded?: boolean;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
@@ -176,12 +189,11 @@ export function clampLabels(raw: unknown, maxItems: number, maxLen: number): str
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
-    const s = String(item ?? "")
-      .replace(/\s+/g, " ")
-      .replace(/^["'“”]+|["'“”]+$/g, "")
-      .trim()
-      .slice(0, maxLen)
-      .trim();
+    // clampHeadline trims back to a word boundary; this did not, and a chip
+    // one character over the cap shipped onto a real graphic reading
+    // "Optimize Core Web Vita". A label cut mid-word is worse than a label
+    // dropped, so cut at a space when there is a sensible one to cut at.
+    const s = clampHeadline(String(item ?? ""), maxLen);
     const key = s.toLowerCase();
     if (s && !seen.has(key)) {
       seen.add(key);
@@ -455,6 +467,8 @@ async function getArtBrief(
     category,
     visualStyleMenuBlock(),
     VISUAL_STYLE_IDS.join("|"),
+    pageLayoutMenuBlock(),
+    PAGE_LAYOUT_IDS.join("|"),
     themeMenuBlock(),
     IMAGE_THEME_IDS.join("|"),
     userProfile
@@ -478,6 +492,10 @@ async function getArtBrief(
           scene,
           subject: clampHeadline(String(parsed.subject ?? ""), 40),
           brands: clampLabels(parsed.brands, 4, 30),
+          layout: String(parsed.layout ?? "").trim().toLowerCase() || undefined,
+          statLine: clampHeadline(String(parsed.statLine ?? ""), 10),
+          subhead: clampHeadline(String(parsed.subhead ?? ""), 60),
+          chips: clampLabels(parsed.chips, 3, 22),
           visualStyle: String(parsed.visualStyle ?? "").trim().toLowerCase() || undefined,
           themeId: clampThemeId(parsed.themeId),
           heroIcon: "",

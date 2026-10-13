@@ -166,3 +166,73 @@ export function visualStyleMenuBlock(): string {
     (s) => `- "${s.id}" (${s.name}, carries ${s.textLoad} text): ${s.when}`
   ).join("\n");
 }
+
+/**
+ * Page layouts.
+ *
+ * ─── Why this exists ─────────────────────────────────────────────────────────
+ *
+ * The brief asked for a "scene" and a headline, and got exactly that: an
+ * illustration with type bolted on afterwards, floating with no structure. Set
+ * beside a graphic briefed by hand, the gap was not the illustration or the
+ * model - it was that one had a LAYOUT and the other did not. A LinkedIn graphic
+ * is a designed page: a text zone, an art zone, and a type hierarchy that reads
+ * as one statement. Naming the layout up front is what produces that.
+ */
+export interface PageLayout {
+  id: string;
+  when: string;
+  direction: string;
+}
+
+export const PAGE_LAYOUTS: PageLayout[] = [
+  {
+    id: "split-text-left",
+    when: "a claim with a few supporting points, and an illustration that earns real space",
+    direction:
+      "Divide the frame vertically. The left 40 percent is a text column, flush left on a clean field: the stat line at the top if there is one, then the headline, then the subhead, then the chips in a row at its foot. The right 60 percent is the artwork, running to the edge. Keep a clear gutter between them and never let artwork intrude into the text column.",
+  },
+  {
+    id: "split-text-right",
+    when: "the same, when the artwork reads better entering from the left",
+    direction:
+      "Divide the frame vertically. The right 40 percent is a text column, flush left on a clean field: the stat line at the top if there is one, then the headline, then the subhead, then the chips at its foot. The left 60 percent is the artwork, running to the edge. Keep a clear gutter between them.",
+  },
+  {
+    id: "headline-top",
+    when: "a single strong statement over a scene or diagram",
+    direction:
+      "Headline across the top third as flat graphic type on a clean band of background, with the subhead directly beneath it. The artwork fills the remaining two thirds edge to edge. Chips, if any, sit in a single row along the very bottom.",
+  },
+  {
+    id: "hero-stat",
+    when: "one number that IS the post",
+    direction:
+      "One figure dominates the centre of the frame at enormous size - it is the subject, not a caption. The headline sits beneath it, smaller, continuing the sentence the figure starts rather than repeating it. Supporting artwork frames the figure on one or both sides without crowding it. Chips, if any, run along the bottom.",
+  },
+  {
+    id: "full-bleed-art",
+    when: "a photograph or a scene strong enough to carry the post alone",
+    direction:
+      "The artwork fills the entire frame. The headline sits in one deliberately uncluttered corner or band of that artwork, as flat graphic type with enough contrast behind it to stay readable. No chips, no subhead - let the picture do the work.",
+  },
+];
+
+export const PAGE_LAYOUT_IDS = PAGE_LAYOUTS.map((l) => l.id);
+
+const LAYOUT_BY_ID = new Map(PAGE_LAYOUTS.map((l) => [l.id, l]));
+
+export function resolvePageLayout(id: string | null | undefined, seed = ""): PageLayout {
+  const hit = id ? LAYOUT_BY_ID.get(id.trim().toLowerCase()) : undefined;
+  if (hit) return hit;
+  if (seed) {
+    let h = 0;
+    for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+    return PAGE_LAYOUTS[Math.abs(h) % PAGE_LAYOUTS.length];
+  }
+  return PAGE_LAYOUTS[0];
+}
+
+export function pageLayoutMenuBlock(): string {
+  return PAGE_LAYOUTS.map((l) => `- "${l.id}": ${l.when}`).join("\n");
+}

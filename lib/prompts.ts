@@ -927,6 +927,8 @@ export function buildArtBriefPrompt(
   category: ImageCategory,
   styleMenu: string,
   styleIds: string,
+  layoutMenu: string,
+  layoutIds: string,
   themeMenu: string,
   themeIds: string,
   userProfile?: UserVisualProfile
@@ -973,12 +975,19 @@ Vary this across posts. A security teardown, a hiring joke, a founder lesson and
 COLOUR THEME - pick one id for the palette:
 ${themeMenu}
 
+LAYOUT - pick how the page is built:
+${layoutMenu}
+
 Return ONLY this JSON object:
 {
   "visualStyle": "${styleIds}",
+  "layout": "${layoutIds}",
   "themeId": "${themeIds}",
   "scene": "string",
+  "statLine": "string",
   "headline": "string",
+  "subhead": "string",
+  "chips": ["string"],
   "labels": ["string"],
   "subject": "string",
   "brands": ["string"]
@@ -987,7 +996,10 @@ Return ONLY this JSON object:
 FIELDS:
 - "scene": the composition, in 45 to 80 words, as an art director would describe it to an illustrator. Name the FOCAL SUBJECT, the supporting elements around it and roughly where they sit, the lighting, the camera angle and the mood. Build it from real physical things with weight and material - devices, tools, workspaces, printed matter, people at work - rather than a scattering of flat symbols; where the idea needs an emblem, call for a believable object rather than a pictogram. Every element must MEAN something from this post - if the post is about review queues, show a queue; if it is about a 3x cost, show the scale. Concrete nouns only, never "a professional abstract concept". Do not describe text here; the words are specified separately below.
   Give it a MOMENT, not a setting. Something has to be HAPPENING in the frame - a decision landing, a reaction, a gesture caught mid-air, a contrast fighting itself across the image, a thing at the instant it breaks or clicks into place. "A developer at a desk" is not a scene; "a developer leaning back from two monitors while a colleague jabs a finger at the left one" is. Choose a deliberate camera angle - low across a surface, high looking down, through a doorway, past a foreground object, caught in a reflection - never a flat centred eye-level shot. Light it with intent: hard raking light, a single lamp in a dark room, late sun through a window. If the scene you have written could illustrate any post in this industry, it has failed - rewrite it until it could only belong to THIS one.
-- "headline": the words to letter onto the image, at most 48 characters. Short, punchy, and the actual point of the post - not the title copied out. Use Title Case or sentence case. No quotation marks, no hashtags, no emojis. If the chosen style carries LOW text, keep this under 30 characters.
+- "statLine": the single biggest thing on the page when the post turns on one figure - a percentage, a multiple, a count. At most 10 characters. Use "" when the post has no real figure; never invent one.
+- "headline": the words that CONTINUE the statLine into a sentence, or carry the point alone when there is no statLine. At most 48 characters. It must never repeat the statLine - "42%" above "42% Conversion Boost" is the same words twice and wastes the page; "42%" above "Average lift after going headless" is a sentence. Title Case or sentence case, no quotation marks, no hashtags, no emojis. If the chosen style carries LOW text, keep this under 30 characters.
+- "subhead": one supporting line under the headline, at most 60 characters, sentence case. Use "" when the page is tight or the style carries low text.
+- "chips": 0 to 3 very short benefit or takeaway phrases that sit in a row as small pills, each at most 22 characters INCLUDING spaces - count them, because a chip over the cap is cut rather than shrunk. Drawn from the post. Use [] when the post does not offer three real ones - padding with filler is worse than none.
 - "labels": 0 to 4 VERY short words or phrases that sit on individual elements in the scene (a bar, an icon, a step, a panel), each at most 18 characters. These are part of the picture, not a list beside it. Use [] when the scene does not need them, and ALWAYS use [] for a style that carries low text.
 - "subject": 2 to 5 words naming the single focal object or character, so the composition has an unmistakable centre. Prefer a real, tangible, dimensional thing - a device, a tool, a surface, a person - over an abstract symbol.
 - "brands": the real products, tools, platforms or companies the POST ITSELF names, copied exactly as the post spells them (for example Next.js, React, Shopify, WhatsApp). These get drawn as their genuine logos and products in the image. Use [] when the post names none - never add a brand the post did not mention.

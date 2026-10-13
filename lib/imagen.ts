@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { put } from "@vercel/blob";
 import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
-import { resolveVisualStyle } from "@/lib/image-styles";
+import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
 import { resolveTheme } from "@/lib/image-themes";
 
 let _ai: GoogleGenAI | null = null;
@@ -400,7 +400,14 @@ export async function generateImageBuffer(
  */
 export function buildArtImagePrompt(opts: {
   scene: string;
+  /** The one big figure, when the post turns on a number. */
+  statLine?: string;
   headline: string;
+  subhead?: string;
+  /** Short benefit pills. */
+  chips?: string[];
+  /** How the page is built - see PAGE_LAYOUTS. */
+  layoutDirection: string;
   labels: string[];
   subject?: string;
   /** Real products, tools or platforms the post itself names. */
@@ -414,6 +421,11 @@ export function buildArtImagePrompt(opts: {
   const { palette: p } = opts;
   const labels = opts.labels.filter(Boolean);
   const brands = (opts.brands ?? []).filter(Boolean);
+  const chips = (opts.chips ?? []).filter(Boolean);
+  const stat = (opts.statLine ?? "").trim();
+  const sub = (opts.subhead ?? "").trim();
+  const pieces =
+    (stat ? 1 : 0) + (opts.headline ? 1 : 0) + (sub ? 1 : 0) + chips.length + labels.length;
 
   const textBlock =
     opts.textLoad === "low" && labels.length === 0 && !opts.headline
@@ -430,11 +442,12 @@ export function buildArtImagePrompt(opts: {
           // guillemet-delimited version lettered the guillemets themselves.
           // Any literal string in a prompt can end up as rendered type.
           `Words to letter onto the image, and no others anywhere in the frame:`,
+          stat ? `  the single largest thing on the page reads "${stat}"` : null,
           opts.headline ? `  the headline reads "${opts.headline}"` : null,
-          ...labels.map((l) => `  one element is labelled "${l}"`),
-          `That is ${
-            (opts.headline ? 1 : 0) + labels.length
-          } piece${(opts.headline ? 1 : 0) + labels.length === 1 ? "" : "s"} of text in the entire image, and there must be no others. Count them as you compose.`,
+          sub ? `  the supporting line beneath it reads "${sub}"` : null,
+          ...chips.map((c) => `  one small pill reads "${c}"`),
+          ...labels.map((l) => `  one element in the artwork is labelled "${l}"`),
+          `That is ${pieces} piece${pieces === 1 ? "" : "s"} of text in the entire image, and there must be no others. Count them as you compose. No string may appear twice - if the figure above already says it, the headline must not say it again.`,
           `Letter the words inside the quote marks and not the quote marks themselves, and do not letter any wording from these instructions. Each string appears once and only once - never repeat a label, never echo the headline a second time, and never invent an extra caption to fill a gap.`,
           // Invented text is where this falls down. Asked for a monitor, a
           // whiteboard or a code editor, the model fills it with words of its
@@ -461,6 +474,8 @@ export function buildArtImagePrompt(opts: {
           .join("\n");
 
   return `Create ONE premium, square (1:1) graphic for a LinkedIn feed. A person scrolling past should understand the idea from the picture alone, before reading anything.
+
+LAYOUT - this is a designed page, not a picture with words dropped onto it. Build it on this structure: ${opts.layoutDirection} Hold a generous, even margin on all four sides, align everything to that structure, and leave one clear area to breathe rather than filling every corner.
 
 VISUAL STYLE - ${opts.styleName}: ${opts.styleDirection}
 
@@ -506,6 +521,10 @@ export async function generateAndStoreArtImage(
     brands?: string[];
     visualStyle?: string;
     themeId?: string;
+    layout?: string;
+    statLine?: string;
+    subhead?: string;
+    chips?: string[];
   },
   postId: string,
   category: ImageCategory
@@ -514,6 +533,7 @@ export async function generateAndStoreArtImage(
 
   const style = resolveVisualStyle(brief.visualStyle, postId);
   const theme = resolveTheme(brief.themeId, postId);
+  const layout = resolvePageLayout(brief.layout, postId);
 
   const prompt = buildArtImagePrompt({
     scene: brief.scene || `A clear, concrete scene representing: ${brief.headline ?? category.label}`,
@@ -521,6 +541,10 @@ export async function generateAndStoreArtImage(
     // The art brief reuses `nodes` for the short labels that sit on elements in
     // the scene. A low-text style gets none, whatever the brief returned.
     labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
+    statLine: brief.statLine,
+    subhead: brief.subhead,
+    chips: brief.chips,
+    layoutDirection: layout.direction,
     subject: brief.subject,
     brands: brief.brands,
     styleDirection: style.direction,
