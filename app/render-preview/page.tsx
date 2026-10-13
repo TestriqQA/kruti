@@ -14,6 +14,7 @@
 import { notFound } from "next/navigation";
 import { getImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
+import { generateImageBuffer, buildBackgroundPrompt } from "@/lib/imagen";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
       nodes: ["Unscoped Discovery", "Silent Dependencies", "Review Queues"],
       icons: ["search", "branch", "time"],
       heroIcon: "roadmap",
+      backgroundScene: "An overhead shot of a planning wall in a quiet studio, sticky notes and a marker on warm paper, soft morning light raking across the surface",
       cards: ["Fewer Handoffs", "Clear Owners"],
     },
   },
@@ -62,6 +64,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
       subheadline: "Before anyone has logged in twice",
       bodyText: "63%",
       heroIcon: "decline",
+      backgroundScene: "A dim product-team room at dusk, an empty chair at a desk lit only by a monitor glow, cool blue light, deep shadow, shallow depth of field",
     },
   },
   {
@@ -72,6 +75,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
       subheadline: "Lesson from three platform rewrites",
       bodyText: "The rewrite was never the risk. Not deciding was.",
       heroIcon: "insight",
+      backgroundScene: "A worn wooden workbench with a half-finished build, hand tools laid out neatly, warm low afternoon sun through a dusty window, rich texture",
     },
   },
   {
@@ -83,6 +87,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
       nodes: ["Migration Applied", "Flags Default Off", "Rollback Tested", "Owner On Call"],
       icons: ["data", "tooling", "iterate", "customer"],
       heroIcon: "checklist",
+      backgroundScene: "Close overhead of a clean desk before a launch, a notebook, a coffee cup and a closed laptop, calm neutral tones, soft even daylight",
     },
   },
   {
@@ -139,7 +144,10 @@ export default async function RenderPreviewPage() {
     SAMPLES.map(async (s, i) => {
       const category = getImageCategory(s.categoryId);
       try {
+        const bgScene = (s.brief as DesignBrief).backgroundScene;
+        const bg = bgScene ? (await generateImageBuffer(buildBackgroundPrompt(bgScene), "2K"))?.buffer : undefined;
         const buf = await renderDesignedImage({
+          background: bg,
           category,
           brief: s.brief,
           seed: `preview-${i}`,

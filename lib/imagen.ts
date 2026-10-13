@@ -11,6 +11,14 @@ function getAI(): GoogleGenAI {
   return _ai;
 }
 
+/**
+ * Nano Banana 2 (Gemini 3.1 Flash Image) - Google's high-efficiency image model,
+ * a fraction of Nano Banana Pro's per-image cost. Single stable model id (no
+ * preview/GA split); if it is unavailable, generation returns no image rather
+ * than silently degrading to a different model.
+ */
+const IMAGE_MODELS = ["gemini-3.1-flash-image"];
+
 // Track last generation error (user-facing message). The raw technical error is
 // always logged separately via console.error for debugging.
 export let lastImageGenError: string | null = null;
@@ -131,6 +139,29 @@ export function buildCategoryImagePrompt(
  * Returns null on failure and sets `lastImageGenError`, matching
  * generatePostImage() so callers need no new error path.
  */
+/**
+ * The prompt for the TEXT-FREE picture that sits behind a designed graphic.
+ *
+ * Every instruction here exists because the text layer is composited on top in
+ * code: any word the model draws would collide with real type, and a busy frame
+ * makes that type unreadable. This is the one job diffusion is genuinely good
+ * at - atmosphere - so it is asked for atmosphere and nothing else.
+ */
+export function buildBackgroundPrompt(scene: string): string {
+  return `Create ONE premium, believable, photoREAL square (1:1) editorial photograph for a LinkedIn graphic.
+
+WHAT TO SHOW: ${scene}
+
+This picture is a BACKGROUND. Headlines and labels will be laid over it afterwards, so:
+- It must contain ZERO text of any kind - no words, letters, numbers, captions, labels, watermarks, signage, logos, charts, graphs, diagrams, or screens showing readable interface. Not one character.
+- Keep the composition calm and uncluttered, with generous areas of even tone, soft focus or open space where type can sit. One clear subject, not a busy collage.
+- No heavy vignettes, no borders, no frames, no text placeholders or lorem-ipsum shapes.
+
+QUALITY: a real photograph taken by a professional - correct proportions, genuine materials and surface texture, natural directional light, true-to-life colour, real depth of field. NO neon glow, NO plastic AI sheen, NO circuit-board or digital-grid cliche, NO warped hands or extra limbs, NO fabricated portrait of a specific real person (a representative person shot over-the-shoulder, hands-only or from behind is fine).
+
+Square 1:1, full-bleed edge to edge, high resolution.`;
+}
+
 export async function renderAndStoreDesignedImage(
   category: ImageCategory,
   brief: DesignBrief,
@@ -138,24 +169,41 @@ export async function renderAndStoreDesignedImage(
   opts?: {
     author?: { name?: string | null; headline?: string | null };
     slide?: { index: number; total: number };
+    /** Pre-generated background, for callers that fetch them in parallel. */
+    background?: Buffer | null;
   }
 ): Promise<string | null> {
   lastImageGenError = null;
   try {
+    // Hybrid: a generated picture underneath, exact type on top. If the model
+    // fails - quota, safety, a timeout - the layout still renders on a solid
+    // field, so a missing picture costs atmosphere rather than the whole image.
+    let background = opts?.background ?? undefined;
+    if (!background && brief.backgroundScene) {
+      const bg = await generateImageBuffer(buildBackgroundPrompt(brief.backgroundScene), "2K");
+      if (bg) background = bg.buffer;
+      else console.warn(`[RenderCard] ${category.id}: no background, rendering on a solid field`);
+    }
+
     const buffer = await renderDesignedImage({
       category,
       brief,
       seed: postId,
       author: opts?.author,
       slide: opts?.slide,
+      background,
     });
+
+    // A failed background must not surface as an error when the image itself
+    // came out fine.
+    lastImageGenError = null;
 
     // Filename shape is load-bearing twice over. lib/usage-analytics.ts recovers
     // an image's generation DATE from the 13-digit epoch embedded here (there is
-    // no event table), and it tells code-rendered images from model-generated
-    // ones by this "card-" prefix - which is the only way the admin cost figure
-    // can know these were free. Keep `generated/card-<id>-<ts>.png`.
-    const filename = `card-${postId}-${Date.now()}.png`;
+    // no event table), and it tells paid from free images by the prefix: a
+    // hybrid called the image model, so it is costed like one ("post-"), while
+    // a pure code render costs nothing ("card-"). Keep both shapes intact.
+    const filename = `${background ? "post" : "card"}-${postId}-${Date.now()}.png`;
     const blob = await put(`generated/${filename}`, buffer, {
       access: "public",
       contentType: "image/png",
@@ -201,15 +249,32 @@ export async function renderCarouselFromPlan(
   const total = plan.slides.length;
   const urls: string[] = [];
 
+  // Backgrounds first, and in PARALLEL. Each image call takes 10-20s, so four in
+  // sequence would run past the 60s function limit on its own; the renders that
+  // follow are about 200ms each, so they stay sequential for ordered progress
+  // events and flat memory. A slide whose picture fails simply renders on the
+  // solid field.
+  plan.slides.forEach((_, i) => onSlideEvent?.({ index: i, status: "start" }));
+  const backgrounds = await Promise.all(
+    plan.slides.map(async (s) => {
+      if (!s.backgroundScene) return null;
+      try {
+        const bg = await generateImageBuffer(buildBackgroundPrompt(s.backgroundScene), "2K");
+        return bg?.buffer ?? null;
+      } catch {
+        return null;
+      }
+    })
+  );
+
   for (let i = 0; i < total; i++) {
-    onSlideEvent?.({ index: i, status: "start" });
     const url = await renderAndStoreDesignedImage(
       category,
       // The plan's theme wins over anything a slide carries: one palette across
       // the set is the whole point.
       { ...plan.slides[i], themeId: plan.themeId },
       `${postId}-c${i}`,
-      { slide: { index: i, total } }
+      { slide: { index: i, total }, background: backgrounds[i] }
     );
     if (url) {
       urls.push(url);
@@ -257,16 +322,31 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
 
   console.log(`[Imagen] Prompt: ${prompt.slice(0, 80)}...`);
 
-  // Nano Banana 2 (Gemini 3.1 Flash Image) - Google's high-efficiency image model:
-  // strong at on-image text rendering, optimized for speed and high-volume use, at a
-  // much lower per-image cost than Nano Banana Pro. Single stable model id (no
-  // preview/GA split); if it is unavailable, generation returns no image rather than
-  // silently degrading to a different model.
-  const imageModels = [
-    "gemini-3.1-flash-image",
-  ];
 
-  for (const model of imageModels) {
+  const result = await generateImageBuffer(prompt, imageSize);
+  if (!result) return null;
+
+  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
+  const blob = await put(`generated/${filename}`, result.buffer, {
+    access: "public",
+    contentType: result.contentType,
+  });
+  console.log(`[Imagen] Generated:`, blob.url);
+  return blob.url;
+}
+
+/**
+ * Call the image model and return the raw bytes, without storing anything.
+ *
+ * Split out from generatePostImage so the hybrid renderer can take the picture
+ * as a buffer, composite the text layer onto it, and upload once - rather than
+ * uploading a background nobody will ever see and then fetching it back.
+ */
+export async function generateImageBuffer(
+  prompt: string,
+  imageSize: "1K" | "2K" = "2K"
+): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
+  for (const model of IMAGE_MODELS) {
     try {
       console.log(`[Imagen] Trying ${model}...`);
       const response = await getAI().models.generateContent({
@@ -274,11 +354,6 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
         contents: prompt,
         config: {
           responseModalities: ["IMAGE", "TEXT"],
-          // Square LinkedIn format. Single images default to 2K; carousels pass 1K (still
-          // crisp at LinkedIn's ~1080px display). 1K stays legible because the prompt sizes
-          // the headline at ~12-18% of image height and caps labels per slide - do NOT raise
-          // carousels to 2K to "fix" small text (2K timed out the 60s limit); text size is
-          // prompt-controlled, not pixel-controlled.
           imageConfig: { aspectRatio: "1:1", imageSize },
         },
       });
@@ -286,16 +361,12 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
       const parts = response.candidates?.[0]?.content?.parts ?? [];
       for (const part of parts) {
         if (part.inlineData?.mimeType?.startsWith("image/") && part.inlineData.data) {
-          const buffer = Buffer.from(part.inlineData.data, "base64");
-          const ext = part.inlineData.mimeType === "image/jpeg" ? "jpg" : "png";
-          const contentType = part.inlineData.mimeType === "image/jpeg" ? "image/jpeg" : "image/png";
-          const filename = `post-${postId}-${Date.now()}.${ext}`;
-          const blob = await put(`generated/${filename}`, buffer, {
-            access: "public",
-            contentType,
-          });
-          console.log(`[Imagen] Generated via ${model}:`, blob.url);
-          return blob.url;
+          const jpeg = part.inlineData.mimeType === "image/jpeg";
+          return {
+            buffer: Buffer.from(part.inlineData.data, "base64"),
+            ext: jpeg ? "jpg" : "png",
+            contentType: jpeg ? "image/jpeg" : "image/png",
+          };
         }
       }
       console.warn(`[Imagen] ${model} returned no image data, trying next model`);

@@ -1,7 +1,7 @@
 import satori from "satori";
 import sharp from "sharp";
 import type { ImageCategory } from "@/lib/image-categories";
-import { resolveTheme, type ImageTheme } from "@/lib/image-themes";
+import { resolveTheme, withAlpha, type ImageTheme } from "@/lib/image-themes";
 import { getRenderFonts, FONT_FAMILY } from "@/lib/og-fonts";
 import { resolveIcon } from "@/lib/image-icons";
 
@@ -68,6 +68,8 @@ export interface DesignBrief {
   icons?: string[];
   /** The icon representing the whole graphic. */
   heroIcon?: string;
+  /** Art direction for the picture behind the graphic (hybrid mode). */
+  backgroundScene?: string;
 }
 
 export interface RenderOptions {
@@ -79,6 +81,12 @@ export interface RenderOptions {
   author?: { name?: string | null; headline?: string | null };
   /** Set for carousel slides so the set gets a position indicator. */
   slide?: { index: number; total: number };
+  /**
+   * A TEXT-FREE picture to composite the text layer over. Omit it (or pass
+   * nothing when the image model failed) and the same layouts render on a
+   * solid themed field instead.
+   */
+  background?: Buffer;
 }
 
 // ─── Type scale ──────────────────────────────────────────────────────────────
@@ -859,13 +867,109 @@ function Layout({ category, brief, t, author }: RenderOptions & { t: ImageTheme 
  * Deterministic for a given brief: the same input always produces the same image,
  * which is what makes a carousel look like one set.
  */
+// ─── Hybrid composition ──────────────────────────────────────────────────────
+//
+// A code-rendered graphic has exact text but no imagery, and a purely generated
+// one has imagery but unreliable text. The hybrid takes both: the image model
+// draws a TEXT-FREE picture, and the text layer is composited on top in code.
+//
+// Two compositions, chosen by how much text the format carries:
+//
+//   "scrim" - the picture fills the frame and the text sits over a gradient of
+//     the theme's own background colour. Used where there are only a few words
+//     (a quote, a stat, a banner, a hook or takeaway slide), because that is
+//     where a full-bleed photograph genuinely lifts the design.
+//
+//   "split" - the picture occupies a band at the top and the content sits below
+//     it on a solid field. Used for lists and comparisons: a five-row checklist
+//     over a photograph is unreadable no matter how heavy the scrim, and
+//     readability is not something to trade away for atmosphere.
+//
+// The band shrinks as the list grows, so a five-item layout still breathes.
+
+type Composition = "solid" | "scrim" | "split";
+
+function compositionFor(opts: RenderOptions): Composition {
+  if (!opts.background) return "solid";
+  const nodes = opts.brief.nodes?.length ?? 0;
+  const { genApproach, id } = opts.category;
+
+  // Text-light formats, and any slide with nothing to list, carry a full picture.
+  if (genApproach === "banner") return "scrim";
+  if (genApproach === "text-card" && id !== "checklist-card" && id !== "x-screenshot") return "scrim";
+  if (nodes === 0) return "scrim";
+
+  // A social screenshot is meant to look like a real UI card; a photograph
+  // behind it breaks the illusion, so it keeps a plain field.
+  if (id === "x-screenshot") return "solid";
+
+  return "split";
+}
+
+/** Breathing room between the picture and the content below it. */
+const SPLIT_GAP = 16;
+
+/** How much of the frame the picture gets in a split, by how long the list is. */
+function imageBandHeight(nodeCount: number): number {
+  if (nodeCount <= 3) return Math.round(IMAGE_SIZE * 0.36);
+  if (nodeCount === 4) return Math.round(IMAGE_SIZE * 0.3);
+  return Math.round(IMAGE_SIZE * 0.25);
+}
+
+/**
+ * Render one designed post image to a PNG buffer.
+ *
+ * With `background`, the text layer is drawn with transparent regions and
+ * composited over that picture. Without it - no background was requested, or
+ * the image model failed - the same layouts render on a solid themed field, so
+ * a picture that never arrives costs quality, never the whole image.
+ *
+ * Deterministic for a given brief and background, which is what makes a
+ * carousel look like one set.
+ */
 export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> {
   const t = resolveTheme(opts.brief.themeId, opts.seed);
-
+  const composition = compositionFor(opts);
 
   // Reserve a strip at the bottom when the carousel indicator is present, so it
   // never collides with the layout's own content.
   const dotStrip = opts.slide ? 52 : 0;
+  const band = composition === "split" ? imageBandHeight(opts.brief.nodes?.length ?? 0) : 0;
+  const fade = 90;
+
+  const content = (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        // Satori follows the CSS default of content-box, NOT border-box. Sizing
+        // the content box explicitly and spacing it with a margin is what keeps
+        // the layout inside the frame - with `width: 100%` plus padding, every
+        // child was laid out 152px too wide and clipped at the right edge.
+        width: IMAGE_SIZE - PAD * 2,
+        // In a split the content owns everything below the picture, so its box
+        // is measured from the band rather than from the whole frame - computing
+        // it from the frame left the chips crowded against the bottom edge.
+        height:
+          composition === "split"
+            ? IMAGE_SIZE - band - PAD - dotStrip - SPLIT_GAP
+            : IMAGE_SIZE - PAD * 2 - dotStrip,
+        marginLeft: PAD,
+        marginRight: PAD,
+        marginTop: composition === "split" ? SPLIT_GAP : PAD,
+        marginBottom: PAD,
+        flexShrink: 0,
+        // Positioned so it paints ABOVE the scrim. Both are in the same stacking
+        // context and CSS paints positioned elements over in-flow ones no matter
+        // what the document order is - without this the gradient washed straight
+        // over the type and the words vanished into the photograph.
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      <Layout {...opts} t={t} />
+    </div>
+  );
 
   const svg = await satori(
     (
@@ -873,31 +977,73 @@ export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> 
         style={{
           position: "relative",
           display: "flex",
-          // Full-bleed by construction: the background IS the root element, so
-          // there is no frame, keyline or inset panel to accidentally draw.
+          flexDirection: "column",
           width: IMAGE_SIZE,
           height: IMAGE_SIZE,
-          backgroundColor: t.bg,
+          // Transparent in hybrid mode so the picture underneath shows through;
+          // the solid field is painted by the panels below instead.
+          backgroundColor: composition === "solid" ? t.bg : "rgba(0,0,0,0)",
           fontFamily: FONT_FAMILY,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            // Satori follows the CSS default of content-box, NOT border-box.
-            // Sizing the content box explicitly and spacing it with a margin is
-            // what keeps the layout inside the frame - with `width: 100%` plus
-            // padding, the content box was the full 1080 and the padding was
-            // added OUTSIDE it, so every child was laid out 152px too wide and
-            // the right edge of each card was clipped off.
-            width: IMAGE_SIZE - PAD * 2,
-            height: IMAGE_SIZE - PAD * 2 - dotStrip,
-            margin: PAD,
+        {composition === "scrim" && (
+          // One gradient across the whole frame: light at the top so the picture
+          // reads, almost opaque lower down where the words are.
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: IMAGE_SIZE,
+              height: IMAGE_SIZE,
+              display: "flex",
+              // Weighted hard towards the bottom two thirds, where the type
+              // actually sits. A gentler ramp left a light theme's charcoal text
+              // sitting on a sunlit photograph with almost no contrast - the
+              // picture is atmosphere, legibility is not negotiable.
+              backgroundImage: `linear-gradient(180deg, ${withAlpha(t.bg, 0.4)} 0%, ${withAlpha(
+                t.bg,
+                0.88
+              )} 38%, ${withAlpha(t.bg, 0.97)} 70%, ${t.bg} 100%)`,
             }}
-        >
-          <Layout {...opts} t={t} />
-        </div>
+          />
+        )}
+
+        {composition === "split" && (
+          <>
+            {/* The picture shows through this band untouched. */}
+            <div style={{ display: "flex", width: IMAGE_SIZE, height: band - fade, flexShrink: 0 }} />
+            {/* Then it dissolves into the solid field rather than cutting hard. */}
+            <div
+              style={{
+                display: "flex",
+                width: IMAGE_SIZE,
+                height: fade,
+                backgroundImage: `linear-gradient(180deg, ${withAlpha(t.bg, 0)} 0%, ${withAlpha(
+                  t.bg,
+                  0.86
+                )} 55%, ${t.bg} 100%)`,
+              }}
+            />
+            {/* Solid field for the content, kept in normal flow. As an absolute
+                panel it painted over the content underneath it and the layout
+                came out blank below the picture. */}
+            <div
+              style={{
+                display: "flex",
+                width: IMAGE_SIZE,
+                height: IMAGE_SIZE - band,
+                backgroundColor: t.bg,
+                position: "absolute",
+                top: band,
+                left: 0,
+                zIndex: 0,
+              }}
+            />
+          </>
+        )}
+
+        {content}
 
         {/* Pinned to the frame, not to the content: a centred layout would
             otherwise pull the indicator up next to the headline. */}
@@ -927,5 +1073,14 @@ export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> 
     }
   );
 
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  const overlay = await sharp(Buffer.from(svg)).png().toBuffer();
+  if (!opts.background) return overlay;
+
+  // `cover` so a model that returns a slightly off-square image still fills the
+  // frame rather than letterboxing into it.
+  return sharp(opts.background)
+    .resize(IMAGE_SIZE, IMAGE_SIZE, { fit: "cover", position: "centre" })
+    .composite([{ input: overlay }])
+    .png()
+    .toBuffer();
 }

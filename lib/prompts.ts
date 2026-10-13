@@ -509,7 +509,8 @@ Return ONLY this JSON object:
   "nodes": ["string"],
   "icons": ["string"],
   "cards": ["string"],
-  "heroIcon": "string"
+  "heroIcon": "string",
+  "backgroundScene": "string"
 }
 
 FIELDS:
@@ -519,6 +520,7 @@ FIELDS:
 - "nodes": the short labels that make up this format's content - the steps, the stages, the checklist items, or the two sides of a comparison. Each 1 to 4 words, at most 28 characters. Use 3 to 5 for a list, diagram, timeline or checklist; EXACTLY 2 for a comparison (first = the myth or the before, second = the fact or the after); and [] for a quote card, big-stat hero or screenshot. Drawn strictly from the post, never invented, never a full sentence.
 - "icons": ONE concept from the icon list for EACH entry in "nodes", in the same order and the same length. Choose on meaning - what is that specific step, side or item actually about? Do not repeat the same concept twice on one graphic unless the content genuinely repeats. Use [] when "nodes" is [].
 - "heroIcon": ONE concept from the icon list that represents the post as a whole. Always provide this, every format uses it.
+- "backgroundScene": a short art direction for ONE premium, believable, TEXT-FREE photograph that will sit behind this graphic. Describe the subject, the setting, the light and the mood in 15 to 35 words, grounded in what THIS post is actually about and in the author's real working world - not a stock cliche. It must contain NO words, letters, numbers, charts, screens full of UI, logos or signage of any kind, because the text is drawn on top in code. Leave the frame relatively calm and uncluttered so type stays readable over it. Always provide this.
 - "cards": 0 to 4 very short supporting chips ("Instant Traffic", "Better ROI"), each 1 to 3 words and at most 22 characters, from the post. Use [] when the post does not call for them. For a banner, the FIRST card is used as the call-to-action button.
 
 RULES:
@@ -587,7 +589,7 @@ Return ONLY this JSON object, with EXACTLY ${count} entries in "slides", in caro
 {
   "themeId": "${themeIds}",
   "slides": [
-    { "headline": "string", "subheadline": "string", "nodes": ["string"], "icons": ["string"], "heroIcon": "string" }
+    { "headline": "string", "subheadline": "string", "nodes": ["string"], "icons": ["string"], "heroIcon": "string", "backgroundScene": "string" }
   ]
 }
 
@@ -597,6 +599,7 @@ FIELDS, per slide:
 - "nodes": 2 to 4 short labels carrying that slide's detail, each 1 to 4 words and at most 28 characters, drawn strictly from the post. Use [] for the first and last slides so they render as clean statement slides.
 - "icons": ONE concept from the icon list for EACH entry in that slide's "nodes", in the same order and the same length. Choose on meaning. Use [] when "nodes" is [].
 - "heroIcon": ONE concept from the icon list representing that slide's point. Always provide this on every slide - it is what the hook and takeaway slides are built around.
+- "backgroundScene": a short art direction for ONE premium, believable, TEXT-FREE photograph behind that slide, 15 to 35 words, specific to that slide's point. NO words, letters, numbers, charts, UI or logos - the text is drawn on top in code. Keep the slides visually related to each other: same world, same light, same mood, so the set hangs together.
 
 RULES:
 - Every slide must follow from the one before it and set up the one after it. A reader swiping through should feel one argument, not four separate posts.

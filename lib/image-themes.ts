@@ -217,6 +217,25 @@ export function resolveTheme(id: string | null | undefined, seed?: string): Imag
   return THEME_BY_ID.get(DEFAULT_THEME_ID) ?? IMAGE_THEMES[0];
 }
 
+/**
+ * `#rrggbb` -> `rgba(r, g, b, a)`.
+ *
+ * The hybrid renderer lays the text over a generated picture, and the scrim that
+ * keeps that text readable has to be the theme's own background colour at a
+ * partial alpha - otherwise a light theme over a bright photo is unreadable and
+ * a dark theme over a dark photo disappears. Satori has no colour functions, so
+ * the conversion happens here.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+}
+
 /** The menu, formatted for the brief prompt. */
 export function themeMenuBlock(): string {
   return IMAGE_THEMES.map((t) => `- "${t.id}" (${t.name}, ${t.mode}): ${t.when}`).join("\n");

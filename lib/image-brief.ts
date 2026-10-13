@@ -42,6 +42,8 @@ export interface ImageBrief {
   icons?: string[];
   /** Code-rendered only: the icon concept representing the post as a whole. */
   heroIcon?: string;
+  /** Hybrid only: art direction for the TEXT-FREE picture behind the graphic. */
+  backgroundScene?: string;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
   bodyText?: string; // hero words for text-card formats (quote / stat / screenshot line)
 
@@ -67,6 +69,8 @@ export interface CarouselSlide {
   subheadline?: string;
   icons?: string[];
   heroIcon?: string;
+  /** Hybrid only: art direction for the TEXT-FREE picture behind this slide. */
+  backgroundScene?: string;
   /** Short labels carrying the slide's detail; [] on the hook and takeaway slides. */
   nodes?: string[];
 
@@ -281,6 +285,7 @@ async function getDesignBrief(
           themeId: clampThemeId(parsed.themeId),
           icons: clampLabels(parsed.icons, 5, 24),
           heroIcon: clampHeadline(String(parsed.heroIcon ?? ""), 24),
+          backgroundScene: clampHeadline(String(parsed.backgroundScene ?? ""), 400),
         };
       }
     } catch (err) {
@@ -402,6 +407,7 @@ export async function getCarouselPlan(
               nodes: clampLabels((s as { nodes?: unknown }).nodes, 4, 28),
               icons: clampLabels((s as { icons?: unknown }).icons, 4, 24),
               heroIcon: clampHeadline(String((s as { heroIcon?: unknown }).heroIcon ?? ""), 24),
+              backgroundScene: clampHeadline(String((s as { backgroundScene?: unknown }).backgroundScene ?? ""), 400),
             }))
             .filter((s) => !!s.headline)
             .slice(0, count)
