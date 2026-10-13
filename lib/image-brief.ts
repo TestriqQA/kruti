@@ -7,6 +7,7 @@ import {
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
 import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
+import { iconMenuBlock } from "@/lib/image-icons";
 
 /**
  * Content-aware image briefs.
@@ -37,6 +38,10 @@ export interface ImageBrief {
   headline: string; // prominent bold headline (2-6 words, <=34 chars)
   subheadline: string; // one supporting subheadline line (<=70 chars), "" if none
   nodes: string[]; // short real labels from the post (steps / stages / comparison sides)
+  /** Code-rendered only: one icon concept per node, same order and length. */
+  icons?: string[];
+  /** Code-rendered only: the icon concept representing the post as a whole. */
+  heroIcon?: string;
   cards: string[]; // 0-4 optional short feature/benefit chips from the post
   bodyText?: string; // hero words for text-card formats (quote / stat / screenshot line)
 
@@ -60,6 +65,8 @@ export interface ImageBrief {
 export interface CarouselSlide {
   headline: string;
   subheadline?: string;
+  icons?: string[];
+  heroIcon?: string;
   /** Short labels carrying the slide's detail; [] on the hook and takeaway slides. */
   nodes?: string[];
 
@@ -253,6 +260,7 @@ async function getDesignBrief(
     category,
     themeMenuBlock(),
     IMAGE_THEME_IDS.join("|"),
+    iconMenuBlock(),
     userProfile
   );
 
@@ -271,6 +279,8 @@ async function getDesignBrief(
           cards: clampLabels(parsed.cards, 4, 22),
           bodyText: clampBodyText(parsed.bodyText),
           themeId: clampThemeId(parsed.themeId),
+          icons: clampLabels(parsed.icons, 5, 24),
+          heroIcon: clampHeadline(String(parsed.heroIcon ?? ""), 24),
         };
       }
     } catch (err) {
@@ -373,6 +383,7 @@ export async function getCarouselPlan(
     count,
     themeMenuBlock(),
     IMAGE_THEME_IDS.join("|"),
+    iconMenuBlock(),
     userProfile
   );
 
@@ -389,6 +400,8 @@ export async function getCarouselPlan(
               headline: clampHeadline(s.headline, 34),
               subheadline: clampSubhead((s as { subheadline?: unknown }).subheadline),
               nodes: clampLabels((s as { nodes?: unknown }).nodes, 4, 28),
+              icons: clampLabels((s as { icons?: unknown }).icons, 4, 24),
+              heroIcon: clampHeadline(String((s as { heroIcon?: unknown }).heroIcon ?? ""), 24),
             }))
             .filter((s) => !!s.headline)
             .slice(0, count)

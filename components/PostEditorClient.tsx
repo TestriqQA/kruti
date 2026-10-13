@@ -389,6 +389,14 @@ export default function PostEditorClient({
         setDocumentName(null);
         const remaining = data.remaining ?? 0;
         setImageGenRemaining(remaining);
+        // Without this the App Router keeps serving the RSC payload it cached
+        // when this page first loaded. Navigate to another post and back, and
+        // the editor re-initialises `generations` from a stale `imageHistory`
+        // and `imageGenRemaining` from a stale `imageGenCount` - so the images
+        // look like they vanished and the per-post limit appears to reset. The
+        // rows were always correct in the database; only the cached payload was
+        // behind. Every other handler here already refreshes; this one did not.
+        router.refresh();
         toast(
           remaining > 0
             ? `Image generated (${remaining} generation${remaining === 1 ? "" : "s"} remaining)`

@@ -347,7 +347,7 @@ ${rules}
 
 IMAGE CATEGORY (pick the best-fit visual FORMAT for each post from its OWN content):
 ${imageStyleGuide}
-Choose the "imageStyle" id that best matches THIS post's content and tone - a meme for a relatable or funny take, a quote-card for one punchy line, before-after for a teardown, framework-diagram or timeline-roadmap for a model or sequence, big-stat-hero ONLY when the post has a real stat, and realistic-scene / behind-the-scenes / desk-setup / storytelling-scene for human or story posts (these render a tasteful REPRESENTATIVE scene, never a fabricated portrait). If unsure, use "infographic". VARY the imageStyle across the ${postCount} posts wherever the content genuinely differs - do not label them all "infographic".
+Choose the "imageStyle" id that best matches THIS post's content and tone - a meme for a relatable or funny take, a quote-card for one punchy line, before-after for a teardown, framework-diagram or timeline-roadmap for a model or sequence, big-stat-hero ONLY when the post has a real stat, and realistic-scene / behind-the-scenes / desk-setup / storytelling-scene for human or story posts (these render a tasteful REPRESENTATIVE scene, never a fabricated portrait). SPREAD the choice across the ${postCount} posts. The three groups - Relatable & Human, Educational & Authority, Branded & Quick-Hit - must ALL appear in a batch of ${postCount}, and at least one post must use a Relatable & Human format (a meme or a real scene) unless literally none of the posts is a story, an opinion or a human moment. Never give two posts in the batch the same imageStyle unless their content genuinely calls for the same shape, and never fall back to "infographic" as a default - pick it only when the post really is an explainer with several parts to lay out.
 
 Generate exactly ${postCount} posts as a JSON array. Each post must follow this exact structure:
 [
@@ -477,6 +477,7 @@ export function buildDesignBriefPrompt(
   category: ImageCategory,
   themeMenu: string,
   themeIds: string,
+  iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
   const role = userProfile?.headline || "professional";
@@ -496,6 +497,9 @@ THEME - pick the ONE id whose mood matches this post's subject and tone:
 ${themeMenu}
 Vary this across posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
 
+ICONS - every graphic carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
+${iconMenu}
+
 Return ONLY this JSON object:
 {
   "themeId": "${themeIds}",
@@ -503,7 +507,9 @@ Return ONLY this JSON object:
   "subheadline": "string",
   "bodyText": "string",
   "nodes": ["string"],
-  "cards": ["string"]
+  "icons": ["string"],
+  "cards": ["string"],
+  "heroIcon": "string"
 }
 
 FIELDS:
@@ -511,6 +517,8 @@ FIELDS:
 - "subheadline": ONE supporting line drawn from the post, at most 70 characters, plain sentence case, no ending period. Use "" if the post genuinely needs none.
 - "bodyText": the hero words for formats that are built around one piece of text - the quote line for a quote card, the single figure for a big-stat hero, the verbatim key line for a social screenshot. At most 160 characters. Use "" for every other format.
 - "nodes": the short labels that make up this format's content - the steps, the stages, the checklist items, or the two sides of a comparison. Each 1 to 4 words, at most 28 characters. Use 3 to 5 for a list, diagram, timeline or checklist; EXACTLY 2 for a comparison (first = the myth or the before, second = the fact or the after); and [] for a quote card, big-stat hero or screenshot. Drawn strictly from the post, never invented, never a full sentence.
+- "icons": ONE concept from the icon list for EACH entry in "nodes", in the same order and the same length. Choose on meaning - what is that specific step, side or item actually about? Do not repeat the same concept twice on one graphic unless the content genuinely repeats. Use [] when "nodes" is [].
+- "heroIcon": ONE concept from the icon list that represents the post as a whole. Always provide this, every format uses it.
 - "cards": 0 to 4 very short supporting chips ("Instant Traffic", "Better ROI"), each 1 to 3 words and at most 22 characters, from the post. Use [] when the post does not call for them. For a banner, the FIRST card is used as the call-to-action button.
 
 RULES:
@@ -547,6 +555,7 @@ export function buildCarouselDesignPrompt(
   count: number,
   themeMenu: string,
   themeIds: string,
+  iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
   const role = userProfile?.headline || "professional";
@@ -571,11 +580,14 @@ ONE SHARED THEME for the whole carousel - pick the ONE id whose mood matches thi
 ${themeMenu}
 Every slide uses this one theme, which is what makes the set cohere. Vary it across different posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
 
+ICONS - every slide carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
+${iconMenu}
+
 Return ONLY this JSON object, with EXACTLY ${count} entries in "slides", in carousel order:
 {
   "themeId": "${themeIds}",
   "slides": [
-    { "headline": "string", "subheadline": "string", "nodes": ["string"] }
+    { "headline": "string", "subheadline": "string", "nodes": ["string"], "icons": ["string"], "heroIcon": "string" }
   ]
 }
 
@@ -583,6 +595,8 @@ FIELDS, per slide:
 - "headline": that slide's one point, in your own words. 2 to 6 words, at most 34 characters, Title Case. Specific and concrete, never a vague label, and never the post title copied verbatim. No quotation marks, no hashtags.
 - "subheadline": ONE supporting line for that slide, at most 70 characters, plain sentence case, no ending period. Use "" if the slide needs none.
 - "nodes": 2 to 4 short labels carrying that slide's detail, each 1 to 4 words and at most 28 characters, drawn strictly from the post. Use [] for the first and last slides so they render as clean statement slides.
+- "icons": ONE concept from the icon list for EACH entry in that slide's "nodes", in the same order and the same length. Choose on meaning. Use [] when "nodes" is [].
+- "heroIcon": ONE concept from the icon list representing that slide's point. Always provide this on every slide - it is what the hook and takeaway slides are built around.
 
 RULES:
 - Every slide must follow from the one before it and set up the one after it. A reader swiping through should feel one argument, not four separate posts.
