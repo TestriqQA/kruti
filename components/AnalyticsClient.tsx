@@ -1,16 +1,26 @@
 "use client";
 
-import {
-  FileText,
-  TrendingUp,
-  Linkedin,
-  BarChart3,
-  Heart,
-  MessageCircle,
-  Share2,
-  Eye,
-} from "lucide-react";
-import { cn, getPostTypeColor } from "@/lib/utils";
+import Link from "next/link";
+import { CheckCircle2, AlertCircle, Info } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { RuleHeader } from "@/components/dashboard/ledger";
+
+/**
+ * Content analytics.
+ *
+ * The honest scope of this page is PRODUCTION and PUBLISHING. LinkedIn
+ * engagement columns exist on Post (likes / comments / shares / impressions)
+ * but nothing populates them - the app authenticates with
+ * `openid profile email w_member_social`, and reading engagement needs
+ * `r_member_social`, which it does not have. The old page rendered those
+ * fields anyway, so it showed a wall of confident zeros. A measurement the
+ * product cannot make is stated as such here instead of being drawn.
+ *
+ * Charts follow the house rules: one axis, thin marks, a 2px surface gap
+ * between stacked segments, direct labels rather than a number on every mark,
+ * recessive grid, and status colour used only for status - always with its
+ * word beside it, never colour alone.
+ */
 
 interface EngagementPost {
   id: string;
@@ -43,31 +53,29 @@ interface AnalyticsProps {
   };
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  ready: "Ready",
-  published: "Published",
-};
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: "bg-gray-400 dark:bg-gray-500",
-  ready: "bg-amber-400 dark:bg-amber-500",
-  published: "bg-green-500 dark:bg-green-400",
-};
-
 const TYPE_LABELS: Record<string, string> = {
-  "thought-leadership": "Thought Leadership",
-  tips: "Tips & How-To",
-  story: "Personal Story",
-  question: "Question / Engagement",
-  listicle: "Listicle / Steps",
+  "thought-leadership": "Thought leadership",
+  tips: "Tips",
+  story: "Story",
+  question: "Question",
+  listicle: "Listicle",
+  poll: "Poll",
+  carousel: "Carousel",
 };
 
-function heatmapColor(count: number): string {
-  if (count === 0) return "bg-slate-100 dark:bg-white/[0.06]";
-  if (count === 1) return "bg-green-200 dark:bg-green-900/60";
-  if (count === 2) return "bg-green-400 dark:bg-green-700";
-  return "bg-green-600 dark:bg-green-500";
+const STATUS_ROWS = [
+  { key: "draft", label: "Draft", help: "Written, waiting for your review", fill: "bg-warning", text: "text-warning" },
+  { key: "ready", label: "Ready", help: "Queued for auto-publish", fill: "bg-accent", text: "text-accent" },
+  { key: "published", label: "Published", help: "Live on LinkedIn", fill: "bg-success", text: "text-success" },
+] as const;
+
+/** One hue, light to dark - the rule for magnitude. */
+function heatStep(count: number): string {
+  if (count <= 0) return "border border-line-strong bg-transparent";
+  if (count === 1) return "bg-accent/25";
+  if (count === 2) return "bg-accent/45";
+  if (count === 3) return "bg-accent/70";
+  return "bg-accent";
 }
 
 export default function AnalyticsClient({
@@ -76,342 +84,295 @@ export default function AnalyticsClient({
   postsByType,
   weeklyActivity,
   calendarHeatmap,
-  engagement,
 }: AnalyticsProps) {
-  const maxWeeklyCount = Math.max(1, ...weeklyActivity.map((w) => Math.max(w.created, w.published)));
-  const hasAnyWeeklyData = weeklyActivity.some((w) => w.created > 0 || w.published > 0);
+  const statusTotal = Math.max(
+    1,
+    STATUS_ROWS.reduce((s, r) => s + (postsByStatus[r.key] ?? 0), 0)
+  );
 
-  const totalByStatus = Object.values(postsByStatus).reduce((a, b) => a + b, 0) || 1;
-  const totalByType = Object.values(postsByType).reduce((a, b) => a + b, 0) || 1;
+  const typeRows = Object.entries(postsByType)
+    .map(([type, count]) => ({ type, count }))
+    .sort((a, b) => b.count - a.count);
+  const typeMax = Math.max(1, ...typeRows.map((t) => t.count));
+
+  const weekMax = Math.max(1, ...weeklyActivity.map((w) => w.created));
+  const attempted = stats.linkedinPublished + stats.linkedinErrors;
+
+  // 13 columns of 7 days, oldest on the left.
+  const heatWeeks: { date: string; count: number }[][] = [];
+  for (let i = 0; i < calendarHeatmap.length; i += 7) {
+    heatWeeks.push(calendarHeatmap.slice(i, i + 7));
+  }
 
   return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-gray-100">
-          Content Analytics
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Track your content production and publishing performance
-        </p>
-      </div>
-
-      {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Posts", value: stats.totalPosts, icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
-          { label: "This Week", value: stats.postsThisWeek, icon: TrendingUp, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
-          { label: "LinkedIn Published", value: stats.linkedinPublished, icon: Linkedin, color: "text-blue-600 dark:text-blue-400", bg: "bg-sky-50 dark:bg-sky-900/30" },
-          { label: "Avg/Week", value: stats.avgPostsPerWeek, icon: BarChart3, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-900/30" },
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div
-            key={label}
-            className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5"
-          >
-            <div className="flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", bg)}>
-                <Icon className={cn("w-5 h-5", color)} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">{value}</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* LinkedIn Success Rate */}
-      {(stats.linkedinPublished > 0 || stats.linkedinErrors > 0) && (
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
-            LinkedIn Publishing Success Rate
-          </h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1 bg-slate-100 dark:bg-white/[0.06] rounded-full h-3 overflow-hidden">
-              <div
-                className="bg-green-500 dark:bg-green-400 h-full rounded-full transition-all"
-                style={{ width: `${stats.successRate}%` }}
-              />
-            </div>
-            <span className="text-sm font-bold text-slate-900 dark:text-gray-100 w-12 text-right">
-              {stats.successRate}%
-            </span>
-          </div>
-          <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
-            {stats.linkedinPublished} published &middot; {stats.linkedinErrors} errors
+    <div className="space-y-7">
+      {/* ═══ CHASSIS ════════════════════════════════════════════════════════ */}
+      <section className="animate-rise-in divide-y divide-line overflow-hidden rounded-panel border border-line bg-surface shadow-e1 motion-reduce:animate-none dark:shadow-none">
+        <div className="px-7 py-6">
+          <p className="tabular text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+            Analytics · last 90 days
+          </p>
+          <h1 className="mt-2 font-display text-[28px] font-bold leading-[1.1] tracking-[-0.03em] text-ink">
+            Content analytics
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-ink-muted">
+            How much you are writing and how reliably it reaches LinkedIn. Reach and
+            engagement are not shown because Kruti cannot read them yet &mdash; see the last
+            section.
           </p>
         </div>
-      )}
 
-      {/* Funnel + Post Types - 2 column grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Publishing Funnel */}
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-            Publishing Funnel
-          </h3>
-          <div className="space-y-4">
-            {["draft", "ready", "published"].map((status) => {
-              const count = postsByStatus[status] || 0;
-              const pct = Math.round((count / totalByStatus) * 100);
-              return (
-                <div key={status}>
-                  <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-slate-600 dark:text-slate-400 font-medium">
-                      {STATUS_LABELS[status] || status}
-                    </span>
-                    <span className="text-slate-900 dark:text-gray-200 font-semibold tabular-nums">
-                      {count} <span className="text-slate-400 dark:text-slate-500 font-normal">({pct}%)</span>
-                    </span>
-                  </div>
-                  <div className="bg-slate-100 dark:bg-white/[0.06] rounded-full h-3 overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full transition-all", STATUS_COLORS[status] || "bg-gray-300")}
-                      style={{ width: `${Math.max(pct > 0 ? 3 : 0, pct)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Post Type Distribution */}
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-          <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-            Post Type Distribution
-          </h3>
-          <div className="space-y-4">
-            {Object.entries(postsByType)
-              .sort((a, b) => b[1] - a[1])
-              .map(([type, count]) => {
-                const pct = Math.round((count / totalByType) * 100);
-                const colorClasses = getPostTypeColor(type);
-                return (
-                  <div key={type}>
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-medium", colorClasses)}>
-                        {TYPE_LABELS[type] || type}
-                      </span>
-                      <span className="text-slate-900 dark:text-gray-200 font-semibold tabular-nums">
-                        {count} <span className="text-slate-400 dark:text-slate-500 font-normal">({pct}%)</span>
-                      </span>
-                    </div>
-                    <div className="bg-slate-100 dark:bg-white/[0.06] rounded-full h-3 overflow-hidden">
-                      <div
-                        className="bg-blue-600 dark:bg-blue-500 h-full rounded-full transition-all"
-                        style={{ width: `${Math.max(pct > 0 ? 3 : 0, pct)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            {Object.keys(postsByType).length === 0 && (
-              <p className="text-xs text-slate-400 dark:text-slate-500 italic">No posts yet</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Weekly Activity Chart */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-          Weekly Activity
-        </h3>
-        {hasAnyWeeklyData ? (
-          <div className="flex items-end gap-2 h-44">
-            {weeklyActivity.map((week) => {
-              const createdH = week.created > 0
-                ? Math.max(8, Math.round((week.created / maxWeeklyCount) * 140))
-                : 0;
-              const publishedH = week.published > 0
-                ? Math.max(8, Math.round((week.published / maxWeeklyCount) * 140))
-                : 0;
-
-              return (
-                <div key={week.weekLabel} className="flex-1 flex flex-col items-center gap-1 min-w-0">
-                  {/* Bar column - stacked from bottom */}
-                  <div className="w-full flex items-end justify-center gap-[2px] h-36">
-                    {/* Created bar */}
-                    <div
-                      className={cn(
-                        "flex-1 max-w-5 bg-slate-300 dark:bg-white/20 rounded-t transition-all",
-                        createdH === 0 && "invisible"
-                      )}
-                      style={{ height: `${createdH}px` }}
-                      title={`${week.created} created`}
-                    />
-                    {/* Published bar */}
-                    <div
-                      className={cn(
-                        "flex-1 max-w-5 bg-blue-600 dark:bg-blue-500 rounded-t transition-all",
-                        publishedH === 0 && "invisible"
-                      )}
-                      style={{ height: `${publishedH}px` }}
-                      title={`${week.published} published`}
-                    />
-                  </div>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate w-full text-center">
-                    {week.weekLabel}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center h-36">
-            <p className="text-sm text-slate-400 dark:text-slate-500 italic">No activity in the last 8 weeks</p>
-          </div>
-        )}
-        <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 dark:border-white/10">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-slate-300 dark:bg-white/20" />
-            <span className="text-xs text-slate-500 dark:text-slate-400">Created</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm bg-blue-600 dark:bg-blue-500" />
-            <span className="text-xs text-slate-500 dark:text-slate-400">Published to LinkedIn</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Calendar Heatmap */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-        <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-          Posting Activity (Last 90 Days)
-        </h3>
-        <div className="overflow-x-auto pb-1">
-          <div
-            className="grid gap-[3px]"
-            style={{
-              gridTemplateRows: "repeat(7, 14px)",
-              gridAutoFlow: "column",
-              gridAutoColumns: "14px",
-            }}
-          >
-            {calendarHeatmap.map((day) => (
-              <div
-                key={day.date}
-                className={cn("w-[14px] h-[14px] rounded-[3px]", heatmapColor(day.count))}
-                title={`${day.date}: ${day.count} post${day.count !== 1 ? "s" : ""}`}
-              />
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 mt-3">
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 mr-1">Less</span>
-          <div className="w-[14px] h-[14px] rounded-[3px] bg-slate-100 dark:bg-white/[0.06]" />
-          <div className="w-[14px] h-[14px] rounded-[3px] bg-green-200 dark:bg-green-900/60" />
-          <div className="w-[14px] h-[14px] rounded-[3px] bg-green-400 dark:bg-green-700" />
-          <div className="w-[14px] h-[14px] rounded-[3px] bg-green-600 dark:bg-green-500" />
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-1">More</span>
-        </div>
-      </div>
-
-      {/* Engagement Metrics - hidden entirely until LinkedIn actually syncs data */}
-      {engagement?.totals.hasSyncedData && (
-        <>
-          {/* Engagement Summary Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: "Total Likes", value: engagement.totals.likes, icon: Heart, color: "text-red-500 dark:text-red-400", bg: "bg-red-50 dark:bg-red-900/30" },
-              { label: "Comments", value: engagement.totals.comments, icon: MessageCircle, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
-              { label: "Shares", value: engagement.totals.shares, icon: Share2, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-900/30" },
-              { label: "Impressions", value: engagement.totals.impressions, icon: Eye, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-900/30" },
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-                <div className="flex items-center gap-3">
-                  <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", bg)}>
-                    <Icon className={cn("w-5 h-5", color)} />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-gray-100">
-                      {value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
-                    </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{label}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Performance by Post Type */}
-          {engagement.byType && engagement.byType.length > 0 && (
-            <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                Performance by Post Type
-              </h3>
-              <div className="space-y-3">
-                {engagement.byType
-                  .sort((a, b) => b.avgEngagement - a.avgEngagement)
-                  .map((t) => {
-                    const total = t.likes + t.comments + t.shares;
-                    const maxTotal = Math.max(1, ...engagement.byType.map((x) => x.likes + x.comments + x.shares));
-                    const barWidth = Math.max(3, Math.round((total / maxTotal) * 100));
-                    return (
-                      <div key={t.postType}>
-                        <div className="flex items-center justify-between text-xs mb-1.5">
-                          <span className={cn("px-2 py-0.5 rounded-md border text-[10px] font-medium", getPostTypeColor(t.postType))}>
-                            {TYPE_LABELS[t.postType] || t.postType}
-                          </span>
-                          <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-                            <span>{t.count} posts</span>
-                            <span className="font-semibold text-blue-600 dark:text-blue-400">{t.avgEngagement}% eng.</span>
-                          </div>
-                        </div>
-                        <div className="bg-slate-100 dark:bg-white/[0.06] rounded-full h-3 overflow-hidden">
-                          <div
-                            className="bg-gradient-to-r from-blue-600 to-blue-700 h-full rounded-full transition-all"
-                            style={{ width: `${barWidth}%` }}
-                          />
-                        </div>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-slate-400 dark:text-slate-500">
-                          <span>{t.likes} likes</span>
-                          <span>{t.comments} comments</span>
-                          <span>{t.shares} shares</span>
-                          <span>{t.impressions} impressions</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
+        <div className="grid grid-cols-4 divide-x divide-line">
+          {[
+            { label: "Total posts", value: stats.totalPosts, hint: "all time" },
+            { label: "Published", value: stats.linkedinPublished, hint: "reached LinkedIn" },
+            { label: "This week", value: stats.postsThisWeek, hint: "written since Monday" },
+            { label: "Weekly average", value: stats.avgPostsPerWeek, hint: "over 8 weeks" },
+          ].map((s) => (
+            <div key={s.label} className="px-5 py-4">
+              <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
+                {s.label}
+              </p>
+              <p className="tabular mt-2 font-display text-[26px] font-bold leading-none tracking-[-0.02em] text-ink">
+                {s.value}
+              </p>
+              <p className="mt-1.5 text-[11px] text-ink-muted">{s.hint}</p>
             </div>
-          )}
+          ))}
+        </div>
+      </section>
 
-          {/* Top Posts by Engagement */}
-          {engagement.byPost.length > 0 && (
-            <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-5">
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                Top Posts by Engagement
-              </h3>
-              <div className="space-y-3">
-                {engagement.byPost
-                  .sort((a, b) => (b.likes + b.comments + b.shares) - (a.likes + a.comments + a.shares))
-                  .slice(0, 5)
-                  .map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 p-3 bg-slate-50 dark:bg-white/[0.06] rounded-xl">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">{p.title}</p>
-                        <span className={cn("text-[10px] px-2 py-0.5 rounded-md border font-medium", getPostTypeColor(p.postType))}>
-                          {TYPE_LABELS[p.postType] || p.postType}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">
-                        <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-red-400" />{p.likes}</span>
-                        <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3 text-blue-400" />{p.comments}</span>
-                        <span className="flex items-center gap-1"><Share2 className="w-3 h-3 text-green-400" />{p.shares}</span>
-                        {p.engagementRate > 0 && (
-                          <span className="font-semibold text-blue-600 dark:text-blue-400">{p.engagementRate}%</span>
+      <div
+        className="grid animate-rise-in grid-cols-[minmax(0,1fr)_320px] gap-7 motion-reduce:animate-none"
+        style={{ animationDelay: "70ms" }}
+      >
+        <div className="min-w-0 space-y-7">
+          {/* ── Production over time ────────────────────────────────────── */}
+          <section>
+            <RuleHeader
+              label="Posts written each week"
+              trailing={
+                <span className="flex items-center gap-3 text-[11px] text-ink-muted">
+                  <span className="flex items-center gap-1.5">
+                    <span className="block h-2 w-3 rounded-sm bg-accent/35" />
+                    Written
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="block h-2 w-3 rounded-sm bg-success" />
+                    Published
+                  </span>
+                </span>
+              }
+            />
+            {weeklyActivity.every((w) => w.created === 0) ? (
+              <p className="py-6 text-[13px] text-ink-muted">
+                Nothing written in the last eight weeks.
+              </p>
+            ) : (
+              <div className="flex h-[168px] items-end gap-2">
+                {weeklyActivity.map((w) => {
+                  const h = Math.round((140 * w.created) / weekMax);
+                  const pub = w.created > 0 ? Math.round((h * w.published) / w.created) : 0;
+                  return (
+                    <div key={w.weekLabel} className="flex min-w-0 flex-1 flex-col items-center">
+                      <span className="tabular mb-1 text-[10.5px] font-semibold text-ink">
+                        {w.created > 0 ? w.created : ""}
+                      </span>
+                      <div
+                        title={`Week of ${w.weekLabel}: ${w.created} written, ${w.published} published`}
+                        className="flex w-full max-w-[44px] flex-col justify-end rounded-t"
+                        style={{ height: Math.max(h, 2) }}
+                      >
+                        {/* 2px surface gap between the segments, per the mark spec */}
+                        <span
+                          className="w-full rounded-t bg-accent/35"
+                          style={{ height: Math.max(h - pub - (pub > 0 ? 2 : 0), 0) }}
+                        />
+                        {pub > 0 && <span className="h-0.5 w-full" />}
+                        {pub > 0 && (
+                          <span className="w-full rounded-b-sm bg-success" style={{ height: pub }} />
                         )}
                       </div>
+                      <span className="tabular mt-2 truncate text-[9.5px] text-ink-muted">
+                        {w.weekLabel}
+                      </span>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* ── Writing days ───────────────────────────────────────────── */}
+          <section>
+            <RuleHeader
+              label="Days you wrote"
+              trailing={
+                <span className="flex items-center gap-1.5 text-[11px] text-ink-muted">
+                  Fewer
+                  {[0, 1, 2, 3, 4].map((n) => (
+                    <span key={n} className={cn("block h-2.5 w-2.5 rounded-[2px]", heatStep(n))} />
                   ))}
+                  More
+                </span>
+              }
+            />
+            <div className="flex gap-1">
+              {heatWeeks.map((week, i) => (
+                <div key={i} className="flex flex-col gap-1">
+                  {week.map((d) => (
+                    <span
+                      key={d.date}
+                      title={`${d.date}: ${d.count} ${d.count === 1 ? "post" : "posts"}`}
+                      className={cn("block h-3.5 w-3.5 rounded-[2px]", heatStep(d.count))}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-ink-muted">
+              Each square is one day over the last 90, darker where you wrote more.
+            </p>
+          </section>
+
+          {/* ── Engagement, stated honestly ─────────────────────────────── */}
+          <section>
+            <RuleHeader label="Reach and engagement" />
+            <div className="flex items-start gap-3 border-l-2 border-line-strong pl-4">
+              <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-ink-muted" />
+              <div>
+                <p className="text-[14px] font-semibold text-ink">Not available yet.</p>
+                <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-ink-muted">
+                  Likes, comments, shares and impressions are stored on every post, but nothing
+                  fills them in: Kruti signs in with permission to publish on your behalf, not to
+                  read how a post performed. That needs a different LinkedIn permission
+                  (<span className="tabular">r_member_social</span>) which this app has not been
+                  granted.
+                </p>
+                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-ink-muted">
+                  Rather than show you a page of zeros, this section stays empty until the data is
+                  real. Everything above is measured from your own posts and is accurate.
+                </p>
               </div>
             </div>
-          )}
-        </>
-      )}
+          </section>
+        </div>
+
+        {/* ── Right rail ───────────────────────────────────────────────── */}
+        <aside className="space-y-7">
+          <section>
+            <RuleHeader label="Publishing reliability" />
+            {attempted === 0 ? (
+              <p className="text-[13px] text-ink-muted">
+                Nothing has been sent to LinkedIn yet.
+              </p>
+            ) : (
+              <>
+                <p className="tabular font-display text-[34px] font-bold leading-none tracking-[-0.03em] text-ink">
+                  {stats.successRate}
+                  <span className="text-[20px] text-ink-muted">%</span>
+                </p>
+                <p className="mt-1.5 text-[12px] text-ink-muted">
+                  of {attempted} attempts reached LinkedIn
+                </p>
+                <div className="mt-4 flex h-2 gap-0.5 overflow-hidden rounded-full">
+                  <span
+                    className="bg-success"
+                    style={{ width: `${(stats.linkedinPublished / attempted) * 100}%` }}
+                  />
+                  {stats.linkedinErrors > 0 && (
+                    <span
+                      className="bg-danger"
+                      style={{ width: `${(stats.linkedinErrors / attempted) * 100}%` }}
+                    />
+                  )}
+                </div>
+                <ul className="mt-3 space-y-1.5">
+                  <li className="flex items-center gap-2 text-[12px] text-ink-muted">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+                    <span className="flex-1">Published</span>
+                    <span className="tabular font-semibold text-ink">
+                      {stats.linkedinPublished}
+                    </span>
+                  </li>
+                  <li className="flex items-center gap-2 text-[12px] text-ink-muted">
+                    <AlertCircle className="h-3.5 w-3.5 text-danger" />
+                    <span className="flex-1">Failed</span>
+                    <span className="tabular font-semibold text-ink">{stats.linkedinErrors}</span>
+                  </li>
+                </ul>
+                {stats.linkedinErrors > 0 && (
+                  <Link
+                    href="/posts?status=ready"
+                    className="mt-3 inline-block text-[12px] font-semibold text-accent hover:underline"
+                  >
+                    See what failed →
+                  </Link>
+                )}
+              </>
+            )}
+          </section>
+
+          <section>
+            <RuleHeader label="Where your posts are" />
+            <div className="flex h-2 gap-0.5 overflow-hidden rounded-full">
+              {STATUS_ROWS.map((r) => {
+                const v = postsByStatus[r.key] ?? 0;
+                if (v === 0) return null;
+                return (
+                  <span
+                    key={r.key}
+                    className={r.fill}
+                    style={{ width: `${(v / statusTotal) * 100}%` }}
+                  />
+                );
+              })}
+            </div>
+            <ul className="mt-3 space-y-2.5">
+              {STATUS_ROWS.map((r) => (
+                <li key={r.key} className="flex items-start gap-2">
+                  <span className={cn("mt-1.5 block h-2 w-2 flex-shrink-0 rounded-full", r.fill)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="text-[12.5px] font-semibold text-ink">{r.label}</span>
+                      <span className="tabular text-[12.5px] font-semibold text-ink">
+                        {postsByStatus[r.key] ?? 0}
+                      </span>
+                    </span>
+                    <span className="block text-[11px] leading-snug text-ink-muted">{r.help}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <RuleHeader label="What you write" />
+            {typeRows.length === 0 ? (
+              <p className="text-[13px] text-ink-muted">Nothing written yet.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {typeRows.map((t) => (
+                  <li key={t.type}>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-[12px] text-ink">
+                        {TYPE_LABELS[t.type] ?? t.type}
+                      </span>
+                      <span className="tabular text-[12px] font-semibold text-ink">{t.count}</span>
+                    </div>
+                    <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
+                      <div
+                        className="h-full rounded-full bg-accent"
+                        style={{ width: `${(t.count / typeMax) * 100}%` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }
