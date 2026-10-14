@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -12,6 +13,7 @@ import {
   Settings,
   LifeBuoy,
   LogOut,
+  Loader2,
   Shield,
   Moon,
   Sun,
@@ -48,6 +50,19 @@ interface SidebarProps {
 export default function Sidebar({ user, supportUnread = 0, profileCompletion = 100 }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  // Escape closes the confirmation, but not while the sign-out is already in
+  // flight - dismissing it then would leave the page looking signed in.
+  useEffect(() => {
+    if (!confirmSignOut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !signingOut) setConfirmSignOut(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmSignOut, signingOut]);
 
   return (
     <aside className="flex w-[288px] flex-shrink-0 flex-col border-r border-edge bg-card">
@@ -157,13 +172,60 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
             to leave. See SubscriptionLock / ALLOW_WHEN_LOCKED. */}
         <button
           data-allow-when-locked=""
-          onClick={() => signOut({ callbackUrl: "/" })}
+          onClick={() => setConfirmSignOut(true)}
           className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
           <LogOut className="h-[17px] w-[17px]" />
           Sign Out
         </button>
       </div>
+
+      {/* Signing out took one click and there is no undo - LinkedIn is the only
+          way back in. Carries the lock exemption too, or a locked user could
+          open this and not be able to answer it. */}
+      {confirmSignOut && (
+        <div
+          data-allow-when-locked=""
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !signingOut && setConfirmSignOut(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm space-y-4 rounded-card bg-card p-6 shadow-lift-lg"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signout-title"
+          >
+            <h3 id="signout-title" className="font-display text-lg font-bold text-text">
+              Sign out of Kruti?
+            </h3>
+            <p className="text-sm leading-relaxed text-text-2">
+              Anything you have saved stays where it is. You will need to sign in with
+              LinkedIn again to get back in.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmSignOut(false)}
+                className="ring-focus h-9 rounded-control border border-edge px-4 text-sm font-medium text-text-2 transition-colors hover:border-brand-edge hover:text-text"
+              >
+                Stay signed in
+              </button>
+              <button
+                onClick={() => {
+                  setSigningOut(true);
+                  signOut({ callbackUrl: "/" });
+                }}
+                disabled={signingOut}
+                className="ring-focus flex h-9 items-center gap-2 rounded-control bg-bad px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-70"
+              >
+                {signingOut && <Loader2 className="h-4 w-4 animate-spin" />}
+                {signingOut ? "Signing out..." : "Sign out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
