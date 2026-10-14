@@ -50,12 +50,12 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside className="flex w-[256px] flex-shrink-0 flex-col border-r border-edge bg-card">
+    <aside className="flex w-[288px] flex-shrink-0 flex-col border-r border-edge bg-card">
       {/* Logo */}
-      <div className="flex h-16 flex-shrink-0 items-center border-b border-edge-soft px-5">
+      <div className="flex h-20 flex-shrink-0 items-center justify-center border-b border-edge-soft px-5">
         <Link href="/dashboard" className="ring-focus flex items-center rounded-control">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-10 w-auto" />
+          <img src="/logo.png" alt="Kruti.io" className="h-[52px] w-auto" />
         </Link>
       </div>
 
