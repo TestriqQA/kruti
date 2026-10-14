@@ -115,6 +115,32 @@ function resolveArt(row: PostRow): OverviewArt {
 /** One hour of grace before a still-armed post counts as missed. */
 const MISSED_GRACE_MS = 60 * 60 * 1000;
 
+/**
+ * The state precedence, on its own, for callers that already hold a row and
+ * only need the verdict.
+ *
+ * Exported because the posts list derives state CLIENT-side. Shipping a
+ * server-derived state would silently break every optimistic update on that
+ * page: "mark ready" patches , and a row rendering a frozen server
+ *  would ignore it until the refetch landed.
+ */
+export function derivePostState(
+  row: Pick<PostRow, "status" | "postError" | "scheduledAt" | "postedToLinkedIn">,
+  now: Date
+): OverviewStatus {
+  const scheduled = row.scheduledAt ? new Date(row.scheduledAt) : null;
+  if (row.postedToLinkedIn || row.status === "published") return "published";
+  if (row.postError) return "failed";
+  if (
+    row.status === "ready" &&
+    scheduled &&
+    scheduled.getTime() < now.getTime() - MISSED_GRACE_MS
+  )
+    return "missed";
+  if (row.status === "ready") return "ready";
+  return "draft";
+}
+
 export function toOverviewPost(row: PostRow, timezone: string, now: Date): OverviewPost {
   const scheduled = row.scheduledAt ? new Date(row.scheduledAt) : null;
 
