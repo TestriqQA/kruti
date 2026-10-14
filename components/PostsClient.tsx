@@ -8,7 +8,8 @@ import {
   Trash2, Clock, CheckCircle, Loader2, X, AlertCircle,
   Image as ImageIcon, Copy, ArrowUpDown, Download,
 } from "lucide-react";
-import { cn, formatDate, getPostTypeColor, getStatusColor } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import { StatCard, Pill, StatusBadge } from "@/components/dashboard/bits";
 import PostImage from "@/components/PostImage";
 import GeneratePostsButton from "@/components/GeneratePostsButton";
 import { useGeneration } from "@/components/GenerationProvider";
@@ -350,69 +351,142 @@ export default function PostsClient({
 
   const selectedCount = selected.size;
 
+  // Readings for the four cards. Derived from the live `posts` array, so an
+  // optimistic bulk update moves them at the same instant it moves the rows.
+  const readyPosts = posts.filter((p) => !p.postedToLinkedIn && p.status === "ready");
+  const draftPosts = posts.filter((p) => !p.postedToLinkedIn && p.status === "draft");
+  const publishedPosts = posts.filter((p) => p.postedToLinkedIn || p.status === "published");
+  const nextOut = [...readyPosts]
+    .filter((p) => p.scheduledAt)
+    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())[0];
+  const weeksHeld = new Set(posts.map((p) => p.weekLabel)).size;
+  const shortDate = (d: Date | string) =>
+    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const statusOf = (p: Post): "scheduled" | "draft" | "published" =>
+    p.postedToLinkedIn || p.status === "published"
+      ? "published"
+      : p.status === "ready"
+        ? "scheduled"
+        : "draft";
+
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-text flex items-center gap-2">
-            <FileText className="w-6 h-6 text-brand" />
+      <div className="flex flex-wrap items-start justify-between gap-5 pt-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
             All Posts
           </h1>
-          <p className="text-text-2 mt-1">{posts.length} posts generated</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-text-2">
+            Everything you have written, newest week first. Open any post to edit it, add an image
+            or mark it ready to publish.
+          </p>
         </div>
-        {/* Generate without going back to the dashboard. */}
-        <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
+        <div className="flex flex-shrink-0 items-start">
+          {/* Generate without going back to the dashboard. */}
+          <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-48">
-          <Search className="w-4 h-4 text-text-3 absolute left-3 top-1/2 -translate-y-1/2" />
+      {/* Readings */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Total posts"
+          value={posts.length}
+          note={`across ${weeksHeld} ${weeksHeld === 1 ? "week" : "weeks"}`}
+          icon={FileText}
+          tone="brand"
+          href="/posts"
+        />
+        <StatCard
+          label="Ready to post"
+          value={readyPosts.length}
+          note={nextOut?.scheduledAt ? `next goes out ${shortDate(nextOut.scheduledAt)}` : "nothing queued"}
+          icon={CheckCircle}
+          tone="ok"
+          href="/posts"
+        />
+        <StatCard
+          label="Published"
+          value={publishedPosts.length}
+          note="live on LinkedIn"
+          icon={Linkedin}
+          tone="violet"
+          href="/posts"
+        />
+        <StatCard
+          label="Drafts"
+          value={draftPosts.length}
+          note={draftPosts.length > 0 ? "waiting for your review" : "nothing waiting"}
+          icon={Clock}
+          tone="warn"
+          href="/posts"
+        />
+      </div>
+
+      {/* Filters. Every control is labelled and looks like a control. */}
+      <div className="card flex flex-wrap items-center gap-3 px-4 py-3">
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search posts..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card"
+            placeholder="Search titles and post text…"
+            className="ring-focus h-10 w-full rounded-control border border-edge bg-card pl-9 pr-3 text-[13.5px] text-text placeholder:text-text-3"
           />
         </div>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
-        >
-          <option value="all">All Types</option>
-          <option value="thought-leadership">Thought Leadership</option>
-          <option value="tips">Tips</option>
-          <option value="story">Story</option>
-          <option value="question">Question</option>
-          <option value="listicle">Listicle</option>
-        </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
-        >
-          <option value="all">All Status</option>
-          <option value="draft">Draft</option>
-          <option value="ready">Ready</option>
-          <option value="published">Published</option>
-        </select>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
-        >
-          <option value="default">Sort: Default</option>
-          <option value="date-asc">Date (Oldest first)</option>
-          <option value="date-desc">Date (Newest first)</option>
-        </select>
+
+        <label className="flex items-center gap-2">
+          <span className="eyebrow">Type</span>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="all">All types</option>
+            <option value="thought-leadership">Thought Leadership</option>
+            <option value="tips">Tips</option>
+            <option value="story">Story</option>
+            <option value="question">Question</option>
+            <option value="listicle">Listicle</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="eyebrow">Status</span>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="all">All status</option>
+            <option value="draft">Draft</option>
+            <option value="ready">Ready</option>
+            <option value="published">Published</option>
+          </select>
+        </label>
+
+        <label className="flex items-center gap-2">
+          <span className="eyebrow">Sort</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="default">By week</option>
+            <option value="date-asc">Date, oldest first</option>
+            <option value="date-desc">Date, newest first</option>
+          </select>
+        </label>
+
         <a
           href="/api/content/export"
           download
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-edge rounded-control hover:bg-card-muted transition-colors text-text-2"
-          title="Export all posts as CSV"
+          title="Export every post as CSV"
+          className="ring-focus flex h-10 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
-          <Download className="w-4 h-4" />
+          <Download className="h-4 w-4" />
           Export CSV
         </a>
       </div>
@@ -468,9 +542,9 @@ export default function PostsClient({
           <button
             onClick={() => setShowScheduleModal(true)}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-edge rounded-control hover:bg-white transition-colors disabled:opacity-50"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
           >
-            <Calendar className="w-3.5 h-3.5 text-text-2" />
+            <Calendar className="h-3.5 w-3.5 text-text-3" />
             Schedule
           </button>
 
@@ -478,36 +552,36 @@ export default function PostsClient({
           <button
             onClick={handleBulkImageGen}
             disabled={bulkLoading || imageGenerating}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded-control hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
           >
             {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            {imageGenerating ? "Generating..." : "Generate Images"}
+            {imageGenerating ? "Generating…" : "Generate images"}
           </button>
 
           {/* Mark as Ready */}
           <button
             onClick={() => handleBulkStatus("ready")}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-control hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-ok px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-            Mark Ready
+            Mark ready
           </button>
 
           {/* Mark as Draft */}
           <button
             onClick={() => handleBulkStatus("draft")}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-edge rounded-control hover:bg-white transition-colors disabled:opacity-50"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
           >
-            Mark Draft
+            Mark draft
           </button>
 
           {/* Delete */}
           <button
             onClick={() => setShowDeleteConfirm(true)}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-bad text-white rounded-control hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-bad px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete
@@ -516,7 +590,7 @@ export default function PostsClient({
           {/* Clear */}
           <button
             onClick={clearSelection}
-            className="flex items-center gap-1 text-sm text-text-2 hover:text-text"
+            className="ring-focus flex h-9 w-9 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-card-muted hover:text-text"
           >
             <X className="w-4 h-4" />
           </button>
@@ -527,19 +601,19 @@ export default function PostsClient({
       <div className="card overflow-hidden">
         {/* Table header with select-all */}
         {sorted.length > 0 && (
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-edge-soft bg-card-muted">
+          <div className="flex items-center gap-2.5 border-b border-edge-soft px-5 py-3">
             <button
               onClick={toggleSelectAll}
-              className="flex-shrink-0 text-text-3 hover:text-blue-600 transition-colors"
+              className="flex-shrink-0 text-text-3 hover:text-brand transition-colors"
               title={allFilteredSelected ? "Deselect all" : "Select all"}
             >
               {allFilteredSelected ? (
-                <CheckSquare className="w-4 h-4 text-blue-600" />
+                <CheckSquare className="w-4 h-4 text-brand" />
               ) : (
                 <Square className="w-4 h-4" />
               )}
             </button>
-            <span className="text-xs text-text-2">
+            <span className="text-[12.5px] font-semibold text-text-2">
               {allFilteredSelected ? "Deselect all" : `Select all ${sorted.length}`}
             </span>
           </div>
@@ -547,7 +621,7 @@ export default function PostsClient({
 
         {sorted.length === 0 ? (
           <div className="py-16 text-center">
-            <FileText className="w-12 h-12 text-slate-200 dark:text-white/10 mx-auto mb-3" />
+            <FileText className="mx-auto mb-3 h-10 w-10 text-text-3" />
             <p className="text-text-2">No posts found.</p>
           </div>
         ) : (
@@ -555,70 +629,76 @@ export default function PostsClient({
             {sorted.map((post) => {
               const isSelected = selected.has(post.id);
               return (
-                <div key={post.id} className={cn("flex items-start gap-3 px-5 py-4 transition-colors", isSelected ? "bg-brand-tint" : "hover:bg-card-muted")}>
-                  {/* Checkbox */}
+                <div
+                  key={post.id}
+                  className={cn(
+                    "group flex items-start gap-3.5 px-5 py-4 transition-colors",
+                    isSelected ? "bg-brand-tint" : "hover:bg-card-muted"
+                  )}
+                >
                   <button
                     onClick={(e) => toggleSelect(post.id, e)}
-                    className="flex-shrink-0 mt-0.5 text-text-3 dark:text-white/10 hover:text-blue-600 transition-colors"
+                    aria-label={isSelected ? "Deselect post" : "Select post"}
+                    className="ring-focus mt-1 flex-shrink-0 rounded text-text-3 transition-colors hover:text-brand"
                   >
                     {isSelected ? (
-                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                      <CheckSquare className="h-4 w-4 text-brand" />
                     ) : (
-                      <Square className="w-4 h-4" />
+                      <Square className="h-4 w-4" />
                     )}
                   </button>
 
-                  {/* Post content - clicking navigates to editor */}
-                  <Link
-                    href={`/posts/${post.id}`}
-                    className="flex items-start gap-4 flex-1 min-w-0"
-                  >
+                  <Link href={`/posts/${post.id}`} className="ring-focus flex min-w-0 flex-1 items-start gap-4 rounded-control">
                     {post.imageUrl ? (
                       <PostImage
                         src={post.imageUrl}
-                        className="w-12 h-12 rounded-control object-cover flex-shrink-0"
-                        iconClassName="w-5 h-5"
+                        className="h-14 w-14 flex-shrink-0 rounded-control object-cover"
+                        iconClassName="h-5 w-5"
                       />
                     ) : (
-                      <div className={cn("w-12 h-12 rounded-control flex items-center justify-center flex-shrink-0", getPostTypeColor(post.postType))}>
-                        <FileText className="w-5 h-5" />
-                      </div>
+                      <span className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-control bg-card-muted">
+                        <FileText className="h-5 w-5 text-text-3" />
+                      </span>
                     )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-text truncate">{post.title}</p>
+
+                    <span className="min-w-0 flex-1">
+                      {/* Wraps in full. The title is the work; cutting it at a
+                          fixed width is the habit this redesign removes. */}
+                      <span className="block text-[14.5px] font-semibold leading-snug text-text">
+                        {post.title}
+                      </span>
+                      <span className="mt-2 flex flex-wrap items-center gap-2">
+                        {(post.style || post.postType) && <Pill>{post.style || post.postType}</Pill>}
+                        <span className="text-[11.5px] text-text-3">{post.weekLabel}</span>
                         {post.postedToLinkedIn && (
-                          <span className="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-ok-tint text-ok">
-                            <Linkedin className="w-3 h-3" />
+                          <span className="flex items-center gap-1 text-[11.5px] font-semibold text-ok">
+                            <Linkedin className="h-3 w-3" />
                             Posted
                           </span>
                         )}
-                      </div>
-                      <p className="text-xs text-text-2 mt-0.5 line-clamp-1">{post.body.slice(0, 100)}</p>
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
-                          {post.style || post.postType}
-                        </span>
-                        <span className={cn("text-xs px-2 py-0.5 rounded-full", getStatusColor(post.status))}>
-                          {post.status}
-                        </span>
-                        <span className="text-xs text-text-3">{post.weekLabel}</span>
-                      </div>
-                      <InlineSchedule
-                        post={post}
-                        onUpdate={(id, scheduledAt) => {
-                          setPosts((prev) =>
-                            prev.map((p) => p.id === id ? { ...p, scheduledAt } : p)
-                          );
-                        }}
-                      />
-                    </div>
+                      </span>
+                      <span className="mt-1.5 block">
+                        <InlineSchedule
+                          post={post}
+                          onUpdate={(id, scheduledAt) => {
+                            setPosts((prev) =>
+                              prev.map((p) => (p.id === id ? { ...p, scheduledAt } : p))
+                            );
+                          }}
+                        />
+                      </span>
+                    </span>
                   </Link>
+
+                  <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">
+                    <StatusBadge kind={statusOf(post)} />
+                  </div>
+
                   {/* Duplicate button */}
                   {!post.postedToLinkedIn && (
                     <button
                       onClick={(e) => handleDuplicate(post.id, e)}
-                      className="flex-shrink-0 mt-0.5 p-1.5 text-text-3 dark:text-white/10 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-control transition-colors"
+                      className="ring-focus mt-0.5 flex-shrink-0 rounded-control p-1.5 text-text-3 opacity-0 transition-all hover:bg-card-muted hover:text-brand group-hover:opacity-100"
                       title="Duplicate post"
                     >
                       <Copy className="w-4 h-4" />
