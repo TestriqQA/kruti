@@ -28,6 +28,7 @@ import {
   groupConversation,
   REPLY_TTL_DAYS,
   MAX_REPLY_CHARS,
+  ticketCategoryLabel,
   type TicketAttachment,
 } from "@/lib/support";
 
@@ -44,6 +45,7 @@ export interface ModalTicket {
   description: string;
   screenshots: string | null;
   status: string;
+  category: string;
   createdAt: string;
   updatedAt: string;
   replies: ModalReply[];
@@ -170,7 +172,13 @@ export default function TicketDetailModal({
 
         {/* ── Body ─────────────────────────────────────────────── */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-          <div className="grid gap-3 text-xs sm:grid-cols-2">
+          <div className="grid gap-3 text-xs sm:grid-cols-3">
+            <div>
+              <span className="text-gray-400 dark:text-gray-500">Category</span>
+              <p className="mt-0.5 text-gray-700 dark:text-gray-300">
+                {ticketCategoryLabel(ticket.category)}
+              </p>
+            </div>
             <div>
               <span className="text-gray-400 dark:text-gray-500">Raised</span>
               <p className="mt-0.5 text-gray-700 dark:text-gray-300">

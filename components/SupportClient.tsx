@@ -23,6 +23,7 @@ import { StatCard } from "@/components/dashboard/bits";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/utils";
 import {
+  TICKET_CATEGORIES,
   MAX_SCREENSHOTS,
   MAX_TOTAL_BYTES,
   MAX_ATTACHMENT_BYTES,
@@ -92,6 +93,7 @@ export default function SupportClient({
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [picked, setPicked] = useState<Picked[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +119,8 @@ export default function SupportClient({
 
   const totalBytes = picked.reduce((n, p) => n + p.file.size, 0);
   const overBudget = totalBytes > MAX_TOTAL_BYTES;
-  const canSubmit = description.trim().length >= 10 && !overBudget && !submitting;
+  const canSubmit =
+    category !== "" && description.trim().length >= 10 && !overBudget && !submitting;
 
   // Tracked per REPLY, not per ticket. Latching on the ticket id meant the
   // second and every later reply on a ticket the user had already opened was
@@ -253,7 +256,7 @@ export default function SupportClient({
       const res = await fetch("/api/support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: description.trim(), attachments }),
+        body: JSON.stringify({ category, description: description.trim(), attachments }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not raise the ticket.");
@@ -261,6 +264,7 @@ export default function SupportClient({
       picked.forEach((p) => URL.revokeObjectURL(p.preview));
       setPicked([]);
       setDescription("");
+      setCategory("");
       toast("Ticket raised. Our reply will appear here.", "success");
       router.refresh();
     } catch (err) {
@@ -449,6 +453,43 @@ export default function SupportClient({
 
             <div>
               <label
+                htmlFor="ticket-category"
+                className="block text-sm font-medium text-text mb-1.5"
+              >
+                What is this about?
+              </label>
+              <div className="relative">
+                <select
+                  id="ticket-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className={cn(
+                    "w-full appearance-none rounded-control border border-edge bg-card py-2.5 pl-3 pr-10 text-sm",
+                    "focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25",
+                    category === "" ? "text-text-3" : "text-text"
+                  )}
+                >
+                  <option value="" disabled>
+                    Choose the area your problem is in
+                  </option>
+                  {TICKET_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value} className="text-text">
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
+              </div>
+              {/* The hint for the chosen area, so the label does not have to
+                  carry every example it covers. */}
+              <p className="mt-1.5 text-xs text-text-3">
+                {TICKET_CATEGORIES.find((c) => c.value === category)?.hint ??
+                  "Picking the right area gets your ticket to the right person faster."}
+              </p>
+            </div>
+
+            <div>
+              <label
                 htmlFor="ticket-description"
                 className="block text-sm font-medium text-text mb-1.5"
               >
@@ -554,10 +595,13 @@ export default function SupportClient({
                 )}
                 {submitting ? "Sending..." : "Raise ticket"}
               </button>
-              {description.trim().length > 0 && description.trim().length < 10 && (
-                <span className="text-xs text-text-3">
-                  A little more detail, please.
-                </span>
+              {category === "" ? (
+                <span className="text-xs text-text-3">Pick an area first.</span>
+              ) : (
+                description.trim().length > 0 &&
+                description.trim().length < 10 && (
+                  <span className="text-xs text-text-3">A little more detail, please.</span>
+                )
               )}
             </div>
           </section>
