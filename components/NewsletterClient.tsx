@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import {
   Mail, Sparkles, Loader2, ChevronDown, ChevronUp,
   Copy, CheckCircle, Calendar, Send, Trash2, Clock, X,
-  Pencil, Save,
+  Pencil, Save, FileText,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
+import { StatCard, StatusBadge } from "@/components/dashboard/bits";
 import { raiseProfileGate } from "@/lib/profile-gate";
 import { useSession } from "next-auth/react";
 
@@ -54,6 +55,16 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
   const [generating, setGenerating] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(initial[0]?.id ?? null);
 
+  // Derived from the live list, so generating or deleting an issue moves the
+  // readings at the same moment it moves the cards.
+  const scheduled = newsletters.filter((n) => n.status === "scheduled" && n.scheduledAt);
+  const scheduledCount = scheduled.length;
+  const sentCount = newsletters.filter((n) => n.status === "sent").length;
+  const draftCount = newsletters.filter((n) => n.status === "draft").length;
+  const nextSend = [...scheduled].sort(
+    (a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime()
+  )[0]?.scheduledAt;
+
   const monthName = new Date(currentYear, currentMonth - 1).toLocaleString("default", { month: "long" });
 
   async function handleGenerate() {
@@ -86,36 +97,75 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-text flex items-center gap-2">
-            <Mail className="w-6 h-6 text-brand" />
-            Newsletter Planner
+      <div className="flex flex-wrap items-start justify-between gap-5 pt-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
+            Newsletter
           </h1>
-          <p className="text-text-2 mt-1">{newsletters.length} newsletter{newsletters.length !== 1 ? "s" : ""} created</p>
+          <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+            A monthly issue written from your content pillars and profile. Edit it, schedule it,
+            and it sends itself.
+          </p>
         </div>
         <button
           onClick={handleGenerate}
           disabled={generating || isTrialExpired}
-          className="flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control font-medium hover:opacity-90 disabled:opacity-70"
+          className="btn-brand ring-focus flex h-12 flex-shrink-0 items-center gap-2.5 rounded-control px-6 text-[14.5px] font-semibold disabled:cursor-not-allowed"
           title={isTrialExpired ? "Subscribe to generate newsletters" : undefined}
         >
-          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-          {isTrialExpired ? "Subscribe to Generate" : `Generate ${monthName} Newsletter`}
+          {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {isTrialExpired ? "Subscribe to Generate" : `Generate ${monthName} issue`}
         </button>
       </div>
 
+      {/* Readings. Each card carries a line only it can say. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Issues"
+          value={newsletters.length}
+          note="written all time"
+          icon={Mail}
+          tone="brand"
+          href="/newsletter"
+        />
+        <StatCard
+          label="Scheduled"
+          value={scheduledCount}
+          note={nextSend ? `next sends ${formatDate(nextSend)}` : "nothing queued to send"}
+          icon={Clock}
+          tone="ok"
+          href="/newsletter"
+        />
+        <StatCard
+          label="Sent"
+          value={sentCount}
+          note={sentCount > 0 ? "delivered to your list" : "none sent yet"}
+          icon={Send}
+          tone="violet"
+          href="/newsletter"
+        />
+        <StatCard
+          label="Drafts"
+          value={draftCount}
+          note={draftCount > 0 ? "waiting for your review" : "nothing waiting"}
+          icon={FileText}
+          tone="warn"
+          href="/newsletter"
+        />
+      </div>
+
       {newsletters.length === 0 ? (
-        <div className="card p-12 text-center">
-          <Mail className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-text mb-2">No newsletters yet</h3>
-          <p className="text-text-2 mb-6">
-            Generate your first newsletter - AI creates it from your content pillars and profile.
+        <div className="card px-6 py-14 text-center">
+          <Mail className="mx-auto mb-4 h-10 w-10 text-text-3" />
+          <h3 className="font-display text-[18px] font-bold text-text">No issues yet</h3>
+          <p className="mx-auto mb-6 mt-2 max-w-md text-[13.5px] leading-relaxed text-text-2">
+            Your first issue is written from the content pillars in your current strategy and the
+            profile your posts already use.
           </p>
           <button
             onClick={handleGenerate}
             disabled={generating || isTrialExpired}
-            className="inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control font-medium"
+            className="btn-brand ring-focus inline-flex h-11 items-center gap-2 rounded-control px-5 text-[14px] font-semibold"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {isTrialExpired ? "Subscribe to Generate" : "Generate Newsletter"}
@@ -254,21 +304,21 @@ function NewsletterCard({
       <div className="card overflow-hidden">
         {/* Header row */}
         <div
-          className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-card-muted transition-colors"
+          className="flex cursor-pointer items-center justify-between gap-4 px-6 py-5 transition-colors hover:bg-card-muted"
           onClick={onToggle}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/30 rounded-control flex items-center justify-center flex-shrink-0">
-              <Mail className="w-5 h-5 text-purple-700 dark:text-purple-400" />
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control bg-violet-tint">
+              <Mail className="h-5 w-5 text-violet" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-text text-sm truncate">{newsletter.title}</p>
-              <p className="text-xs text-text-2 mt-0.5 flex items-center gap-1.5">
+              <p className="text-[15px] font-semibold leading-snug text-text">{newsletter.title}</p>
+              <p className="nums mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-2">
                 {formatDate(newsletter.createdAt)}
                 {" · "}
                 {statusBadge(newsletter.status)}
                 {newsletter.scheduledAt && newsletter.status === "scheduled" && (
-                  <span className="flex items-center gap-1 text-blue-600">
+                  <span className="flex items-center gap-1 text-brand">
                     <Clock className="w-3 h-3" />
                     {new Date(newsletter.scheduledAt).toLocaleString([], {
                       month: "short", day: "numeric",
@@ -283,14 +333,14 @@ function NewsletterCard({
           {/* Action buttons */}
           <div className="flex items-center gap-1.5 flex-shrink-0 ml-3" onClick={(e) => e.stopPropagation()}>
             {sendError && (
-              <span className="text-xs text-red-500 mr-1">{sendError}</span>
+              <span className="mr-1 text-[12px] text-bad">{sendError}</span>
             )}
             <button
               onClick={handleCopy}
               title="Copy text"
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-edge rounded-control hover:bg-card-muted transition-colors"
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[12.5px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
             >
-              {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-text-2" />}
+              {copied ? <CheckCircle className="h-3.5 w-3.5 text-ok" /> : <Copy className="w-3.5 h-3.5 text-text-2" />}
               {copied ? "Copied" : "Copy"}
             </button>
 
@@ -298,7 +348,7 @@ function NewsletterCard({
               <button
                 onClick={() => setShowScheduleModal(true)}
                 title="Schedule"
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-edge rounded-control hover:bg-card-muted transition-colors"
+                className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[12.5px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
               >
                 <Calendar className="w-3.5 h-3.5 text-text-2" />
                 {newsletter.status === "scheduled" ? "Reschedule" : "Schedule"}
