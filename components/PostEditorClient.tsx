@@ -973,24 +973,68 @@ export default function PostEditorClient({
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-5 pt-1">
-        <div className="min-w-0">
-          <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
-            Edit post
-          </h1>
-          <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
-            {scheduleLine}
-          </p>
-        </div>
-        <span
-          className={cn(
-            "mt-2 flex-shrink-0 rounded-full border px-3 py-1 text-[12.5px] font-medium capitalize",
-            getPostTypeColor(post.postType)
-          )}
+      {/* Header. Moving between posts is navigation, so it lives up here with
+          the title rather than in the bar of things you do to a post. */}
+      <div className="pt-1">
+        <button
+          onClick={() => router.push("/posts")}
+          className="ring-focus -ml-2 flex h-8 items-center gap-1.5 rounded-control px-2 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+          title="Back to the list of all your posts"
         >
-          {post.style || post.postType}
-        </span>
+          <ArrowLeft className="w-3.5 h-3.5" />
+          All posts
+        </button>
+
+        <div className="mt-2 flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
+            <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
+              Edit post
+            </h1>
+            <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+              {scheduleLine}
+            </p>
+          </div>
+
+          <div className="flex flex-shrink-0 flex-col items-end gap-2.5">
+            <span
+              className={cn(
+                "rounded-full border px-3 py-1 text-[12.5px] font-medium capitalize",
+                getPostTypeColor(post.postType)
+              )}
+            >
+              {post.style || post.postType}
+            </span>
+
+            {/* Steps through the same ordered list the posts page shows. The
+                count is here because "Previous"/"Next" on their own never said
+                what they moved between. */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
+                disabled={!prevPostId}
+                className="ring-focus flex h-8 items-center gap-1 rounded-control border border-edge px-2.5 text-[13px] text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                title={prevPostId ? "Open the previous post" : "This is the first post"}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                Previous post
+              </button>
+              {postIndex && postTotal ? (
+                <span className="nums px-2 text-xs text-text-3" title="Your posts, in scheduled order">
+                  {postIndex} of {postTotal}
+                </span>
+              ) : null}
+              <button
+                onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
+                disabled={!nextPostId}
+                className="ring-focus flex h-8 items-center gap-1 rounded-control border border-edge px-2.5 text-[13px] text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                title={nextPostId ? "Open the next post" : "This is the last post"}
+              >
+                Next post
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
       {/* Published banner */}
       {isPublished && (
@@ -1041,138 +1085,78 @@ export default function PostEditorClient({
       )}
 
       {/* Floating toolbar: navigation + actions, stays in view while scrolling */}
-      {/* Toolbar: where you are on top, what you can do underneath. */}
-      <div className="sticky top-0 z-30 space-y-2.5 rounded-card border border-edge bg-card/95 px-4 py-3 shadow-lift backdrop-blur-md">
-        {/* ── Navigation ─────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => router.push("/posts")}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
-            title="Back to the list of all your posts"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            All posts
-          </button>
+      {/* Toolbar: only what you do to this post. Navigation moved to the
+          header and deleting to Post details, which is what got this down to
+          one row. */}
+      <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 rounded-card border border-edge bg-card/95 px-4 py-3 shadow-lift backdrop-blur-md">
+        <button
+          onClick={handleCopy}
+          className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text"
+          title="Copy the post text to your clipboard"
+        >
+          {copied ? <CheckCircle className="w-4 h-4 text-ok" /> : <Copy className="w-4 h-4" />}
+          {copied ? "Copied!" : "Copy text"}
+        </button>
 
-          <span className="h-5 w-px bg-edge" aria-hidden />
-
-          {/* Steps through the same ordered list the posts page shows. The
-              count is here because "Prev"/"Next" on their own never said what
-              they moved between. */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
-              disabled={!prevPostId}
-              className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-              title={prevPostId ? "Open the previous post" : "This is the first post"}
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Previous post
-            </button>
-            {postIndex && postTotal ? (
-              <span className="nums px-2 text-xs text-text-3" title="Your posts, in scheduled order">
-                {postIndex} of {postTotal}
-              </span>
-            ) : null}
-            <button
-              onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
-              disabled={!nextPostId}
-              className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-              title={nextPostId ? "Open the next post" : "This is the last post"}
-            >
-              Next post
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {!isPublished && (
-            <div className="ml-auto flex items-center gap-1.5">
-              {autoSaveStatus === "saving" && (
-                <span className="text-xs text-text-3 flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Saving...
-                </span>
-              )}
-              {autoSaveStatus === "saved" && (
-                <span className="text-xs text-ok flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" />
-                  Saved
-                </span>
-              )}
-              {autoSaveStatus === "error" && (
-                <span className="text-xs text-bad flex items-center gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Save failed
-                </span>
-              )}
-            </div>
+        <button
+          onClick={handleRepurpose}
+          disabled={generatingRepurpose}
+          className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
+          title="Rewrite this post for other platforms"
+        >
+          {generatingRepurpose ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Repeat2 className="w-4 h-4" />
           )}
+          Repurpose
+        </button>
+
+        {/* Mirrors the Post Details dropdown - same state, so both stay in sync. */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="toolbar-status" className="text-xs text-text-2">
+            Status
+          </label>
+          <select
+            id="toolbar-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value)}
+            disabled={post.postedToLinkedIn || isTrialExpired}
+            className="select-field h-9 rounded-control border border-edge bg-card pl-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:cursor-not-allowed disabled:opacity-50"
+            title={
+              post.postedToLinkedIn
+                ? "Published posts cannot change status"
+                : "Post status - click Save to apply"
+            }
+          >
+            <option value="draft">Draft</option>
+            <option value="ready">Ready (auto-post)</option>
+            <option value="published">Published</option>
+          </select>
         </div>
 
-        {/* ── Actions ────────────────────────────────────────── */}
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={handleCopy}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text"
-            title="Copy the post text to your clipboard"
-          >
-            {copied ? <CheckCircle className="w-4 h-4 text-ok" /> : <Copy className="w-4 h-4" />}
-            {copied ? "Copied!" : "Copy text"}
-          </button>
+        <div className="flex-1" />
 
-          <button
-            onClick={handleRepurpose}
-            disabled={generatingRepurpose}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
-            title="Rewrite this post for other platforms"
-          >
-            {generatingRepurpose ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Repeat2 className="w-4 h-4" />
+        {!isPublished && (
+          <>
+            {autoSaveStatus === "saving" && (
+              <span className="flex items-center gap-1 text-xs text-text-3">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Saving...
+              </span>
             )}
-            Repurpose
-          </button>
-
-          {/* Mirrors the Post Details dropdown - same state, so both stay in sync. */}
-          <div className="flex items-center gap-2">
-            <label htmlFor="toolbar-status" className="text-xs text-text-2">
-              Status
-            </label>
-            <select
-              id="toolbar-status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              disabled={post.postedToLinkedIn || isTrialExpired}
-              className="select-field h-9 rounded-control border border-edge bg-card pl-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:cursor-not-allowed disabled:opacity-50"
-              title={
-                post.postedToLinkedIn
-                  ? "Published posts cannot change status"
-                  : "Post status - click Save to apply"
-              }
-            >
-              <option value="draft">Draft</option>
-              <option value="ready">Ready (auto-post)</option>
-              <option value="published">Published</option>
-            </select>
-          </div>
-
-          {/* Deleting sits at the end of this group, with the gap below keeping
-              it away from Save and Post to LinkedIn. */}
-          {!isPublished && (
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-bad/30 px-3 text-sm text-bad transition-colors hover:bg-bad-tint"
-              title="Delete this post permanently"
-            >
-              <Trash2 className="w-4 h-4" />
-              Delete
-            </button>
-          )}
-
-          <div className="flex-1" />
-
-          {!isPublished && (
+            {autoSaveStatus === "saved" && (
+              <span className="flex items-center gap-1 text-xs text-ok">
+                <CheckCircle className="w-3 h-3" />
+                Saved
+              </span>
+            )}
+            {autoSaveStatus === "error" && (
+              <span className="flex items-center gap-1 text-xs text-bad">
+                <AlertCircle className="w-3 h-3" />
+                Save failed
+              </span>
+            )}
             <button
               onClick={handleSave}
               disabled={saving}
@@ -1188,38 +1172,38 @@ export default function PostEditorClient({
               )}
               {saved ? "Saved!" : "Save"}
             </button>
-          )}
+          </>
+        )}
 
-          {!post.postedToLinkedIn ? (
-            <button
-              onClick={handlePublishClick}
-              disabled={posting || isTrialExpired}
-              className="btn-brand ring-focus flex h-9 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:cursor-not-allowed"
-              title={isTrialExpired ? "Subscribe to post to LinkedIn" : "Publish this post to LinkedIn now"}
-            >
-              {posting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
-                </svg>
-              )}
-              {posting ? "Posting..." : "Post to LinkedIn"}
-            </button>
-          ) : (
-            <a
-              href={`https://www.linkedin.com/feed/update/${post.linkedinPostId ?? ""}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-ok/30 bg-ok-tint px-4 text-sm text-ok transition-colors hover:bg-ok/15"
-              title="Open this post on LinkedIn"
-            >
-              <CheckCircle className="w-4 h-4" />
-              View on LinkedIn
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          )}
-        </div>
+        {!post.postedToLinkedIn ? (
+          <button
+            onClick={handlePublishClick}
+            disabled={posting || isTrialExpired}
+            className="btn-brand ring-focus flex h-9 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:cursor-not-allowed"
+            title={isTrialExpired ? "Subscribe to post to LinkedIn" : "Publish this post to LinkedIn now"}
+          >
+            {posting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+              </svg>
+            )}
+            {posting ? "Posting..." : "Post to LinkedIn"}
+          </button>
+        ) : (
+          <a
+            href={`https://www.linkedin.com/feed/update/${post.linkedinPostId ?? ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-ok/30 bg-ok-tint px-4 text-sm text-ok transition-colors hover:bg-ok/15"
+            title="Open this post on LinkedIn"
+          >
+            <CheckCircle className="w-4 h-4" />
+            View on LinkedIn
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
       </div>
 
       {/* Post result alerts */}
@@ -1827,6 +1811,22 @@ export default function PostEditorClient({
                 <p className="text-xs text-text-2 bg-card-muted p-2 rounded-control leading-relaxed line-clamp-3">
                   {post.imagePrompt}
                 </p>
+              </div>
+            )}
+
+            {/* Rare and irreversible, so it sits at the end of this card rather
+                than in the toolbar next to Save - the same place Settings keeps
+                account deletion. */}
+            {!isPublished && (
+              <div className="border-t border-edge pt-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="ring-focus flex h-9 w-full items-center justify-center gap-1.5 rounded-control border border-bad/30 text-sm text-bad transition-colors hover:bg-bad-tint"
+                  title="Delete this post permanently"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Delete this post
+                </button>
               </div>
             )}
           </div>
