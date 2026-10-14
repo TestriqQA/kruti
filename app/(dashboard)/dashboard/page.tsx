@@ -55,6 +55,8 @@ export default async function DashboardPage() {
         status: true,
         weekNumber: true,
         postedToLinkedIn: true,
+        // The dashboard of a product that generates artwork showed none of it.
+        imageUrl: true,
       },
     }),
   ]);
@@ -132,6 +134,7 @@ export default async function DashboardPage() {
         status: true,
         weekNumber: true,
         postedToLinkedIn: true,
+        imageUrl: true,
       },
     });
   }

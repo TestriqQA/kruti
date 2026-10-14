@@ -228,7 +228,9 @@ select.select-field::-ms-expand {
    =========================================================================== */
 @layer base {
   :root {
-    --field: 246 247 250;        /* page background */
+    --field: 240 242 247;        /* page background - deliberately a step below
+                                    the card, so a borderless surface reads as
+                                    lifted rather than as a shape with no edge */
     --card: 255 255 255;         /* card background */
     --card-muted: 248 250 252;   /* nested / header strips inside a card */
 
@@ -253,15 +255,18 @@ select.select-field::-ms-expand {
 
     /* One shadow, barely there. Cards are separated by their border; the
        shadow only stops them sitting flat on the field. */
-    --lift: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 1px 3px 0 rgb(16 24 40 / 0.03);
-    --lift-lg: 0 12px 28px -8px rgb(16 24 40 / 0.14), 0 4px 10px -4px rgb(16 24 40 / 0.06);
+    /* Depth instead of outlines. A surface that floats needs no border, and
+       removing ~40 hairlines from a page is most of what makes it feel light. */
+    --lift: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 10px 24px -14px rgb(16 24 40 / 0.18);
+    --lift-hover: 0 2px 4px 0 rgb(16 24 40 / 0.05), 0 18px 36px -16px rgb(16 24 40 / 0.22);
+    --lift-lg: 0 24px 48px -12px rgb(16 24 40 / 0.18), 0 8px 16px -8px rgb(16 24 40 / 0.08);
 
-    --radius-card: 12px;
-    --radius-control: 8px;
+    --radius-card: 16px;
+    --radius-control: 10px;
   }
 
   .dark {
-    --field: 10 13 20;
+    --field: 8 10 16;
     --card: 17 22 32;
     --card-muted: 22 28 40;
 
@@ -284,8 +289,9 @@ select.select-field::-ms-expand {
     --bad: 248 113 113;
     --bad-tint: 56 18 18;
 
-    --lift: none;
-    --lift-lg: 0 12px 28px -8px rgb(0 0 0 / 0.6);
+    --lift: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 28px -18px rgb(0 0 0 / 0.9);
+    --lift-hover: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 18px 36px -18px rgb(0 0 0 / 1);
+    --lift-lg: 0 32px 64px -16px rgb(0 0 0 / 0.8);
   }
 
   body {
@@ -303,26 +309,41 @@ select.select-field::-ms-expand {
 @layer components {
   /* The one card treatment. Replaces the mix of rounded-xl/2xl, four border
      colours and three shadow levels that the pages had grown. */
+  /* The card carries no border. It is separated from the field by light, which
+     is what lets a page hold eight of them without reading as a grid of boxes. */
   .card {
     background-color: rgb(var(--card));
-    border: 1px solid rgb(var(--edge));
     border-radius: var(--radius-card);
     box-shadow: var(--lift);
   }
 
+  .dark .card {
+    border: 1px solid rgb(var(--edge));
+  }
+
+  /* Opt in where a card is genuinely interactive. */
+  .card-lift {
+    transition: box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .card-lift:hover {
+    box-shadow: var(--lift-hover);
+    transform: translateY(-2px);
+  }
+
+  /* No rule under the title - space does the separating. */
   .card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 14px 20px;
-    border-bottom: 1px solid rgb(var(--edge-soft));
+    padding: 20px 24px 12px;
   }
 
   .card-title {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-size: 15.5px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
     color: rgb(var(--text));
   }
 

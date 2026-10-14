@@ -87,7 +87,7 @@ function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string,
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-edge rounded-control shadow-lift-lg p-3 space-y-3 w-64">
+          <div className="absolute left-0 top-full mt-1 z-50 bg-card rounded-control shadow-lift-lg p-3 space-y-3 w-64">
             <p className="text-xs font-semibold text-text">Schedule Date & Time</p>
             <div className="space-y-2">
               <div>

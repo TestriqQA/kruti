@@ -371,7 +371,7 @@ function NewsletterCard({
                 <input
                   value={editContent.subject}
                   onChange={(e) => updateEditField("subject", e.target.value)}
-                  className="w-full text-sm font-semibold text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
+                  className="w-full text-sm font-semibold text-text bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                 />
               ) : (
                 <p className="text-sm font-semibold text-text">{content.subject}</p>
@@ -386,14 +386,14 @@ function NewsletterCard({
                   <input
                     value={editContent.intro.hook}
                     onChange={(e) => updateEditField("intro.hook", e.target.value)}
-                    className="w-full text-sm font-medium text-text dark:text-gray-200 bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
+                    className="w-full text-sm font-medium text-text dark:text-gray-200 bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                     placeholder="Hook..."
                   />
                   <textarea
                     value={editContent.intro.preview}
                     onChange={(e) => updateEditField("intro.preview", e.target.value)}
                     rows={2}
-                    className="w-full text-sm text-text-2 bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
+                    className="w-full text-sm text-text-2 bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                     placeholder="Preview..."
                   />
                 </div>
@@ -413,13 +413,13 @@ function NewsletterCard({
                     <input
                       value={section.heading}
                       onChange={(e) => updateEditField(`sections.${i}.heading`, e.target.value)}
-                      className="w-full font-semibold text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
+                      className="w-full font-semibold text-text bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
                     />
                     <textarea
                       value={section.content}
                       onChange={(e) => updateEditField(`sections.${i}.content`, e.target.value)}
                       rows={4}
-                      className="w-full text-sm text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
+                      className="w-full text-sm text-text bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                     />
                     <input
                       value={section.keyTakeaway}
@@ -473,18 +473,18 @@ function NewsletterCard({
                   <input
                     value={editContent.cta.heading}
                     onChange={(e) => updateEditField("cta.heading", e.target.value)}
-                    className="w-full font-bold text-brand bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
+                    className="w-full font-bold text-brand bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
                   />
                   <textarea
                     value={editContent.cta.text}
                     onChange={(e) => updateEditField("cta.text", e.target.value)}
                     rows={2}
-                    className="w-full text-sm text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
+                    className="w-full text-sm text-text bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                   />
                   <input
                     value={editContent.cta.action}
                     onChange={(e) => updateEditField("cta.action", e.target.value)}
-                    className="w-full text-sm font-semibold text-brand bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
+                    className="w-full text-sm font-semibold text-brand bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                   />
                 </div>
               ) : (
@@ -501,7 +501,7 @@ function NewsletterCard({
               <input
                 value={editContent.signoff}
                 onChange={(e) => updateEditField("signoff", e.target.value)}
-                className="w-full text-sm text-text-2 italic bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
+                className="w-full text-sm text-text-2 italic bg-card rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
               />
             ) : (
               <p className="text-sm text-text-2 italic">{content.signoff}</p>

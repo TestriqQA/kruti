@@ -22,7 +22,8 @@ import {
   XCircle,
   ListChecks,
 } from "lucide-react";
-import { cn, formatDate, getPostTypeColor } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
+import PostImage from "@/components/PostImage";
 import type { ProfileGap } from "@/lib/profile-completeness";
 
 interface Post {
@@ -34,6 +35,7 @@ interface Post {
   status: string;
   weekNumber: number;
   postedToLinkedIn: boolean;
+  imageUrl?: string | null;
 }
 
 interface Props {
@@ -116,7 +118,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* ── Profile completeness ───────────────────────────────────────────
           This was a soft "tip" gated on `!headline || !industry`, which missed
           the fields that actually matter - summary, skills and target audience
@@ -165,12 +167,12 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-4 pt-1">
         <div>
-          <h1 className="font-display text-[26px] font-bold leading-tight tracking-[-0.02em] text-text">
+          <h1 className="font-display text-[32px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
             Good {mounted ? getTimeOfDay() : "day"}, {user?.name?.split(" ")[0] ?? "there"}
           </h1>
-          <p className="mt-1.5 max-w-3xl text-[14px] leading-relaxed text-text-2">
+          <p className="mt-2 max-w-3xl text-[14.5px] leading-relaxed text-text-2">
             {user?.headline ?? "Ready to build your LinkedIn presence?"}
           </p>
         </div>
@@ -189,7 +191,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           <button
             onClick={onGenerateClick}
             disabled={generating || limitReached}
-            className="ring-focus flex h-10 items-center gap-2 rounded-control bg-brand px-4 text-[13.5px] font-semibold text-white shadow-lift transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+            className="ring-focus flex h-11 items-center gap-2 rounded-control bg-brand px-5 text-[14px] font-semibold text-white shadow-[0_6px_16px_-6px_rgb(var(--brand)/0.65)] transition-all hover:bg-brand-hover hover:shadow-[0_10px_22px_-8px_rgb(var(--brand)/0.75)] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -298,25 +300,30 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
       {/* The number is the content, so it leads. The 40px tinted icon tile that
           used to sit above it was the largest element in each card and carried
           none of the information. */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {statCards.map((stat) => (
+      {/* One surface, four readings, separated by light. Four bordered tiles
+          with a tinted icon in each was the single busiest thing on the page. */}
+      <div className="card grid grid-cols-2 lg:grid-cols-4">
+        {statCards.map((stat, i) => (
           <Link
             key={stat.label}
             href={stat.href}
-            className="card ring-focus group p-5 transition-colors hover:border-edge hover:bg-card-muted"
+            className={cn(
+              "ring-focus group relative px-6 py-5 transition-colors first:rounded-l-card last:rounded-r-card hover:bg-card-muted",
+              i > 0 && "lg:before:absolute lg:before:inset-y-5 lg:before:left-0 lg:before:w-px lg:before:bg-edge-soft"
+            )}
           >
-            <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2">
+              <stat.icon className={cn("h-3.5 w-3.5", stat.color)} />
               <p className="eyebrow">{stat.label}</p>
-              <stat.icon className={cn("h-4 w-4", stat.color)} />
             </div>
-            <p className="nums mt-3 font-display text-[28px] font-bold leading-none tracking-[-0.02em] text-text">
+            <p className="nums mt-2.5 font-display text-[30px] font-bold leading-none tracking-[-0.03em] text-text">
               {stat.value}
             </p>
           </Link>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         {/* Upcoming / Recent Posts */}
         <div className="card">
           <div className="card-head">
@@ -342,25 +349,41 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
                 <Link
                   key={post.id}
                   href={`/posts/${post.id}`}
-                  className="flex items-start gap-3 p-3 rounded-control hover:bg-card-muted transition-colors"
+                  className="ring-focus group flex items-center gap-3.5 rounded-control p-3 transition-colors hover:bg-card-muted"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-text truncate">{post.title}</p>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
+                  {/* The artwork is the product. A list of its output with no
+                      output in it is why this page felt like a spreadsheet. */}
+                  {post.imageUrl ? (
+                    <PostImage
+                      src={post.imageUrl}
+                      className="h-11 w-11 flex-shrink-0 rounded-control object-cover"
+                      iconClassName="h-4 w-4"
+                    />
+                  ) : (
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control bg-card-muted">
+                      <FileText className="h-4 w-4 text-text-3" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13.5px] font-semibold text-text">{post.title}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-[11.5px] font-medium text-text-2">
                         {post.style || post.postType}
                       </span>
                       {post.scheduledAt && (
-                        <span className="text-xs text-text-2">{formatDate(post.scheduledAt)}</span>
+                        <>
+                          <span className="text-text-3">&middot;</span>
+                          <span className="nums text-[11.5px] text-text-3">{formatDate(post.scheduledAt)}</span>
+                        </>
                       )}
                       {post.postedToLinkedIn && (
-                        <span className="text-xs bg-blue-500/10 text-brand px-2 py-0.5 rounded-full">
+                        <span className="rounded-full bg-ok-tint px-2 py-0.5 text-[10.5px] font-semibold text-ok">
                           Posted
                         </span>
                       )}
                     </div>
                   </div>
-                  <ArrowRight className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1" />
+                  <ArrowRight className="h-4 w-4 flex-shrink-0 text-text-3 opacity-0 transition-opacity group-hover:opacity-100" />
                 </Link>
               ))
             )}
@@ -412,7 +435,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           <Link
             key={a.href}
             href={a.href}
-            className="flex items-center gap-3 p-4 rounded-card border border-edge-soft shadow-sm bg-white dark:bg-white/[0.03] hover:shadow-md transition-shadow"
+            className="flex items-center gap-3 p-4 rounded-card shadow-sm bg-white dark:bg-white/[0.03] hover:shadow-md transition-shadow"
           >
             <div className={cn("w-9 h-9 rounded-control flex items-center justify-center", a.color)}>
               <a.icon className="w-5 h-5" />

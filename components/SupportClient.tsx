@@ -355,7 +355,7 @@ export default function SupportClient({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         {/* ── Left: raise a ticket ─────────────────────────────── */}
         <div className="space-y-6 min-w-0">
-          <section className="bg-card border border-edge rounded-card p-5">
+          <section className="bg-card rounded-card p-5">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-text-3">
               Sent with your ticket
             </h2>
@@ -382,7 +382,7 @@ export default function SupportClient({
             </p>
           </section>
 
-          <section className="bg-card border border-edge rounded-card p-5 space-y-5">
+          <section className="bg-card rounded-card p-5 space-y-5">
             <div>
               <label
                 htmlFor="ticket-description"

@@ -730,7 +730,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
                 Cancel Subscription
               </button>
               {showCancelConfirm && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-card border border-edge rounded-control shadow-lift-lg z-20 p-4">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-card rounded-control shadow-lift-lg z-20 p-4">
                   <div className="flex items-start gap-2 mb-3">
                     <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                     <div>
