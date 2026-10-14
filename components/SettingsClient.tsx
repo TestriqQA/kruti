@@ -3,7 +3,7 @@
 import DeleteAccountSection from "@/components/DeleteAccountSection";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
+import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown, Circle } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { cn, safeJsonParse } from "@/lib/utils";
 import { parsePostingSchedule, type PostingSchedule } from "@/lib/posting-schedule";
@@ -12,6 +12,7 @@ import {
   MIN_HEADLINE_CHARS,
   MIN_SUMMARY_CHARS,
   MIN_SKILLS,
+  MIN_CONTENT_GOALS,
   MIN_CONTENT_STYLES,
   MIN_AUDIENCE_CHARS,
   MAX_AUDIENCE_CHARS,
@@ -192,6 +193,22 @@ export default function SettingsClient({ user }: { user: User | null }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   /** Completeness gaps on the SAVED row - what still blocks generation. */
   const [profileGaps, setProfileGaps] = useState<ProfileGap[]>([]);
+  /**
+   * What the AI prompts actually need, measured against the live form rather
+   * than the saved record - so the rail moves as you type. The thresholds are
+   * imported, never inlined, so this cannot drift from what the save enforces.
+   */
+  const checks = [
+    { id: "profile", label: "Headline", ok: headline.trim().length >= MIN_HEADLINE_CHARS },
+    { id: "profile", label: "Summary", ok: summary.trim().length >= MIN_SUMMARY_CHARS },
+    { id: "profile", label: "Skills", ok: skills.length >= MIN_SKILLS },
+    { id: "content", label: "Goals", ok: contentGoals.length >= MIN_CONTENT_GOALS },
+    { id: "content", label: "Styles", ok: contentStyles.length >= MIN_CONTENT_STYLES },
+    { id: "content", label: "Audience", ok: targetAudience.trim().length >= MIN_AUDIENCE_CHARS },
+  ];
+  const ready = checks.filter((c) => c.ok).length;
+  const allReady = ready === checks.length;
+
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [invoices, setInvoices] = useState<Array<{
@@ -319,22 +336,47 @@ export default function SettingsClient({ user }: { user: User | null }) {
     : 0;
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-text">Settings</h1>
-          <p className="text-text-2 mt-1">Manage your profile and content preferences</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control font-medium hover:opacity-90 disabled:opacity-70 shadow-lift shadow-blue-200 dark:shadow-blue-900/30"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saved ? "Saved!" : "Save Changes"}
-        </button>
+      <div className="pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
+          Settings
+        </h1>
+        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+          This is what every post is written from. The more specific these answers are, the less
+          your posts read like they could have been written for anybody.
+        </p>
       </div>
+
+      <div className="flex gap-8">
+        {/* Section index. Eleven cards is more than fits on a screen, so the
+            page needs a way to say what it contains and to jump. */}
+        <nav className="sticky top-6 hidden h-fit w-[180px] flex-shrink-0 lg:block">
+          <p className="eyebrow mb-2 px-3">On this page</p>
+          <ul className="space-y-0.5">
+            {[
+              ["profile", "Your profile"],
+              ["tone", "Tone & voice"],
+              ["positioning", "Positioning"],
+              ["content", "Goals & styles"],
+              ["human-mode", "Human mode"],
+              ["signature", "Signature"],
+              ["schedule", "Posting schedule"],
+              ["subscription", "Subscription"],
+            ].map(([id, label]) => (
+              <li key={id}>
+                <a
+                  href={`#${id}`}
+                  className="ring-focus block rounded-control px-3 py-1.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+                >
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="min-w-0 max-w-[880px] flex-1 space-y-5">
 
       {/* Save error banner */}
       {saveError && (
@@ -362,11 +404,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
       )}
 
       {/* Profile Overview */}
-      <div className="card p-6">
+      <div id="profile" className="scroll-mt-6 card p-6">
         <div className="flex items-center gap-4 mb-6">
           <Avatar src={user?.image} name={user?.name} size={64} />
           <div>
-            <h2 className="font-semibold text-text">{user?.name}</h2>
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">{user?.name}</h2>
             <p className="text-sm text-text-2">{user?.email}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full inline-block">
@@ -468,9 +510,9 @@ export default function SettingsClient({ user }: { user: User | null }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {skills.map((skill) => (
-              <span key={skill} className="flex items-center gap-1 text-sm px-3 py-1 bg-blue-50 dark:bg-brand/10 text-brand rounded-full">
+              <span key={skill} className="flex items-center gap-1 text-sm px-3 py-1 bg-brand-tint text-brand rounded-full">
                 {skill}
-                <button onClick={() => removeSkill(skill)} className="hover:text-blue-900 dark:hover:text-blue-200">
+                <button onClick={() => removeSkill(skill)} className="hover:text-brand-hover">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -486,8 +528,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Tone & Voice */}
-      <div className="card p-6">
-        <h2 className="font-semibold font-display text-text mb-4">Tone & Voice</h2>
+      <div id="tone" className="scroll-mt-6 card p-6">
+        <h2 className="mb-4 font-display text-[17px] font-bold tracking-[-0.02em] text-text">Tone & Voice</h2>
         <div className="grid grid-cols-2 gap-3">
           {TONES.map((t) => (
             <button
@@ -496,11 +538,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
               className={cn(
                 "p-4 rounded-control border-2 text-left transition-all",
                 tone === t.value
-                  ? "border-blue-600 bg-brand-tint"
-                  : "border-edge hover:border-edge dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint"
+                  : "border-edge hover:border-brand-edge"
               )}
             >
-              <p className={cn("font-medium text-sm", tone === t.value ? "text-brand" : "text-gray-800 dark:text-gray-200")}>
+              <p className={cn("font-medium text-sm", tone === t.value ? "text-brand" : "text-text")}>
                 {t.label}
               </p>
               <p className="text-xs text-text-2 mt-0.5">{t.desc}</p>
@@ -510,8 +552,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Content Positioning */}
-      <div className="card p-6">
-        <h2 className="font-semibold font-display text-text mb-1">Content Positioning</h2>
+      <div id="positioning" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Content Positioning</h2>
         <p className="text-sm text-text-2 mb-4">How you want to show up on LinkedIn</p>
         <div className="space-y-2">
           {POSITIONING_OPTIONS.map((opt) => (
@@ -521,12 +563,12 @@ export default function SettingsClient({ user }: { user: User | null }) {
               className={cn(
                 "w-full flex items-center gap-3 p-3 rounded-control border-2 text-left transition-all",
                 positioning === opt.value
-                  ? "border-blue-600 bg-brand-tint"
-                  : "border-edge hover:border-edge dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint"
+                  : "border-edge hover:border-brand-edge"
               )}
             >
               <div className="flex-1">
-                <p className={cn("font-medium text-sm", positioning === opt.value ? "text-brand" : "text-gray-800 dark:text-gray-200")}>
+                <p className={cn("font-medium text-sm", positioning === opt.value ? "text-brand" : "text-text")}>
                   {opt.value}
                 </p>
                 <p className="text-xs text-text-2">{opt.desc}</p>
@@ -538,9 +580,9 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Content Goals & Styles */}
-      <div className="card p-6 space-y-6">
+      <div id="content" className="scroll-mt-6 card p-6 space-y-6">
         <div>
-          <h2 className="font-semibold font-display text-text mb-1">LinkedIn Goals</h2>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">LinkedIn Goals</h2>
           <div className="mt-3">
             <ChipMultiSelect
               options={CONTENT_GOALS}
@@ -554,7 +596,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
 
         <div>
-          <h2 className="font-semibold font-display text-text mb-1">Content Styles</h2>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Content Styles</h2>
           <p className="text-sm text-text-2">The types of content that resonate with you</p>
           <div className="mt-3">
             <ChipMultiSelect
@@ -575,7 +617,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
 
         <div>
-          <h2 className="font-semibold font-display text-text mb-1">Target Audience</h2>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Target Audience</h2>
           <textarea
             value={targetAudience}
             onChange={(e) => setTargetAudience(e.target.value.slice(0, MAX_AUDIENCE_CHARS))}
@@ -594,10 +636,10 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Human Mode */}
-      <div className="card p-6">
+      <div id="human-mode" className="scroll-mt-6 card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold font-display text-text">Human Mode (Global Default)</h2>
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Human Mode (Global Default)</h2>
             <p className="text-sm text-text-2 mt-1">
               Makes AI-generated content sound more naturally human - slight variations in style
               and phrasing that make posts less detectable as AI-generated.
@@ -607,7 +649,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
             onClick={() => setHumanMode(!humanMode)}
             className={cn(
               "relative w-14 h-7 rounded-full transition-colors flex-shrink-0 ml-6",
-              humanMode ? "bg-brand" : "bg-slate-200 dark:bg-gray-600"
+              humanMode ? "bg-brand" : "bg-edge"
             )}
           >
             <span
@@ -626,8 +668,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Post Signature */}
-      <div className="card p-6">
-        <h2 className="font-semibold font-display text-text mb-1">Post Signature</h2>
+      <div id="signature" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Post Signature</h2>
         <p className="text-sm text-text-2 mb-3">
           This text is automatically appended to every post when published to LinkedIn.
           Use it for a consistent sign-off, tagline, or call-to-action.
@@ -643,8 +685,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Posting Schedule */}
-      <div className="card p-6">
-        <h2 className="font-semibold font-display text-text mb-1">Posting Schedule</h2>
+      <div id="schedule" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Posting Schedule</h2>
         <p className="text-sm text-text-2 mb-4">
           Posts set to &quot;Ready&quot; will auto-publish to LinkedIn at these times
         </p>
@@ -657,8 +699,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
               className={cn(
                 "px-4 py-2 rounded-control text-sm font-medium border-2 transition-all",
                 postingSchedule.days.includes(day)
-                  ? "border-blue-600 bg-brand-tint text-brand"
-                  : "border-edge text-text-2 hover:border-edge dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint text-brand"
+                  : "border-edge text-text-2 hover:border-brand-edge hover:text-text"
               )}
             >
               {day.slice(0, 3)}
@@ -682,10 +724,10 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Subscription */}
-      <div className="card p-6">
+      <div id="subscription" className="scroll-mt-6 card p-6">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="font-semibold font-display text-text flex items-center gap-2">
+            <h2 className="flex items-center gap-2 font-display text-[17px] font-bold tracking-[-0.02em] text-text">
               <CreditCard className="w-5 h-5 text-text-3" />
               Subscription
             </h2>
@@ -818,7 +860,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
                         inv.status === "captured"
                           ? "bg-ok-tint text-ok"
                           : inv.status === "authorized"
-                            ? "bg-brand-tint text-blue-700 dark:text-blue-400"
+                            ? "bg-brand-tint text-brand"
                             : "bg-card-muted text-text-2"
                       )}
                     >
@@ -837,21 +879,84 @@ export default function SettingsClient({ user }: { user: User | null }) {
         )}
       </div>
 
-      {/* Save button at bottom */}
-      <div className="pb-6">
+      {/* Save, pinned to the bottom of the scroll area. The control that
+          commits your work should not scroll away from the work. */}
+      <div className="sticky bottom-0 -mx-1 border-t border-edge bg-field/92 px-1 py-3 backdrop-blur-md">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-brand hover:bg-brand-hover text-white py-3 rounded-control font-semibold hover:opacity-90 disabled:opacity-70"
+          className="btn-brand ring-focus flex h-12 w-full items-center justify-center gap-2 rounded-control text-[14.5px] font-semibold disabled:cursor-not-allowed"
         >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : saved ? <CheckCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
-          {saved ? "All changes saved!" : "Save All Settings"}
+          {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : saved ? <CheckCircle className="h-5 w-5" /> : <Save className="h-5 w-5" />}
+          {saved ? "All changes saved" : "Save all settings"}
         </button>
       </div>
 
       {/* Erasure (DPDP s.12(3)). Last on the page, visually separated, and
           high-friction by design - it is irreversible. */}
       <DeleteAccountSection />
+        </div>
+
+        {/* Profile strength. An incomplete profile blocks generation outright,
+            so the page that fixes it should say what is missing. */}
+        <aside className="sticky top-6 hidden h-fit w-[300px] flex-shrink-0 xl:block">
+          <div className="card p-5">
+            <p className="eyebrow">Profile strength</p>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="font-display text-[30px] font-bold leading-none tracking-[-0.03em] text-text">
+                {ready}
+              </span>
+              <span className="text-[14px] text-text-2">of {checks.length} ready</span>
+            </div>
+
+            <div className="mt-3 flex gap-1" aria-hidden>
+              {checks.map((c, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-1.5 flex-1 rounded-full transition-colors",
+                    c.ok ? "bg-ok" : "bg-edge"
+                  )}
+                />
+              ))}
+            </div>
+
+            <p className="mt-3 text-[13px] leading-relaxed text-text-2">
+              {allReady
+                ? "Every field the AI writes from is filled in. Generation is unblocked."
+                : "Generation stays blocked until each of these is filled in."}
+            </p>
+
+            <ul className="mt-4 space-y-0.5 border-t border-edge pt-3">
+              {checks.map((c, i) => (
+                <li key={i}>
+                  <a
+                    href={`#${c.id}`}
+                    className="ring-focus -mx-2 flex items-center gap-2.5 rounded-control px-2 py-1.5 transition-colors hover:bg-card-muted"
+                  >
+                    {c.ok ? (
+                      <CheckCircle className="h-4 w-4 flex-shrink-0 text-ok" />
+                    ) : (
+                      <Circle className="h-4 w-4 flex-shrink-0 text-text-3" />
+                    )}
+                    <span
+                      className={cn(
+                        "text-[13.5px] font-medium",
+                        c.ok ? "text-text-2" : "text-text"
+                      )}
+                    >
+                      {c.label}
+                    </span>
+                    {!c.ok && (
+                      <span className="ml-auto text-[12px] font-medium text-warn">needed</span>
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -900,7 +1005,7 @@ function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: str
                   key={tz}
                   onClick={() => { onChange(tz); setOpen(false); setSearch(""); }}
                   className={cn(
-                    "w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors",
+                    "w-full text-left px-3 py-2 text-sm hover:bg-brand-tint transition-colors",
                     tz === value ? "bg-brand-tint text-brand font-medium" : "text-text"
                   )}
                 >
