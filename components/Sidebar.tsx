@@ -78,24 +78,24 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
 
       {/* User */}
       <div className="border-b border-edge-soft px-3 py-3">
-        <div className="flex items-center gap-2.5 rounded-control px-2 py-1.5">
+        <div className="flex items-center gap-3 rounded-control px-2 py-1.5">
           <ProfileCompletionRing
             src={user.image}
             name={user.name}
             percent={profileCompletion}
-            size={36}
+            size={44}
           />
           <div className="flex-1 min-w-0">
-            <p className="truncate text-[13px] font-semibold text-text">{user.name}</p>
-            <p className="truncate text-[11.5px] text-text-3">{user.email}</p>
+            <p className="truncate text-[14.5px] font-semibold text-text">{user.name}</p>
+            <p className="truncate text-[12.5px] text-text-3">{user.email}</p>
             {/* The ring alone shows there is something left; this says how much
                 and goes straight to the screen that fixes it. */}
             {profileCompletion >= 100 ? (
-              <p className="mt-0.5 text-[11px] font-semibold text-ok">Profile complete</p>
+              <p className="mt-0.5 text-[11.5px] font-semibold text-ok">Profile complete</p>
             ) : (
               <Link
                 href="/onboarding"
-                className="mt-0.5 inline-block text-[11px] font-semibold text-brand hover:underline"
+                className="mt-0.5 inline-block text-[11.5px] font-semibold text-brand hover:underline"
               >
                 Profile {profileCompletion}% - finish it
               </Link>
