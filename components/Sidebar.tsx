@@ -67,7 +67,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
   return (
     <aside className="flex w-[288px] flex-shrink-0 flex-col border-r border-edge bg-card">
       {/* Logo */}
-      <div className="flex h-24 flex-shrink-0 items-center justify-center border-b border-edge-soft px-4">
+      <div className="flex h-20 flex-shrink-0 items-center justify-center border-b border-edge-soft px-4">
         <Link href="/dashboard" className="ring-focus flex items-center rounded-control">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           {/* Width-driven so the mark scales with the sidebar rather than being
@@ -77,8 +77,8 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </div>
 
       {/* User */}
-      <div className="border-b border-edge-soft px-3 py-3">
-        <div className="flex items-center gap-3 rounded-control px-2 py-1.5">
+      <div className="border-b border-edge-soft px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-control px-2 py-1">
           <ProfileCompletionRing
             src={user.image}
             name={user.name}
@@ -105,7 +105,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
         {navItems.map((item) => {
           const active =
             item.href === "/dashboard"
@@ -162,7 +162,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </nav>
 
       {/* Bottom section: Dark mode + Sign out */}
-      <div className="flex-shrink-0 space-y-1 border-t border-edge-soft p-3">
+      <div className="flex-shrink-0 space-y-1 border-t border-edge-soft px-3 py-2.5">
         <button
           onClick={toggleTheme}
           className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
