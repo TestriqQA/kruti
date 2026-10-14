@@ -59,11 +59,11 @@ function PromptBlock({ prompt }: { prompt: string }) {
       <summary className="cursor-pointer select-none text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
         <span className="group-open:hidden">Show prompt</span>
         <span className="hidden group-open:inline">Hide prompt</span>
-        <span className="ml-1.5 font-normal text-slate-400 dark:text-slate-500">
+        <span className="ml-1.5 font-normal text-text-3">
           ({prompt.length.toLocaleString()} chars)
         </span>
       </summary>
-      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600 dark:bg-white/[0.04] dark:text-slate-300">
+      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control bg-slate-50 p-3 text-[11px] leading-relaxed text-text-2 dark:bg-white/[0.04]">
         {prompt}
       </pre>
     </details>
@@ -75,7 +75,7 @@ function StepIcon({ status }: { status: StepStatus }) {
   if (status === "error") return <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />;
   if (status === "skipped") return <MinusCircle className="w-4 h-4 text-amber-500 shrink-0" />;
   if (status === "running") return <Loader2 className="w-4 h-4 text-blue-500 animate-spin shrink-0" />;
-  return <Circle className="w-4 h-4 text-slate-300 dark:text-slate-600 shrink-0" />;
+  return <Circle className="w-4 h-4 text-text-3 shrink-0" />;
 }
 
 /**
@@ -99,12 +99,12 @@ export default function PipelineModal({
   return (
     <></>
     // <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    //   <div className="bg-white dark:bg-[#0D131F] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+    //   <div className="bg-white dark:bg-[#0D131F] rounded-card shadow-lift-lg w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
     //     {/* Header */}
-    //     <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+    //     <div className="flex items-center justify-between px-6 py-4 border-b border-edge-soft">
     //       <div className="min-w-0">
-    //         <h2 className="font-display text-lg font-bold text-slate-900 dark:text-gray-100">{title}</h2>
-    //         <p className="text-sm text-slate-500 dark:text-slate-400">
+    //         <h2 className="font-display text-lg font-bold text-text">{title}</h2>
+    //         <p className="text-sm text-text-2">
     //           {running
     //             ? "Live pipeline - each step as it happens"
     //             : done
@@ -118,17 +118,17 @@ export default function PipelineModal({
     //         {running && (
     //           <button
     //             onClick={onCancel}
-    //             className="flex items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+    //             className="flex items-center gap-1.5 rounded-control border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
     //           >
     //             Cancel run
     //           </button>
     //         )}
     //         <button
     //           onClick={onClose}
-    //           className="p-2 hover:bg-slate-100 dark:hover:bg-white/[0.06] rounded-lg transition-colors"
+    //           className="p-2 hover:bg-card-muted rounded-control transition-colors"
     //           aria-label="Close"
     //         >
-    //           <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+    //           <X className="w-5 h-5 text-text-2" />
     //         </button>
     //       </div>
     //     </div>
@@ -136,7 +136,7 @@ export default function PipelineModal({
     //     {/* Body */}
     //     <div className="flex-1 overflow-y-auto p-6 space-y-5">
     //       {running && (
-    //         <p className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+    //         <p className="rounded-control bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
     //           You can close this and keep working - the run continues in the background
     //           and you will get a notification when it finishes.
     //         </p>
@@ -146,19 +146,19 @@ export default function PipelineModal({
     //       {checks.length > 0 && (
     //         <>
     //           <section>
-    //             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+    //             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-3 mb-2">
     //               Preflight checks
     //             </h3>
     //             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
     //               {checks.map((c) => (
     //                 <div key={c.key} className="flex items-center gap-2 text-sm">
     //                   <StepIcon status={c.status} />
-    //                   <span className="text-slate-700 dark:text-slate-300">{c.label}</span>
+    //                   <span className="text-text">{c.label}</span>
     //                   {c.detail && (
     //                     <span
     //                       className={cn(
     //                         "text-xs truncate",
-    //                         c.status === "error" ? "text-red-500" : "text-slate-400 dark:text-slate-500"
+    //                         c.status === "error" ? "text-red-500" : "text-text-3"
     //                       )}
     //                     >
     //                       - {c.detail}
@@ -169,7 +169,7 @@ export default function PipelineModal({
     //             </div>
     //           </section>
     //           <div className="flex justify-center">
-    //             <ArrowDown className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+    //             <ArrowDown className="w-4 h-4 text-text-3" />
     //           </div>
     //         </>
     //       )}
@@ -177,19 +177,19 @@ export default function PipelineModal({
     //       {/* Stages */}
     //       {stages.length > 0 && (
     //         <section className="space-y-3">
-    //           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+    //           <h3 className="text-xs font-semibold uppercase tracking-wide text-text-3">
     //             Stages
     //           </h3>
     //           {stages.map((s) => (
     //             <div
     //               key={s.key}
-    //               className="rounded-xl border border-slate-100 dark:border-white/10 px-4 py-3"
+    //               className="rounded-control border border-edge-soft px-4 py-3"
     //             >
     //               <div className="flex items-center gap-2 text-sm">
     //                 <StepIcon status={s.status} />
-    //                 <span className="font-medium text-slate-800 dark:text-slate-200">{s.label}</span>
+    //                 <span className="font-medium text-text">{s.label}</span>
     //                 {s.detail && (
-    //                   <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+    //                   <span className="text-xs text-text-2 truncate">
     //                     - {s.detail}
     //                   </span>
     //                 )}
@@ -199,7 +199,7 @@ export default function PipelineModal({
     //                   {s.lines.map((l, i) => (
     //                     <li
     //                       key={i}
-    //                       className="text-xs leading-relaxed text-slate-500 dark:text-slate-400"
+    //                       className="text-xs leading-relaxed text-text-2"
     //                     >
     //                       {l}
     //                     </li>
@@ -216,17 +216,17 @@ export default function PipelineModal({
     //       {items.length > 0 && (
     //         <>
     //           <div className="flex justify-center">
-    //             <ArrowDown className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+    //             <ArrowDown className="w-4 h-4 text-text-3" />
     //           </div>
     //           <section>
-    //             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
+    //             <h3 className="text-xs font-semibold uppercase tracking-wide text-text-3 mb-2">
     //               {itemsLabel}
     //             </h3>
     //             <div className="space-y-1.5">
     //               {items.map((it) => (
     //                 <div
     //                   key={it.index}
-    //                   className="flex items-center gap-2.5 rounded-lg border border-slate-100 dark:border-white/10 px-3 py-2"
+    //                   className="flex items-center gap-2.5 rounded-control border border-edge-soft px-3 py-2"
     //                 >
     //                   <StepIcon status={it.status} />
     //                   {it.url && (
@@ -237,7 +237,7 @@ export default function PipelineModal({
     //                     />
     //                   )}
     //                   <div className="min-w-0 flex-1">
-    //                     <p className="truncate text-sm text-slate-700 dark:text-slate-300">
+    //                     <p className="truncate text-sm text-text">
     //                       {it.title}
     //                     </p>
     //                     {it.detail && (
@@ -246,7 +246,7 @@ export default function PipelineModal({
     //                           "truncate text-xs",
     //                           it.status === "error"
     //                             ? "text-red-500"
-    //                             : "text-slate-400 dark:text-slate-500"
+    //                             : "text-text-3"
     //                         )}
     //                       >
     //                         {it.detail}
@@ -263,13 +263,13 @@ export default function PipelineModal({
 
     //       {/* Outcome */}
     //       {error && (
-    //         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
+    //         <div className="flex items-start gap-2 rounded-control border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-300">
     //           <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
     //           <span>{error}</span>
     //         </div>
     //       )}
     //       {done && summary && !error && (
-    //         <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+    //         <div className="flex items-start gap-2 rounded-control border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
     //           <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
     //           <span>{summary}</span>
     //         </div>

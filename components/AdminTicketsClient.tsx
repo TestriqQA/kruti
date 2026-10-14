@@ -7,7 +7,13 @@ import Avatar from "@/components/Avatar";
 import PostImage from "@/components/PostImage";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/Toast";
-import { parseAttachments, TICKET_STATUSES, isTicketClosed, isUserReply } from "@/lib/support";
+import {
+  parseAttachments,
+  TICKET_STATUSES,
+  isTicketClosed,
+  isUserReply,
+  ticketCategoryShort,
+} from "@/lib/support";
 import TicketDetailModal, { type ModalTicket } from "@/components/TicketDetailModal";
 
 type Ticket = ModalTicket;
@@ -275,6 +281,7 @@ export default function AdminTicketsClient({
                   <th className={TH}>Raised</th>
                   <th className={TH}>Last updated</th>
                   <th className={TH}>Status</th>
+                  <th className={TH}>Category</th>
                   <th className={cn(TH, "w-[260px]")}>Description</th>
                   <th className={TH}>Images</th>
                   <th className={cn(TH, "text-right")}>Actions</th>
@@ -348,6 +355,14 @@ export default function AdminTicketsClient({
                             Unread by user
                           </span>
                         )}
+                      </td>
+
+                      {/* Which part of the product the ticket is about. Shown in
+                          its short form - the full label is in the modal. */}
+                      <td className="px-3 py-3">
+                        <span className="inline-block whitespace-nowrap rounded-full bg-gray-100 px-2.5 py-1 text-[11px] text-gray-600 dark:bg-white/[0.08] dark:text-slate-300">
+                          {ticketCategoryShort(t.category)}
+                        </span>
                       </td>
 
                       {/* Fixed width + two-line clamp. The full text is one click

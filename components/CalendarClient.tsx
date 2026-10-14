@@ -1,10 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, Sparkles, FileText, ChevronLeft, ChevronRight, Linkedin, GripVertical } from "lucide-react";
+import {
+  Sparkles, FileText, ChevronLeft, ChevronRight, Linkedin, GripVertical,
+  CalendarDays, CheckCircle, Clock, LayoutGrid, Loader2,
+} from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { cn, getPostTypeColor, getStatusColor } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { StatCard, Pill, StatusBadge } from "@/components/dashboard/bits";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, addMonths, subMonths, startOfWeek } from "date-fns";
 import { toZonedTime, formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
@@ -148,96 +152,188 @@ export default function CalendarClient({ posts: initialPosts, userTimezone = "As
     return d.getFullYear() === currentDate.getFullYear() && d.getMonth() === currentDate.getMonth();
   });
 
+  /* ── Month readings. Each card says something only it can say, the same way
+        the dashboard cards do. ─────────────────────────────────────────── */
+  const monthPosts = posts.filter((p) => {
+    if (!p.scheduledAt) return false;
+    const d = toZonedTime(new Date(p.scheduledAt), userTimezone);
+    return d.getFullYear() === currentDate.getFullYear() && d.getMonth() === currentDate.getMonth();
+  });
+  const monthScheduled = monthPosts.filter((p) => !p.postedToLinkedIn && p.status === "ready");
+  const monthPublished = monthPosts.filter((p) => p.postedToLinkedIn || p.status === "published");
+  const monthDrafts = monthPosts.filter((p) => !p.postedToLinkedIn && p.status === "draft");
+  const daysUsed = new Set(
+    monthPosts.map((p) => toZonedTime(new Date(p.scheduledAt!), userTimezone).getDate())
+  ).size;
+
+  const nextOut = [...monthScheduled].sort(
+    (a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime()
+  )[0];
+  const fmtShort = (d: Date | string) =>
+    formatInTimeZone(new Date(d), userTimezone, "MMM d");
+
+  const statusOf = (p: Post): "scheduled" | "draft" | "published" =>
+    p.postedToLinkedIn || p.status === "published"
+      ? "published"
+      : p.status === "ready"
+        ? "scheduled"
+        : "draft";
+
+  const viewingThisMonth =
+    currentDate.getFullYear() === new Date().getFullYear() &&
+    currentDate.getMonth() === new Date().getMonth();
+
+  const DOT: Record<"scheduled" | "draft" | "published", string> = {
+    scheduled: "bg-brand",
+    draft: "bg-violet",
+    published: "bg-ok",
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+    <div className="space-y-5">
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-5 pt-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
             Content Calendar
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{monthName}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-text-2">
+            Every post you have scheduled, on the day it goes out. Drag one to another day to move it.
+          </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+
+        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           {rescheduling && (
-            <span className="text-xs text-blue-600 dark:text-blue-400 animate-pulse">Saving...</span>
+            <span className="flex items-center gap-1.5 text-[12.5px] font-semibold text-brand">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Saving…
+            </span>
           )}
-          {/* Month Navigation */}
-          <div className="flex items-center gap-1 border border-slate-200 dark:border-white/10 rounded-lg overflow-hidden">
+
+          <div className="flex items-center rounded-control border border-edge bg-card">
             <button
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors text-slate-600 dark:text-slate-400"
+              aria-label="Previous month"
+              className="ring-focus flex h-10 w-10 items-center justify-center rounded-l-control text-text-2 transition-colors hover:bg-card-muted hover:text-text"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 min-w-[130px] text-center">
+            <span className="nums min-w-[132px] border-x border-edge px-3 text-center text-[13.5px] font-semibold text-text">
               {monthName}
             </span>
             <button
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
-              className="p-2 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors text-slate-600 dark:text-slate-400"
+              aria-label="Next month"
+              className="ring-focus flex h-10 w-10 items-center justify-center rounded-r-control text-text-2 transition-colors hover:bg-card-muted hover:text-text"
             >
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
-          {/* View Toggle */}
-          <div className="flex rounded-lg border border-slate-200 dark:border-white/10 overflow-hidden">
-            <button
-              onClick={() => setView("calendar")}
-              className={cn("px-4 py-2 text-sm font-medium", view === "calendar" ? "bg-blue-600 text-white" : "bg-white dark:bg-white/[0.03] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06]")}
-            >
-              Calendar
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={cn("px-4 py-2 text-sm font-medium", view === "list" ? "bg-blue-600 text-white" : "bg-white dark:bg-white/[0.03] text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06]")}
-            >
-              List
-            </button>
+
+          <button
+            onClick={() => setCurrentDate(new Date())}
+            disabled={viewingThisMonth}
+            className="ring-focus h-10 rounded-control border border-edge bg-card px-4 text-[13.5px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text disabled:opacity-40"
+          >
+            Today
+          </button>
+
+          <div className="flex items-center rounded-control border border-edge bg-card p-1">
+            {([
+              { k: "calendar", label: "Calendar", icon: CalendarDays },
+              { k: "list", label: "List", icon: LayoutGrid },
+            ] as const).map((v) => (
+              <button
+                key={v.k}
+                onClick={() => setView(v.k)}
+                aria-pressed={view === v.k}
+                className={cn(
+                  "ring-focus flex h-8 items-center gap-1.5 rounded-[6px] px-3 text-[13px] font-semibold transition-colors",
+                  view === v.k ? "bg-brand text-white" : "text-text-2 hover:bg-card-muted hover:text-text"
+                )}
+              >
+                <v.icon className="h-3.5 w-3.5" />
+                {v.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {/* Drag hint */}
-      {hasAnyPosts && view === "calendar" && (
-        <p className="text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1">
-          <GripVertical className="w-3 h-3" />
-          Drag posts to reschedule them to a different day
-        </p>
-      )}
+      {/* ── Month readings ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Scheduled"
+          value={monthScheduled.length}
+          note={nextOut ? `next goes out ${fmtShort(nextOut.scheduledAt!)}` : "nothing queued this month"}
+          icon={Clock}
+          tone="brand"
+          href="/posts?status=ready"
+        />
+        <StatCard
+          label="Published"
+          value={monthPublished.length}
+          note={`live on LinkedIn in ${monthName.split(" ")[0]}`}
+          icon={CheckCircle}
+          tone="ok"
+          href="/posts?status=published"
+        />
+        <StatCard
+          label="Drafts"
+          value={monthDrafts.length}
+          note={monthDrafts.length > 0 ? "waiting for your review" : "nothing waiting"}
+          icon={FileText}
+          tone="warn"
+          href="/posts?status=draft"
+        />
+        <StatCard
+          label="Days used"
+          value={daysUsed}
+          note={`of ${days.length} days in ${monthName.split(" ")[0]}`}
+          icon={CalendarDays}
+          tone="violet"
+          href="/calendar"
+        />
+      </div>
 
+      {/* ── Body ────────────────────────────────────────────────────────── */}
       {!hasAnyPosts ? (
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 p-12 text-center shadow-sm">
-          <Sparkles className="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No content plan yet</h3>
-          <p className="text-slate-500 dark:text-slate-400 mb-6">Generate your weekly content strategy to see posts on the calendar.</p>
+        <div className="card px-6 py-14 text-center">
+          <Sparkles className="mx-auto mb-4 h-10 w-10 text-text-3" />
+          <h3 className="font-display text-[18px] font-bold text-text">No content plan yet</h3>
+          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-text-2">
+            Generate your weekly batch and the posts land on your posting days automatically.
+          </p>
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90"
+            className="btn-brand ring-focus mt-6 inline-flex h-11 items-center gap-2 rounded-control px-5 text-[14px] font-semibold"
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="h-4 w-4" />
             Generate Content Plan
           </Link>
         </div>
       ) : view === "calendar" ? (
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm overflow-hidden">
-          {/* Calendar Header */}
-          <div className="grid grid-cols-7 border-b border-slate-100 dark:border-white/10">
+        <div className="card overflow-hidden">
+          {hasAnyPosts && (
+            <p className="flex items-center gap-1.5 px-5 pt-4 text-[12px] text-text-3">
+              <GripVertical className="h-3.5 w-3.5" />
+              Drag a post to another day to reschedule it
+            </p>
+          )}
+
+          <div className="grid grid-cols-7 px-2 pb-2 pt-3">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-              <div key={d} className="p-3 text-xs font-semibold text-slate-500 dark:text-slate-400 text-center bg-slate-50 dark:bg-white/[0.06]">
+              <div key={d} className="eyebrow py-2 text-center">
                 {d}
               </div>
             ))}
           </div>
 
-          {/* Calendar Grid */}
-          <div className="grid grid-cols-7">
-            {/* Empty cells before month start */}
+          <div className="grid grid-cols-7 gap-px bg-edge-soft px-2 pb-2">
             {Array.from({ length: startDay }, (_, i) => (
-              <div key={`empty-${i}`} className="min-h-[100px] border-b border-r border-slate-100 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.03]" />
+              <div key={`empty-${i}`} className="min-h-[132px] bg-card-muted/40" />
             ))}
 
-            {/* Day cells */}
             {days.map((day) => {
               const dayPosts = getPostsForDay(day);
               const today = isToday(day);
@@ -247,52 +343,66 @@ export default function CalendarClient({ posts: initialPosts, userTimezone = "As
               return (
                 <div
                   key={dayKey}
-                  className={cn(
-                    "min-h-[100px] border-b border-r border-slate-100 dark:border-white/10 p-2 transition-colors",
-                    today && "bg-blue-50/30 dark:bg-blue-900/10",
-                    isDropHere && "bg-blue-100/50 dark:bg-blue-900/30 ring-2 ring-inset ring-blue-500/40"
-                  )}
                   onDragOver={(e) => handleDragOver(e, dayKey)}
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, day)}
+                  className={cn(
+                    "min-h-[132px] bg-card p-2 transition-colors",
+                    today && "bg-brand-tint",
+                    isDropHere && "bg-brand-tint ring-2 ring-inset ring-brand/40"
+                  )}
                 >
-                  <div className={cn(
-                    "text-xs font-semibold mb-1.5 w-6 h-6 flex items-center justify-center rounded-full",
-                    today ? "bg-blue-600 text-white" : "text-slate-400 dark:text-slate-500"
-                  )}>
-                    {format(day, "d")}
-                  </div>
-                  <div className="space-y-1">
-                    {dayPosts.slice(0, 2).map((post) => (
-                      <div
-                        key={post.id}
-                        draggable={!post.postedToLinkedIn}
-                        onDragStart={() => handleDragStart(post.id)}
-                        onDragEnd={() => { setDragPostId(null); setDropTarget(null); }}
-                        className={cn(
-                          "group relative",
-                          !post.postedToLinkedIn && "cursor-grab active:cursor-grabbing"
-                        )}
-                      >
-                        <Link
-                          href={`/posts/${post.id}`}
-                          className={cn(
-                            "block text-xs px-1.5 py-1 rounded truncate border hover:opacity-80 transition-opacity",
-                            getPostTypeColor(post.postType)
-                          )}
-                          title={`${post.title} - drag to reschedule`}
-                          draggable={false}
-                        >
-                          {post.postedToLinkedIn && (
-                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-1" />
-                          )}
-                          {post.title.slice(0, 18)}{post.title.length > 18 ? "..." : ""}
-                        </Link>
-                      </div>
-                    ))}
-                    {dayPosts.length > 2 && (
-                      <div className="text-xs text-slate-400 dark:text-slate-500 px-1">+{dayPosts.length - 2} more</div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <span
+                      className={cn(
+                        "nums flex h-6 w-6 items-center justify-center rounded-full text-[11.5px] font-semibold",
+                        today ? "bg-brand text-white" : "text-text-3"
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    {dayPosts.length > 0 && (
+                      <span className="nums text-[10.5px] font-semibold text-text-3">
+                        {dayPosts.length}
+                      </span>
                     )}
+                  </div>
+
+                  {/* Every post is shown. A cell that hides work behind
+                      "+2 more" is the one place a calendar must not. */}
+                  <div className="space-y-1.5">
+                    {dayPosts.map((post) => {
+                      const kind = statusOf(post);
+                      return (
+                        <div
+                          key={post.id}
+                          draggable={!post.postedToLinkedIn}
+                          onDragStart={() => handleDragStart(post.id)}
+                          onDragEnd={() => {
+                            setDragPostId(null);
+                            setDropTarget(null);
+                          }}
+                          className={cn(!post.postedToLinkedIn && "cursor-grab active:cursor-grabbing")}
+                        >
+                          <Link
+                            href={`/posts/${post.id}`}
+                            draggable={false}
+                            title={post.title}
+                            className="ring-focus block rounded-[7px] bg-card-muted px-2 py-1.5 transition-colors hover:bg-edge-soft"
+                          >
+                            <span className="nums flex items-center gap-1.5 text-[10px] font-semibold text-text-3">
+                              <span className={cn("h-1.5 w-1.5 rounded-full", DOT[kind])} />
+                              {post.scheduledAt &&
+                                formatInTimeZone(new Date(post.scheduledAt), userTimezone, "HH:mm")}
+                              {post.postedToLinkedIn && <Linkedin className="h-2.5 w-2.5 text-ok" />}
+                            </span>
+                            <span className="mt-0.5 block text-[11px] font-medium leading-tight text-text">
+                              {post.title}
+                            </span>
+                          </Link>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -300,52 +410,55 @@ export default function CalendarClient({ posts: initialPosts, userTimezone = "As
           </div>
         </div>
       ) : (
-        /* List View */
-        <div className="space-y-3">
+        <div className="space-y-5">
           {!monthHasPosts ? (
-            <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 p-10 text-center shadow-sm">
-              <p className="text-slate-500 dark:text-slate-400">No posts scheduled for {monthName}.</p>
+            <div className="card px-6 py-12 text-center">
+              <p className="text-[14px] text-text-2">No posts scheduled for {monthName}.</p>
             </div>
           ) : (
             weekGroups.map(({ weekLabel, weekStart, posts: weekPosts }) => (
-              <div key={weekStart.toISOString()} className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 bg-slate-50 dark:bg-white/[0.06] border-b border-slate-100 dark:border-white/10">
-                  <h3 className="font-semibold text-slate-700 dark:text-slate-300 text-sm">{weekLabel}</h3>
+              <div key={weekStart.toISOString()} className="card overflow-hidden">
+                <div className="flex items-center justify-between px-6 pb-3 pt-5">
+                  <h3 className="font-display text-[16px] font-bold tracking-[-0.02em] text-text">
+                    {weekLabel}
+                  </h3>
+                  <span className="nums text-[12px] text-text-2">
+                    {weekPosts.length} {weekPosts.length === 1 ? "post" : "posts"}
+                  </span>
                 </div>
-                <div className="divide-y divide-slate-100 dark:divide-white/10">
-                  {weekPosts.map((post) => (
-                    <Link
-                      key={post.id}
-                      href={`/posts/${post.id}`}
-                      className="flex items-center justify-between px-5 py-4 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
-                    >
-                      <div className="flex items-start gap-3">
-                        <FileText className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-slate-900 dark:text-white">{post.title}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
-                              {post.style || post.postType}
-                            </span>
-                            <span className={cn("text-xs px-2 py-0.5 rounded-full", getStatusColor(post.status))}>
-                              {post.status}
-                            </span>
-                            {post.postedToLinkedIn && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 flex items-center gap-1">
-                                <Linkedin className="w-3 h-3" />
-                                Published
-                              </span>
-                            )}
+                <div className="px-3 pb-3">
+                  {weekPosts.map((post) => {
+                    const kind = statusOf(post);
+                    return (
+                      <Link
+                        key={post.id}
+                        href={`/posts/${post.id}`}
+                        className="ring-focus flex items-center gap-4 rounded-control px-3 py-3 transition-colors hover:bg-card-muted"
+                      >
+                        <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control bg-card-muted">
+                          <FileText className="h-4 w-4 text-text-3" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-semibold leading-snug text-text">
+                            {post.title}
+                          </span>
+                          <span className="mt-1.5 flex flex-wrap items-center gap-2">
+                            {post.style && <Pill>{post.style}</Pill>}
                             {post.scheduledAt && (
-                              <span className="text-xs text-slate-500 dark:text-slate-400">
-                                {formatInTimeZone(new Date(post.scheduledAt), userTimezone, "MMM d, yyyy h:mm a")}
+                              <span className="nums text-[11.5px] text-text-2">
+                                {formatInTimeZone(
+                                  new Date(post.scheduledAt),
+                                  userTimezone,
+                                  "MMM d, yyyy · HH:mm"
+                                )}
                               </span>
                             )}
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
+                          </span>
+                        </span>
+                        <StatusBadge kind={kind} />
+                      </Link>
+                    );
+                  })}
                 </div>
               </div>
             ))
@@ -353,19 +466,23 @@ export default function CalendarClient({ posts: initialPosts, userTimezone = "As
         </div>
       )}
 
-      {/* Legend */}
+      {/* ── Legend. Spelled out, because a colour the reader has to decode is
+            not information. ───────────────────────────────────────────── */}
       {hasAnyPosts && (
-        <div className="flex items-center gap-4 flex-wrap">
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Post types:</span>
-          {["thought-leadership", "tips", "story", "question", "listicle"].map((type) => (
-            <span key={type} className={cn("text-xs px-2 py-1 rounded-full border", getPostTypeColor(type))}>
-              {type}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
+          <span className="eyebrow">What the dots mean</span>
+          {(
+            [
+              { k: "scheduled", label: "Scheduled — publishes itself" },
+              { k: "draft", label: "Draft — needs your review" },
+              { k: "published", label: "Published to LinkedIn" },
+            ] as const
+          ).map((l) => (
+            <span key={l.k} className="flex items-center gap-1.5 text-[12px] text-text-2">
+              <span className={cn("h-2 w-2 rounded-full", DOT[l.k])} />
+              {l.label}
             </span>
           ))}
-          <span className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 ml-2">
-            <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
-            = Posted to LinkedIn
-          </span>
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export default async function DashboardPage() {
 
   const now = new Date();
 
-  const [user, recentPlan, allPostCounts, newsletters, upcomingPosts] = await Promise.all([
+  const [user, recentPlan, allPostCounts, newsletters, trendRows, upcomingPosts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -37,6 +37,14 @@ export default async function DashboardPage() {
       _count: { _all: true },
     }),
     prisma.newsletter.count({ where: { userId: session.user.id } }),
+    // Eight weeks of creation dates, for the sparkline on each stat card.
+    prisma.post.findMany({
+      where: {
+        plan: { userId: session.user.id },
+        createdAt: { gte: new Date(now.getTime() - 56 * 24 * 60 * 60 * 1000) },
+      },
+      select: { createdAt: true, status: true, postedToLinkedIn: true },
+    }),
     // Upcoming posts across ALL plans - scheduled in the future and not yet posted
     prisma.post.findMany({
       where: {
@@ -55,6 +63,8 @@ export default async function DashboardPage() {
         status: true,
         weekNumber: true,
         postedToLinkedIn: true,
+        // The dashboard of a product that generates artwork showed none of it.
+        imageUrl: true,
       },
     }),
   ]);
@@ -132,6 +142,7 @@ export default async function DashboardPage() {
         status: true,
         weekNumber: true,
         postedToLinkedIn: true,
+        imageUrl: true,
       },
     });
   }
@@ -140,6 +151,36 @@ export default async function DashboardPage() {
   // button, because that is where the user finds out otherwise - the generation
   // preflight refuses with the same gaps.
   const profileGaps = assessProfile(user).gaps;
+
+  // Eight weekly buckets per stat, so each card carries its own shape rather
+  // than a decorative squiggle. Counted here because the client should receive
+  // numbers, not rows.
+  // Each stat card says something only IT can say, rather than four copies of
+  // the same sparkline. These are cheap derivations of rows the page already has.
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const madeThisMonth = trendRows.filter((r) => new Date(r.createdAt) >= startOfMonth).length;
+  const publishedThisMonth = trendRows.filter(
+    (r) => new Date(r.createdAt) >= startOfMonth && (r.postedToLinkedIn || r.status === "published")
+  ).length;
+  const nextOut = postsToShow.find(
+    (p) => !p.postedToLinkedIn && p.status === "ready" && p.scheduledAt
+  );
+  const oldestDraft = [...postsToShow]
+    .filter((p) => p.status === "draft" && p.scheduledAt)
+    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())[0];
+  const asDate = (d: Date | string) =>
+    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const cardNotes = {
+    total: madeThisMonth > 0 ? `${madeThisMonth} written this month` : "nothing written this month",
+    ready: nextOut?.scheduledAt
+      ? `next goes out ${asDate(nextOut.scheduledAt)}`
+      : "nothing queued to publish",
+    published: publishedThisMonth > 0 ? `${publishedThisMonth} this month` : "none yet this month",
+    draft: oldestDraft?.scheduledAt
+      ? `oldest due ${asDate(oldestDraft.scheduledAt)}`
+      : "nothing waiting",
+  };
 
   return (
     <DashboardClient
@@ -151,6 +192,7 @@ export default async function DashboardPage() {
           : null
       }
       stats={{ totalPosts, readyPosts, draftPosts, publishedPosts, newsletters }}
+      cardNotes={cardNotes}
       upcomingPosts={postsToShow}
       batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}

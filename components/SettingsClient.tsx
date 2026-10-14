@@ -3,7 +3,7 @@
 import DeleteAccountSection from "@/components/DeleteAccountSection";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
+import { Save, Loader2, CheckCircle, Plus, X, CreditCard, AlertCircle, AlertTriangle, RefreshCw, ChevronDown, Circle } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { cn, safeJsonParse } from "@/lib/utils";
 import { parsePostingSchedule, type PostingSchedule } from "@/lib/posting-schedule";
@@ -12,6 +12,7 @@ import {
   MIN_HEADLINE_CHARS,
   MIN_SUMMARY_CHARS,
   MIN_SKILLS,
+  MIN_CONTENT_GOALS,
   MIN_CONTENT_STYLES,
   MIN_AUDIENCE_CHARS,
   MAX_AUDIENCE_CHARS,
@@ -111,22 +112,22 @@ function FieldNote({
 }) {
   if (error) {
     return (
-      <p className="flex items-start gap-1.5 text-xs text-red-600 dark:text-red-400 mt-1">
+      <p className="flex items-start gap-1.5 text-xs text-bad mt-1">
         <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
         {error}
       </p>
     );
   }
   if (count === undefined) {
-    return hint ? <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{hint}</p> : null;
+    return hint ? <p className="text-xs text-text-3 mt-1">{hint}</p> : null;
   }
   const short = min !== undefined && count < min;
   return (
     <div className="flex items-start justify-between gap-3 mt-1">
-      {hint ? <p className="text-xs text-slate-400 dark:text-slate-500">{hint}</p> : <span />}
+      {hint ? <p className="text-xs text-text-3">{hint}</p> : <span />}
       <p
         className={`text-xs flex-shrink-0 ${
-          short ? "text-amber-600 dark:text-amber-400" : "text-slate-400 dark:text-slate-500"
+          short ? "text-warn" : "text-text-3"
         }`}
       >
         {max !== undefined ? `${count}/${max}` : count}
@@ -192,6 +193,22 @@ export default function SettingsClient({ user }: { user: User | null }) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   /** Completeness gaps on the SAVED row - what still blocks generation. */
   const [profileGaps, setProfileGaps] = useState<ProfileGap[]>([]);
+  /**
+   * What the AI prompts actually need, measured against the live form rather
+   * than the saved record - so the rail moves as you type. The thresholds are
+   * imported, never inlined, so this cannot drift from what the save enforces.
+   */
+  const checks = [
+    { id: "profile", label: "Headline", ok: headline.trim().length >= MIN_HEADLINE_CHARS },
+    { id: "profile", label: "Summary", ok: summary.trim().length >= MIN_SUMMARY_CHARS },
+    { id: "profile", label: "Skills", ok: skills.length >= MIN_SKILLS },
+    { id: "content", label: "Goals", ok: contentGoals.length >= MIN_CONTENT_GOALS },
+    { id: "content", label: "Styles", ok: contentStyles.length >= MIN_CONTENT_STYLES },
+    { id: "content", label: "Audience", ok: targetAudience.trim().length >= MIN_AUDIENCE_CHARS },
+  ];
+  const ready = checks.filter((c) => c.ok).length;
+  const allReady = ready === checks.length;
+
   const [cancelLoading, setCancelLoading] = useState(false);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [invoices, setInvoices] = useState<Array<{
@@ -319,26 +336,51 @@ export default function SettingsClient({ user }: { user: User | null }) {
     : 0;
 
   return (
-    <div className="max-w-3xl space-y-8">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-white">Settings</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">Manage your profile and content preferences</p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 disabled:opacity-70 shadow-md shadow-blue-200 dark:shadow-blue-900/30"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
-          {saved ? "Saved!" : "Save Changes"}
-        </button>
+      <div className="pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
+          Settings
+        </h1>
+        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+          This is what every post is written from. The more specific these answers are, the less
+          your posts read like they could have been written for anybody.
+        </p>
       </div>
+
+      <div className="flex gap-8">
+        {/* Section index. Eleven cards is more than fits on a screen, so the
+            page needs a way to say what it contains and to jump. */}
+        <nav className="sticky top-6 hidden h-fit w-[180px] flex-shrink-0 lg:block">
+          <p className="eyebrow mb-2 px-3">On this page</p>
+          <ul className="space-y-0.5">
+            {[
+              ["profile", "Your profile"],
+              ["tone", "Tone & voice"],
+              ["positioning", "Positioning"],
+              ["content", "Goals & styles"],
+              ["human-mode", "Human mode"],
+              ["signature", "Signature"],
+              ["schedule", "Posting schedule"],
+              ["subscription", "Subscription"],
+            ].map(([id, label]) => (
+              <li key={id}>
+                <a
+                  href={`#${id}`}
+                  className="ring-focus block rounded-control px-3 py-1.5 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+                >
+                  {label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="min-w-0 max-w-[880px] flex-1 space-y-5">
 
       {/* Save error banner */}
       {saveError && (
-        <div className="flex items-center gap-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
+        <div className="flex items-center gap-3 bg-bad-tint border border-bad/30 text-bad px-4 py-3 rounded-control text-sm">
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {saveError}
         </div>
@@ -346,7 +388,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
 
       {/* What still blocks content generation, as of the last successful save. */}
       {profileGaps.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl px-4 py-3">
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-control px-4 py-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
             <AlertTriangle className="w-4 h-4 flex-shrink-0" />
             Saved - but content generation is still blocked
@@ -362,30 +404,30 @@ export default function SettingsClient({ user }: { user: User | null }) {
       )}
 
       {/* Profile Overview */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
+      <div id="profile" className="scroll-mt-6 card p-6">
         <div className="flex items-center gap-4 mb-6">
           <Avatar src={user?.image} name={user?.name} size={64} />
           <div>
-            <h2 className="font-semibold text-slate-900 dark:text-white">{user?.name}</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">{user?.email}</p>
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">{user?.name}</h2>
+            <p className="text-sm text-text-2">{user?.email}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
-              <span className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full inline-block">
+              <span className="text-xs bg-brand/10 text-brand px-2 py-0.5 rounded-full inline-block">
                 LinkedIn Connected
               </span>
               {tokenStatus && (
                 tokenStatus.isExpired ? (
-                  <span className="text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <span className="text-xs bg-bad-tint text-bad px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3" />
                     Token expired - sign out &amp; sign in to reconnect
                   </span>
                 ) : tokenStatus.expiresInDays !== null && tokenStatus.expiresInDays <= 14 ? (
-                  <span className="text-xs bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                  <span className="text-xs bg-warn-tint text-warn px-2 py-0.5 rounded-full inline-flex items-center gap-1">
                     <RefreshCw className="w-3 h-3" />
                     Token expires in {tokenStatus.expiresInDays} days
                     {tokenStatus.refreshable && " (auto-refresh enabled)"}
                   </span>
                 ) : tokenStatus.expiresInDays !== null ? (
-                  <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 px-2 py-0.5 rounded-full inline-block">
+                  <span className="text-xs bg-ok-tint text-ok px-2 py-0.5 rounded-full inline-block">
                     Token valid ({tokenStatus.expiresInDays} days)
                   </span>
                 ) : null
@@ -396,14 +438,14 @@ export default function SettingsClient({ user }: { user: User | null }) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-sm font-medium text-text mb-1">
               Professional Headline
             </label>
             <input
               value={headline}
               onChange={(e) => setHeadline(e.target.value)}
               placeholder="e.g. Senior Product Manager at Acme - I help B2B teams ship faster"
-              className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="w-full px-4 py-2.5 border border-edge rounded-control text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card dark:text-white"
             />
             <FieldNote
               error={fieldErrors.headline}
@@ -414,11 +456,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Industry</label>
+            <label className="block text-sm font-medium text-text mb-1">Industry</label>
             <select
               value={industry}
               onChange={(e) => setIndustry(e.target.value)}
-              className="select-field w-full pl-4 pr-11 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="select-field w-full pl-4 pr-11 py-2.5 border border-edge rounded-control text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
             >
               <option value="">Select industry</option>
               {INDUSTRIES.map((ind) => (
@@ -428,7 +470,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
           </div>
 
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-sm font-medium text-text mb-1">
               Professional Summary
             </label>
             <textarea
@@ -436,7 +478,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
               onChange={(e) => setSummary(e.target.value)}
               rows={5}
               placeholder="e.g. I've spent 9 years in B2B SaaS product, the last 4 leading a 12-person team. I've shipped three platform rewrites and killed two of my own features. Most teams I meet over-index on roadmap theatre and under-invest in talking to churned customers..."
-              className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="w-full px-4 py-2.5 border border-edge rounded-control text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
             />
             <FieldNote
               error={fieldErrors.summary}
@@ -449,18 +491,18 @@ export default function SettingsClient({ user }: { user: User | null }) {
 
         {/* Skills */}
         <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Skills & Topics</label>
+          <label className="block text-sm font-medium text-text mb-2">Skills & Topics</label>
           <div className="flex gap-2 mb-3">
             <input
               value={skillInput}
               onChange={(e) => setSkillInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSkill())}
               placeholder="Add a skill or topic..."
-              className="flex-1 px-4 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="flex-1 px-4 py-2 border border-edge rounded-control text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
             />
             <button
               onClick={addSkill}
-              className="flex items-center gap-1 px-4 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors dark:text-slate-300"
+              className="flex items-center gap-1 px-4 py-2 border border-edge rounded-control text-sm hover:bg-card-muted transition-colors"
             >
               <Plus className="w-4 h-4" />
               Add
@@ -468,9 +510,9 @@ export default function SettingsClient({ user }: { user: User | null }) {
           </div>
           <div className="flex flex-wrap gap-2">
             {skills.map((skill) => (
-              <span key={skill} className="flex items-center gap-1 text-sm px-3 py-1 bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-full">
+              <span key={skill} className="flex items-center gap-1 text-sm px-3 py-1 bg-brand-tint text-brand rounded-full">
                 {skill}
-                <button onClick={() => removeSkill(skill)} className="hover:text-blue-900 dark:hover:text-blue-200">
+                <button onClick={() => removeSkill(skill)} className="hover:text-brand-hover">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -486,61 +528,61 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Tone & Voice */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
-        <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-4">Tone & Voice</h2>
+      <div id="tone" className="scroll-mt-6 card p-6">
+        <h2 className="mb-4 font-display text-[17px] font-bold tracking-[-0.02em] text-text">Tone & Voice</h2>
         <div className="grid grid-cols-2 gap-3">
           {TONES.map((t) => (
             <button
               key={t.value}
               onClick={() => setTone(t.value)}
               className={cn(
-                "p-4 rounded-xl border-2 text-left transition-all",
+                "p-4 rounded-control border-2 text-left transition-all",
                 tone === t.value
-                  ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                  : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint"
+                  : "border-edge hover:border-brand-edge"
               )}
             >
-              <p className={cn("font-medium text-sm", tone === t.value ? "text-blue-600 dark:text-blue-400" : "text-gray-800 dark:text-gray-200")}>
+              <p className={cn("font-medium text-sm", tone === t.value ? "text-brand" : "text-text")}>
                 {t.label}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t.desc}</p>
+              <p className="text-xs text-text-2 mt-0.5">{t.desc}</p>
             </button>
           ))}
         </div>
       </div>
 
       {/* Content Positioning */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
-        <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Content Positioning</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">How you want to show up on LinkedIn</p>
+      <div id="positioning" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Content Positioning</h2>
+        <p className="text-sm text-text-2 mb-4">How you want to show up on LinkedIn</p>
         <div className="space-y-2">
           {POSITIONING_OPTIONS.map((opt) => (
             <button
               key={opt.value}
               onClick={() => setPositioning(opt.value)}
               className={cn(
-                "w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all",
+                "w-full flex items-center gap-3 p-3 rounded-control border-2 text-left transition-all",
                 positioning === opt.value
-                  ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                  : "border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint"
+                  : "border-edge hover:border-brand-edge"
               )}
             >
               <div className="flex-1">
-                <p className={cn("font-medium text-sm", positioning === opt.value ? "text-blue-600 dark:text-blue-400" : "text-gray-800 dark:text-gray-200")}>
+                <p className={cn("font-medium text-sm", positioning === opt.value ? "text-brand" : "text-text")}>
                   {opt.value}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">{opt.desc}</p>
+                <p className="text-xs text-text-2">{opt.desc}</p>
               </div>
-              {positioning === opt.value && <CheckCircle className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />}
+              {positioning === opt.value && <CheckCircle className="w-4 h-4 text-brand flex-shrink-0" />}
             </button>
           ))}
         </div>
       </div>
 
       {/* Content Goals & Styles */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6 space-y-6">
+      <div id="content" className="scroll-mt-6 card p-6 space-y-6">
         <div>
-          <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">LinkedIn Goals</h2>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">LinkedIn Goals</h2>
           <div className="mt-3">
             <ChipMultiSelect
               options={CONTENT_GOALS}
@@ -554,8 +596,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
 
         <div>
-          <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Content Styles</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">The types of content that resonate with you</p>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Content Styles</h2>
+          <p className="text-sm text-text-2">The types of content that resonate with you</p>
           <div className="mt-3">
             <ChipMultiSelect
               options={CONTENT_STYLES}
@@ -575,13 +617,13 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
 
         <div>
-          <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Target Audience</h2>
+          <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Target Audience</h2>
           <textarea
             value={targetAudience}
             onChange={(e) => setTargetAudience(e.target.value.slice(0, MAX_AUDIENCE_CHARS))}
             rows={4}
             placeholder="e.g. Seed-stage B2B SaaS founders with 5-20 employees. Their biggest challenge right now: they keep shipping features nobody asked for and churn is climbing. What they actually want: a repeatable way to decide what to build next without guessing."
-            className="w-full mt-2 px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+            className="w-full mt-2 px-4 py-2.5 border border-edge rounded-control text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
           />
           <FieldNote
             error={fieldErrors.targetAudience}
@@ -594,11 +636,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Human Mode */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
+      <div id="human-mode" className="scroll-mt-6 card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-semibold font-display text-slate-900 dark:text-white">Human Mode (Global Default)</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Human Mode (Global Default)</h2>
+            <p className="text-sm text-text-2 mt-1">
               Makes AI-generated content sound more naturally human - slight variations in style
               and phrasing that make posts less detectable as AI-generated.
             </p>
@@ -607,18 +649,18 @@ export default function SettingsClient({ user }: { user: User | null }) {
             onClick={() => setHumanMode(!humanMode)}
             className={cn(
               "relative w-14 h-7 rounded-full transition-colors flex-shrink-0 ml-6",
-              humanMode ? "bg-blue-600" : "bg-slate-200 dark:bg-gray-600"
+              humanMode ? "bg-brand" : "bg-edge"
             )}
           >
             <span
               className={cn(
-                "absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform",
-                humanMode ? "translate-x-8" : "translate-x-1"
+                "absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                humanMode ? "translate-x-7" : "translate-x-0"
               )}
             />
           </button>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">
+        <p className="text-xs text-text-3 mt-3">
           {humanMode
             ? "Human Mode is ON - all generated posts will include natural writing variations"
             : "Human Mode is OFF - clean, polished AI output (can be toggled per-post)"}
@@ -626,9 +668,9 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Post Signature */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
-        <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Post Signature</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">
+      <div id="signature" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Post Signature</h2>
+        <p className="text-sm text-text-2 mb-3">
           This text is automatically appended to every post when published to LinkedIn.
           Use it for a consistent sign-off, tagline, or call-to-action.
         </p>
@@ -637,15 +679,15 @@ export default function SettingsClient({ user }: { user: User | null }) {
           onChange={(e) => setPostSignature(e.target.value)}
           rows={3}
           placeholder={`e.g.\n\nFollow me for more insights on [topic].\nBook a free call: https://calendly.com/yourname`}
-          className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] dark:text-white"
+          className="w-full px-4 py-2.5 border border-edge rounded-control text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card dark:text-white"
         />
-        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">{postSignature.length} chars</p>
+        <p className="text-xs text-text-3 mt-1 text-right">{postSignature.length} chars</p>
       </div>
 
       {/* Posting Schedule */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
-        <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Posting Schedule</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+      <div id="schedule" className="scroll-mt-6 card p-6">
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">Posting Schedule</h2>
+        <p className="text-sm text-text-2 mb-4">
           Posts set to &quot;Ready&quot; will auto-publish to LinkedIn at these times
         </p>
 
@@ -655,10 +697,10 @@ export default function SettingsClient({ user }: { user: User | null }) {
               key={day}
               onClick={() => toggleDay(day)}
               className={cn(
-                "px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all",
+                "px-4 py-2 rounded-control text-sm font-medium border-2 transition-all",
                 postingSchedule.days.includes(day)
-                  ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400"
-                  : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-gray-600"
+                  ? "border-brand bg-brand-tint text-brand"
+                  : "border-edge text-text-2 hover:border-brand-edge hover:text-text"
               )}
             >
               {day.slice(0, 3)}
@@ -667,14 +709,14 @@ export default function SettingsClient({ user }: { user: User | null }) {
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          <label className="text-sm font-medium text-slate-700 dark:text-slate-300">Posting time:</label>
+          <label className="text-sm font-medium text-text">Posting time:</label>
           <input
             type="time"
             value={postingSchedule.time}
             onChange={(e) => setPostingSchedule((s) => ({ ...s, time: e.target.value }))}
-            className="px-3 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+            className="px-3 py-2 border border-edge rounded-control text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
           />
-          <p className="text-xs text-slate-400 dark:text-slate-500">{timezone.replace(/_/g, " ")}</p>
+          <p className="text-xs text-text-3">{timezone.replace(/_/g, " ")}</p>
         </div>
 
         {/* Timezone with search */}
@@ -682,11 +724,11 @@ export default function SettingsClient({ user }: { user: User | null }) {
       </div>
 
       {/* Subscription */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6">
+      <div id="subscription" className="scroll-mt-6 card p-6">
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="font-semibold font-display text-slate-900 dark:text-white flex items-center gap-2">
-              <CreditCard className="w-5 h-5 text-slate-400" />
+            <h2 className="flex items-center gap-2 font-display text-[17px] font-bold tracking-[-0.02em] text-text">
+              <CreditCard className="w-5 h-5 text-text-3" />
               Subscription
             </h2>
             {sub ? (
@@ -694,9 +736,9 @@ export default function SettingsClient({ user }: { user: User | null }) {
                 <div className="flex items-center gap-2">
                   <span className={cn(
                     "text-xs px-2 py-0.5 rounded-full font-medium",
-                    sub.status === "active" ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400" :
-                    sub.status === "trialing" ? "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400" :
-                    "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400"
+                    sub.status === "active" ? "bg-ok-tint text-ok" :
+                    sub.status === "trialing" ? "bg-warn-tint text-warn" :
+                    "bg-bad-tint text-bad"
                   )}>
                     {sub.status === "trialing"
                       ? `Free Trial - ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} left`
@@ -706,18 +748,18 @@ export default function SettingsClient({ user }: { user: User | null }) {
                   </span>
                 </div>
                 {sub.currentPeriodEnd && sub.status === "active" && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-text-2">
                     Renews {new Date(sub.currentPeriodEnd).toLocaleDateString()}
                   </p>
                 )}
                 {sub.trialEnd && sub.status === "trialing" && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-text-2">
                     Trial ends {new Date(sub.trialEnd).toLocaleDateString()}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">No subscription found</p>
+              <p className="text-sm text-text-2 mt-1">No subscription found</p>
             )}
           </div>
 
@@ -725,17 +767,17 @@ export default function SettingsClient({ user }: { user: User | null }) {
             <div className="relative">
               <button
                 onClick={() => setShowCancelConfirm(true)}
-                className="flex items-center gap-2 text-sm px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                className="flex items-center gap-2 text-sm px-4 py-2 border border-bad/30 text-bad rounded-control hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
                 Cancel Subscription
               </button>
               {showCancelConfirm && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl z-20 p-4">
+                <div className="absolute right-0 top-full mt-2 w-72 bg-card rounded-control shadow-lift-lg z-20 p-4">
                   <div className="flex items-start gap-2 mb-3">
                     <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-medium text-slate-900 dark:text-white">Cancel subscription?</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      <p className="text-sm font-medium text-text">Cancel subscription?</p>
+                      <p className="text-xs text-text-2 mt-1">
                         Your access will continue until the end of the current billing period.
                       </p>
                     </div>
@@ -744,14 +786,14 @@ export default function SettingsClient({ user }: { user: User | null }) {
                     <button
                       onClick={handleCancelSubscription}
                       disabled={cancelLoading}
-                      className="flex-1 py-2 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-70 flex items-center justify-center gap-1"
+                      className="flex-1 py-2 text-xs font-semibold bg-bad text-white rounded-control hover:bg-red-700 transition-colors disabled:opacity-70 flex items-center justify-center gap-1"
                     >
                       {cancelLoading && <Loader2 className="w-3 h-3 animate-spin" />}
                       Yes, Cancel
                     </button>
                     <button
                       onClick={() => setShowCancelConfirm(false)}
-                      className="flex-1 py-2 text-xs font-semibold border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
+                      className="flex-1 py-2 text-xs font-semibold border border-edge text-text rounded-control hover:bg-card-muted transition-colors"
                     >
                       Keep Plan
                     </button>
@@ -762,7 +804,7 @@ export default function SettingsClient({ user }: { user: User | null }) {
           ) : sub?.status !== "active" ? (
             <a
               href="/subscribe"
-              className="flex items-center gap-2 text-sm px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 text-sm px-4 py-2 bg-brand text-white rounded-control hover:bg-brand-hover transition-colors"
             >
               Subscribe Now
             </a>
@@ -771,28 +813,28 @@ export default function SettingsClient({ user }: { user: User | null }) {
 
         {/* Invoice History */}
         {sub?.razorpaySubscriptionId && (
-          <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/10">
+          <div className="mt-6 pt-6 border-t border-edge-soft">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+              <h3 className="text-sm font-semibold text-text">
                 Invoice History
               </h3>
               {!invoicesLoaded && !invoicesLoading && (
                 <button
                   onClick={loadInvoices}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                  className="text-sm text-brand hover:underline"
                 >
                   Load Invoices
                 </button>
               )}
             </div>
             {invoicesLoading && (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
+              <div className="flex items-center gap-2 text-sm text-text-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Loading invoices...
               </div>
             )}
             {invoicesLoaded && invoices.length === 0 && (
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-text-2">
                 No invoices found yet.
               </p>
             )}
@@ -801,14 +843,14 @@ export default function SettingsClient({ user }: { user: User | null }) {
                 {invoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="flex items-center justify-between text-sm py-2.5 px-3 rounded-lg bg-slate-50 dark:bg-white/[0.06]"
+                    className="flex items-center justify-between text-sm py-2.5 px-3 rounded-control bg-card-muted"
                   >
-                    <span className="text-slate-600 dark:text-slate-400 min-w-[90px]">
+                    <span className="text-text-2 min-w-[90px]">
                       {inv.date
                         ? new Date(inv.date).toLocaleDateString()
                         : "-"}
                     </span>
-                    <span className="text-slate-900 dark:text-white font-medium">
+                    <span className="text-text font-medium">
                       {inv.currency === "USD" ? "$" : "₹"}
                       {inv.amount}
                     </span>
@@ -816,16 +858,16 @@ export default function SettingsClient({ user }: { user: User | null }) {
                       className={cn(
                         "text-xs px-2 py-0.5 rounded-full font-medium",
                         inv.status === "captured"
-                          ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400"
+                          ? "bg-ok-tint text-ok"
                           : inv.status === "authorized"
-                            ? "bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400"
-                            : "bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400"
+                            ? "bg-brand-tint text-brand"
+                            : "bg-card-muted text-text-2"
                       )}
                     >
                       {inv.status === "captured" ? "Paid" : inv.status}
                     </span>
                     {inv.method && (
-                      <span className="text-xs text-slate-400 capitalize">
+                      <span className="text-xs text-text-3 capitalize">
                         {inv.method}
                       </span>
                     )}
@@ -837,21 +879,84 @@ export default function SettingsClient({ user }: { user: User | null }) {
         )}
       </div>
 
-      {/* Save button at bottom */}
-      <div className="pb-6">
+      {/* Save, pinned to the bottom of the scroll area. The control that
+          commits your work should not scroll away from the work. */}
+      <div className="sticky bottom-0 -mx-1 border-t border-edge bg-field/92 px-1 py-3 backdrop-blur-md">
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold hover:opacity-90 disabled:opacity-70"
+          className="btn-brand ring-focus flex h-12 w-full items-center justify-center gap-2 rounded-control text-[14.5px] font-semibold disabled:cursor-not-allowed"
         >
-          {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : saved ? <CheckCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
-          {saved ? "All changes saved!" : "Save All Settings"}
+          {saving ? <Loader2 className="h-5 w-5 animate-spin" /> : saved ? <CheckCircle className="h-5 w-5" /> : <Save className="h-5 w-5" />}
+          {saved ? "All changes saved" : "Save all settings"}
         </button>
       </div>
 
       {/* Erasure (DPDP s.12(3)). Last on the page, visually separated, and
           high-friction by design - it is irreversible. */}
       <DeleteAccountSection />
+        </div>
+
+        {/* Profile strength. An incomplete profile blocks generation outright,
+            so the page that fixes it should say what is missing. */}
+        <aside className="sticky top-6 hidden h-fit w-[300px] flex-shrink-0 xl:block">
+          <div className="card p-5">
+            <p className="eyebrow">Profile strength</p>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="font-display text-[30px] font-bold leading-none tracking-[-0.03em] text-text">
+                {ready}
+              </span>
+              <span className="text-[14px] text-text-2">of {checks.length} ready</span>
+            </div>
+
+            <div className="mt-3 flex gap-1" aria-hidden>
+              {checks.map((c, i) => (
+                <span
+                  key={i}
+                  className={cn(
+                    "h-1.5 flex-1 rounded-full transition-colors",
+                    c.ok ? "bg-ok" : "bg-edge"
+                  )}
+                />
+              ))}
+            </div>
+
+            <p className="mt-3 text-[13px] leading-relaxed text-text-2">
+              {allReady
+                ? "Every field the AI writes from is filled in. Generation is unblocked."
+                : "Generation stays blocked until each of these is filled in."}
+            </p>
+
+            <ul className="mt-4 space-y-0.5 border-t border-edge pt-3">
+              {checks.map((c, i) => (
+                <li key={i}>
+                  <a
+                    href={`#${c.id}`}
+                    className="ring-focus -mx-2 flex items-center gap-2.5 rounded-control px-2 py-1.5 transition-colors hover:bg-card-muted"
+                  >
+                    {c.ok ? (
+                      <CheckCircle className="h-4 w-4 flex-shrink-0 text-ok" />
+                    ) : (
+                      <Circle className="h-4 w-4 flex-shrink-0 text-text-3" />
+                    )}
+                    <span
+                      className={cn(
+                        "text-[13.5px] font-medium",
+                        c.ok ? "text-text-2" : "text-text"
+                      )}
+                    >
+                      {c.label}
+                    </span>
+                    {!c.ok && (
+                      <span className="ml-auto text-[12px] font-medium text-warn">needed</span>
+                    )}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </aside>
+      </div>
     </div>
   );
 }
@@ -869,39 +974,39 @@ function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: str
 
   return (
     <div className="mt-4 relative">
-      <label className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1 block">Timezone</label>
+      <label className="text-sm font-medium text-text mb-1 block">Timezone</label>
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="w-full px-3 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white flex items-center justify-between"
+        className="w-full px-3 py-2 border border-edge rounded-control text-sm text-left focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white flex items-center justify-between"
       >
         <span>{value.replace(/_/g, " ")}</span>
-        <ChevronDown className="w-4 h-4 text-slate-400" />
+        <ChevronDown className="w-4 h-4 text-text-3" />
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-[#0D131F] border border-slate-200 dark:border-white/10 rounded-xl shadow-xl max-h-64 overflow-hidden flex flex-col">
-          <div className="p-2 border-b border-slate-100 dark:border-white/10">
+        <div className="absolute z-50 mt-1 w-full bg-white dark:bg-[#0D131F] border border-edge rounded-control shadow-lift-lg max-h-64 overflow-hidden flex flex-col">
+          <div className="p-2 border-b border-edge-soft">
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search timezone..."
               autoFocus
-              className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-white"
+              className="w-full px-3 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card dark:text-white"
             />
           </div>
           <div className="overflow-y-auto max-h-48">
             {filtered.length === 0 ? (
-              <p className="text-sm text-slate-400 p-3 text-center">No matches</p>
+              <p className="text-sm text-text-3 p-3 text-center">No matches</p>
             ) : (
               filtered.map((tz) => (
                 <button
                   key={tz}
                   onClick={() => { onChange(tz); setOpen(false); setSearch(""); }}
                   className={cn(
-                    "w-full text-left px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors",
-                    tz === value ? "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium" : "text-slate-700 dark:text-slate-300"
+                    "w-full text-left px-3 py-2 text-sm hover:bg-brand-tint transition-colors",
+                    tz === value ? "bg-brand-tint text-brand font-medium" : "text-text"
                   )}
                 >
                   {tz.replace(/_/g, " ")}
@@ -917,7 +1022,7 @@ function TimezoneSelect({ value, onChange }: { value: string; onChange: (tz: str
         <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(""); }} />
       )}
 
-      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+      <p className="text-xs text-text-3 mt-1">
         Posts will be scheduled and auto-published in this timezone
       </p>
     </div>

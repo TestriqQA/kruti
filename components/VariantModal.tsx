@@ -45,22 +45,22 @@ export default function VariantModal({
 }) {
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#0D131F] rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-white dark:bg-[#0D131F] rounded-card shadow-lift-lg w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-white/10">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-edge-soft">
           <div>
-            <h2 className="font-display text-lg font-bold text-slate-900 dark:text-gray-100">
+            <h2 className="font-display text-lg font-bold text-text">
               Choose a Variant
             </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-text-2">
               Three different styles generated for this post - pick your favorite
             </p>
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-white/[0.06] rounded-lg transition-colors"
+            className="p-2 hover:bg-card-muted rounded-control transition-colors"
           >
-            <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            <X className="w-5 h-5 text-text-2" />
           </button>
         </div>
 
@@ -68,8 +68,8 @@ export default function VariantModal({
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
-              <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-400" />
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-brand" />
+              <p className="text-sm text-text-2">
                 Generating 3 variants with different styles...
               </p>
               {/* Skeleton cards */}
@@ -77,18 +77,18 @@ export default function VariantModal({
                 {[0, 1, 2].map((i) => (
                   <div
                     key={i}
-                    className="bg-slate-50 dark:bg-white/[0.06] rounded-xl p-5 animate-pulse space-y-3"
+                    className="bg-card-muted rounded-control p-5 animate-pulse space-y-3"
                   >
-                    <div className="h-5 bg-slate-200 dark:bg-white/[0.08] rounded w-24" />
-                    <div className="h-4 bg-slate-200 dark:bg-white/[0.08] rounded w-full" />
+                    <div className="h-5 bg-slate-200 rounded w-24" />
+                    <div className="h-4 bg-slate-200 rounded w-full" />
                     <div className="space-y-2">
-                      <div className="h-3 bg-slate-200 dark:bg-white/[0.08] rounded w-full" />
-                      <div className="h-3 bg-slate-200 dark:bg-white/[0.08] rounded w-5/6" />
-                      <div className="h-3 bg-slate-200 dark:bg-white/[0.08] rounded w-4/6" />
-                      <div className="h-3 bg-slate-200 dark:bg-white/[0.08] rounded w-full" />
-                      <div className="h-3 bg-slate-200 dark:bg-white/[0.08] rounded w-3/6" />
+                      <div className="h-3 bg-slate-200 rounded w-full" />
+                      <div className="h-3 bg-slate-200 rounded w-5/6" />
+                      <div className="h-3 bg-slate-200 rounded w-4/6" />
+                      <div className="h-3 bg-slate-200 rounded w-full" />
+                      <div className="h-3 bg-slate-200 rounded w-3/6" />
                     </div>
-                    <div className="h-8 bg-slate-200 dark:bg-white/[0.08] rounded w-full mt-4" />
+                    <div className="h-8 bg-slate-200 rounded w-full mt-4" />
                   </div>
                 ))}
               </div>
@@ -101,7 +101,7 @@ export default function VariantModal({
                 return (
                   <div
                     key={i}
-                    className="flex flex-col bg-white dark:bg-white/[0.06] border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden hover:shadow-lg transition-shadow"
+                    className="flex flex-col bg-card border border-edge rounded-control overflow-hidden hover:shadow-lift-lg transition-shadow"
                   >
                     {/* Style badge */}
                     <div className="px-4 pt-4 pb-2">
@@ -119,14 +119,14 @@ export default function VariantModal({
 
                     {/* Title */}
                     <div className="px-4 pb-2">
-                      <h3 className="text-sm font-bold text-slate-900 dark:text-gray-100 line-clamp-2">
+                      <h3 className="text-sm font-bold text-text line-clamp-2">
                         {variant.title}
                       </h3>
                     </div>
 
                     {/* Body preview */}
                     <div className="px-4 pb-3 flex-1">
-                      <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed line-clamp-8 whitespace-pre-wrap">
+                      <p className="text-xs text-text-2 leading-relaxed line-clamp-8 whitespace-pre-wrap">
                         {variant.body}
                       </p>
                     </div>
@@ -137,13 +137,13 @@ export default function VariantModal({
                         {variant.hashtags.slice(0, 3).map((tag, j) => (
                           <span
                             key={j}
-                            className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded"
+                            className="text-[10px] px-1.5 py-0.5 bg-brand-tint text-brand rounded"
                           >
                             #{tag}
                           </span>
                         ))}
                         {variant.hashtags.length > 3 && (
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-[10px] text-text-3">
                             +{variant.hashtags.length - 3}
                           </span>
                         )}
@@ -154,7 +154,7 @@ export default function VariantModal({
                     <div className="px-4 pb-4">
                       <button
                         onClick={() => onSelect(variant)}
-                        className="w-full py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+                        className="w-full py-2 text-sm font-semibold text-white bg-brand rounded-control hover:bg-brand-hover transition-colors"
                       >
                         Use This
                       </button>

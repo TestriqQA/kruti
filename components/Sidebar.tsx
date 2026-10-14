@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
@@ -12,6 +13,7 @@ import {
   Settings,
   LifeBuoy,
   LogOut,
+  Loader2,
   Shield,
   Moon,
   Sun,
@@ -48,39 +50,52 @@ interface SidebarProps {
 export default function Sidebar({ user, supportUnread = 0, profileCompletion = 100 }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  // Escape closes the confirmation, but not while the sign-out is already in
+  // flight - dismissing it then would leave the page looking signed in.
+  useEffect(() => {
+    if (!confirmSignOut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !signingOut) setConfirmSignOut(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [confirmSignOut, signingOut]);
 
   return (
-    <aside className="w-64 bg-white dark:bg-[#0D131F] border-r border-slate-200 dark:border-white/10 flex flex-col">
+    <aside className="flex w-[288px] flex-shrink-0 flex-col border-r border-edge bg-card">
       {/* Logo */}
-      <div className="p-5 border-b border-slate-100 dark:border-white/10">
-        <Link href="/dashboard" className="flex items-center">
+      <div className="flex h-20 flex-shrink-0 items-center justify-center border-b border-edge-soft px-4">
+        <Link href="/dashboard" className="ring-focus flex items-center rounded-control">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
+          {/* Width-driven so the mark scales with the sidebar rather than being
+              pinned to a height. */}
+          <img src="/logo.png" alt="Kruti.io" className="h-auto w-[168px]" />
         </Link>
       </div>
 
       {/* User */}
-      <div className="p-4 border-b border-slate-100 dark:border-white/10">
-        <div className="flex items-center gap-3">
+      <div className="border-b border-edge-soft px-3 py-2.5">
+        <div className="flex items-center gap-3 rounded-control px-2 py-1">
           <ProfileCompletionRing
             src={user.image}
             name={user.name}
             percent={profileCompletion}
-            size={36}
+            size={44}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            <p className="truncate text-[14.5px] font-semibold text-text">{user.name}</p>
+            <p className="truncate text-[12.5px] text-text-3">{user.email}</p>
             {/* The ring alone shows there is something left; this says how much
                 and goes straight to the screen that fixes it. */}
             {profileCompletion >= 100 ? (
-              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
-                Profile complete
-              </p>
+              <p className="mt-0.5 text-[11.5px] font-semibold text-ok">Profile complete</p>
             ) : (
               <Link
                 href="/onboarding"
-                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline mt-0.5 inline-block"
+                className="mt-0.5 inline-block text-[11.5px] font-semibold text-brand hover:underline"
               >
                 Profile {profileCompletion}% - finish it
               </Link>
@@ -90,7 +105,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-3">
         {navItems.map((item) => {
           const active =
             item.href === "/dashboard"
@@ -103,16 +118,22 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
               href={item.href}
               {...(item.allowWhenLocked ? { "data-allow-when-locked": "" } : {})}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "ring-focus relative flex h-10 items-center gap-3 rounded-control px-3 text-[13.5px] font-medium transition-colors",
                 active
-                  ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-brand-tint text-brand"
+                  : "text-text-2 hover:bg-card-muted hover:text-text"
               )}
             >
-              <item.icon className={cn("w-4 h-4", active ? "text-blue-600 dark:text-blue-400" : "")} />
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand"
+                />
+              )}
+              <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
               {item.label}
               {item.href === "/support" && supportUnread > 0 && (
-                <span className="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-semibold text-center">
+                <span className="nums ml-auto min-w-[18px] rounded-full bg-brand px-1.5 py-0.5 text-center text-[10px] font-bold text-white">
                   {supportUnread}
                 </span>
               )}
@@ -123,17 +144,17 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
         {/* Admin link */}
         {user.role === "admin" && (
           <>
-            <div className="my-2 border-t border-slate-100 dark:border-white/10" />
+            <div className="my-2 border-t border-edge-soft" />
             <Link
               href="/admin"
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "ring-focus flex h-10 items-center gap-3 rounded-control px-3 text-[13.5px] font-medium transition-colors",
                 pathname.startsWith("/admin")
-                  ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-bad-tint text-bad"
+                  : "text-text-2 hover:bg-card-muted hover:text-text"
               )}
             >
-              <Shield className={cn("w-4 h-4", pathname.startsWith("/admin") ? "text-red-700 dark:text-red-400" : "")} />
+              <Shield className="h-[17px] w-[17px] flex-shrink-0" />
               Admin Panel
             </Link>
           </>
@@ -141,25 +162,72 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </nav>
 
       {/* Bottom section: Dark mode + Sign out */}
-      <div className="p-3 border-t border-slate-100 dark:border-white/10 space-y-1">
+      <div className="flex-shrink-0 space-y-1 border-t border-edge-soft px-3 py-2.5">
         <button
           onClick={toggleTheme}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors w-full"
+          className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === "dark" ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
           {theme === "dark" ? "Light Mode" : "Dark Mode"}
         </button>
         {/* Exempt from the subscription lock: a locked user must always be able
             to leave. See SubscriptionLock / ALLOW_WHEN_LOCKED. */}
         <button
           data-allow-when-locked=""
-          onClick={() => signOut({ callbackUrl: "/" })}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors w-full"
+          onClick={() => setConfirmSignOut(true)}
+          className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="h-[17px] w-[17px]" />
           Sign Out
         </button>
       </div>
+
+      {/* Signing out took one click and there is no undo - LinkedIn is the only
+          way back in. Carries the lock exemption too, or a locked user could
+          open this and not be able to answer it. */}
+      {confirmSignOut && (
+        <div
+          data-allow-when-locked=""
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => !signingOut && setConfirmSignOut(false)}
+          role="presentation"
+        >
+          <div
+            className="w-full max-w-sm space-y-4 rounded-card bg-card p-6 shadow-lift-lg"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="signout-title"
+          >
+            <h3 id="signout-title" className="font-display text-lg font-bold text-text">
+              Sign out of Kruti?
+            </h3>
+            <p className="text-sm leading-relaxed text-text-2">
+              Anything you have saved stays where it is. You will need to sign in with
+              LinkedIn again to get back in.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmSignOut(false)}
+                className="ring-focus h-9 rounded-control border border-edge px-4 text-sm font-medium text-text-2 transition-colors hover:border-brand-edge hover:text-text"
+              >
+                Stay signed in
+              </button>
+              <button
+                onClick={() => {
+                  setSigningOut(true);
+                  signOut({ callbackUrl: "/" });
+                }}
+                disabled={signingOut}
+                className="ring-focus flex h-9 items-center gap-2 rounded-control bg-bad px-4 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-70"
+              >
+                {signingOut && <Loader2 className="h-4 w-4 animate-spin" />}
+                {signingOut ? "Signing out..." : "Sign out"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

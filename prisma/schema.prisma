@@ -188,6 +188,9 @@ model SupportTicket {
   /// deliberately never sweeps (see lib/image-cleanup.ts).
   screenshots String?  @db.Text
   status      String   @default("open") // open | in_progress | closed
+  /// Which part of the product the ticket is about. Values and labels live in
+  /// lib/support.ts (TICKET_CATEGORIES). Existing rows take the default.
+  category    String   @default("other")
   adminNote   String?  @db.Text
   replies     SupportReply[]
   createdAt   DateTime @default(now())
