@@ -117,6 +117,8 @@ export default function PostEditorClient({
   showWatermark = false,
   prevPostId = null,
   nextPostId = null,
+  postIndex = null,
+  postTotal = 0,
 }: {
   post: Post;
   postSignature: string | null;
@@ -125,6 +127,9 @@ export default function PostEditorClient({
   showWatermark?: boolean;
   prevPostId?: string | null;
   nextPostId?: string | null;
+  /** 1-based position of this post in the same ordered list prev/next walk. */
+  postIndex?: number | null;
+  postTotal?: number;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -1036,36 +1041,50 @@ export default function PostEditorClient({
       )}
 
       {/* Floating toolbar: navigation + actions, stays in view while scrolling */}
+      {/* Toolbar: where you are on top, what you can do underneath. */}
       <div className="sticky top-0 z-30 space-y-2.5 rounded-card border border-edge bg-card/95 px-4 py-3 shadow-lift backdrop-blur-md">
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* ── Navigation ─────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => router.push("/posts")}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control px-2.5 text-sm text-text-2 transition-colors hover:bg-card-muted hover:text-text"
-            title="Back to all posts"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control px-2.5 text-sm font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+            title="Back to the list of all your posts"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back
+            All posts
           </button>
+
+          <span className="h-5 w-px bg-edge" aria-hidden />
+
+          {/* Steps through the same ordered list the posts page shows. The
+              count is here because "Prev"/"Next" on their own never said what
+              they moved between. */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
               disabled={!prevPostId}
               className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-              title={prevPostId ? "Previous post" : "No previous post"}
+              title={prevPostId ? "Open the previous post" : "This is the first post"}
             >
               <ChevronLeft className="w-4 h-4" />
-              Prev
+              Previous post
             </button>
+            {postIndex && postTotal ? (
+              <span className="nums px-2 text-xs text-text-3" title="Your posts, in scheduled order">
+                {postIndex} of {postTotal}
+              </span>
+            ) : null}
             <button
               onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
               disabled={!nextPostId}
               className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
-              title={nextPostId ? "Next post" : "No next post"}
+              title={nextPostId ? "Open the next post" : "This is the last post"}
             >
-              Next
+              Next post
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+
           {!isPublished && (
             <div className="ml-auto flex items-center gap-1.5">
               {autoSaveStatus === "saving" && (
@@ -1090,22 +1109,22 @@ export default function PostEditorClient({
           )}
         </div>
 
-        {/* Action buttons row */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* ── Actions ────────────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleCopy}
             className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text"
-            title="Copy to clipboard"
+            title="Copy the post text to your clipboard"
           >
-            {copied ? <CheckCircle className="w-4 h-4 text-ok" /> : <Copy className="w-4 h-4 text-text-2" />}
-            {copied ? "Copied!" : "Copy"}
+            {copied ? <CheckCircle className="w-4 h-4 text-ok" /> : <Copy className="w-4 h-4" />}
+            {copied ? "Copied!" : "Copy text"}
           </button>
 
           <button
             onClick={handleRepurpose}
             disabled={generatingRepurpose}
             className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
-            title="Repurpose for other platforms"
+            title="Rewrite this post for other platforms"
           >
             {generatingRepurpose ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1115,12 +1134,9 @@ export default function PostEditorClient({
             Repurpose
           </button>
 
-          {/* Status - mirrors the Post Details dropdown (same state, so both stay in sync) */}
+          {/* Mirrors the Post Details dropdown - same state, so both stay in sync. */}
           <div className="flex items-center gap-2">
-            <label
-              htmlFor="toolbar-status"
-              className="text-xs text-text-2"
-            >
+            <label htmlFor="toolbar-status" className="text-xs text-text-2">
               Status
             </label>
             <select
@@ -1141,15 +1157,45 @@ export default function PostEditorClient({
             </select>
           </div>
 
+          {/* Deleting sits at the end of this group, with the gap below keeping
+              it away from Save and Post to LinkedIn. */}
+          {!isPublished && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-bad/30 px-3 text-sm text-bad transition-colors hover:bg-bad-tint"
+              title="Delete this post permanently"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete
+            </button>
+          )}
+
           <div className="flex-1" />
 
-          {/* Post to LinkedIn */}
+          {!isPublished && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-4 text-sm font-medium text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
+              title="Save your changes now"
+            >
+              {saving ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : saved ? (
+                <CheckCircle className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {saved ? "Saved!" : "Save"}
+            </button>
+          )}
+
           {!post.postedToLinkedIn ? (
             <button
               onClick={handlePublishClick}
               disabled={posting || isTrialExpired}
               className="btn-brand ring-focus flex h-9 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:cursor-not-allowed"
-              title={isTrialExpired ? "Subscribe to post to LinkedIn" : undefined}
+              title={isTrialExpired ? "Subscribe to post to LinkedIn" : "Publish this post to LinkedIn now"}
             >
               {posting ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1165,38 +1211,13 @@ export default function PostEditorClient({
               href={`https://www.linkedin.com/feed/update/${post.linkedinPostId ?? ""}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-ok-tint text-ok border border-ok/30 rounded-control hover:bg-ok-tint transition-colors"
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-ok/30 bg-ok-tint px-4 text-sm text-ok transition-colors hover:bg-ok/15"
+              title="Open this post on LinkedIn"
             >
               <CheckCircle className="w-4 h-4" />
               View on LinkedIn
               <ExternalLink className="w-3 h-3" />
             </a>
-          )}
-
-          {!isPublished && (
-            <>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-4 text-sm font-medium text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : saved ? (
-                  <CheckCircle className="w-4 h-4" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {saved ? "Saved!" : "Save"}
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-bad/30 px-3 text-sm text-bad transition-colors hover:bg-bad-tint"
-                title="Delete post"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </>
           )}
         </div>
       </div>
