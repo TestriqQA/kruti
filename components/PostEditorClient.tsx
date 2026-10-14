@@ -1322,7 +1322,7 @@ export default function PostEditorClient({
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         {/* Editor */}
         <div className="lg:col-span-2 space-y-4">
           {/* Title */}
@@ -1512,6 +1512,23 @@ export default function PostEditorClient({
             )
           )}
 
+
+          {/* Sits under the fields it previews, which is also what fills the
+              column - it used to be below the whole grid, past a gap the size
+              of a screen. */}
+          <LinkedInPostPreview
+            name={userProfile.name}
+            image={userProfile.image}
+            headline={userProfile.headline}
+            title={title}
+            body={body}
+            hashtags={hashtags}
+            postSignature={signature}
+            imageUrl={imageUrl}
+            carouselImages={carouselImages}
+            documentName={documentUrl ? documentName || "Document.pdf" : null}
+            watermark={showWatermark ? WATERMARK_TEXT : null}
+          />
         </div>
 
         {/* Sidebar */}
@@ -1957,21 +1974,6 @@ export default function PostEditorClient({
           </div>
         </div>
       </div>
-
-      {/* LinkedIn Post Preview */}
-      <LinkedInPostPreview
-        name={userProfile.name}
-        image={userProfile.image}
-        headline={userProfile.headline}
-        title={title}
-        body={body}
-        hashtags={hashtags}
-        postSignature={signature}
-        imageUrl={imageUrl}
-        carouselImages={carouselImages}
-        documentName={documentUrl ? documentName || "Document.pdf" : null}
-        watermark={showWatermark ? WATERMARK_TEXT : null}
-      />
 
       {/* Lightbox Modal */}
       {lightboxOpen && imageUrl && (
