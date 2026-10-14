@@ -72,6 +72,8 @@ const POSITIONING_OPTIONS = [
   { value: "Community Builder", desc: "Connect people and foster meaningful conversations" },
 ];
 
+import ChipMultiSelect from "@/components/ChipMultiSelect";
+
 const CONTENT_GOALS = [
   "Lead Generation", "Network Building", "Brand Awareness",
   "Job Seeking", "Sales / Business Development", "Recruiting Top Talent",
@@ -238,10 +240,6 @@ export default function SettingsClient({ user }: { user: User | null }) {
 
   function removeSkill(skill: string) {
     setSkills(skills.filter((s) => s !== skill));
-  }
-
-  function toggleMulti(value: string, list: string[], setList: (v: string[]) => void) {
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
   }
 
   function toggleDay(day: string) {
@@ -543,42 +541,30 @@ export default function SettingsClient({ user }: { user: User | null }) {
       <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-6 space-y-6">
         <div>
           <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">LinkedIn Goals</h2>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {CONTENT_GOALS.map((goal) => (
-              <button
-                key={goal}
-                onClick={() => toggleMulti(goal, contentGoals, setContentGoals)}
-                className={cn(
-                  "px-4 py-2 rounded-full text-sm font-medium border-2 transition-all",
-                  contentGoals.includes(goal)
-                    ? "border-blue-600 bg-blue-600 text-white"
-                    : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-gray-600"
-                )}
-              >
-                {goal}
-              </button>
-            ))}
+          <div className="mt-3">
+            <ChipMultiSelect
+              options={CONTENT_GOALS}
+              value={contentGoals}
+              onChange={setContentGoals}
+              accent="blue"
+              inputId="settings-custom-goal"
+              addPlaceholder="Add your own goal..."
+            />
           </div>
         </div>
 
         <div>
           <h2 className="font-semibold font-display text-slate-900 dark:text-white mb-1">Content Styles</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">The types of content that resonate with you</p>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {CONTENT_STYLES.map((style) => (
-              <button
-                key={style}
-                onClick={() => toggleMulti(style, contentStyles, setContentStyles)}
-                className={cn(
-                  "px-4 py-2 rounded-full text-sm font-medium border-2 transition-all",
-                  contentStyles.includes(style)
-                    ? "border-indigo-500 bg-indigo-500 text-white"
-                    : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-gray-600"
-                )}
-              >
-                {style}
-              </button>
-            ))}
+          <div className="mt-3">
+            <ChipMultiSelect
+              options={CONTENT_STYLES}
+              value={contentStyles}
+              onChange={setContentStyles}
+              accent="indigo"
+              inputId="settings-custom-style"
+              addPlaceholder="Add a style in your own words..."
+            />
           </div>
           <FieldNote
             error={fieldErrors.contentStyles}

@@ -28,6 +28,8 @@ import {
   type ProfileGap,
 } from "@/lib/profile-completeness";
 
+import ChipMultiSelect from "@/components/ChipMultiSelect";
+
 const INDUSTRIES = [
   "Technology", "Finance", "Healthcare", "Marketing", "Sales",
   "Education", "Consulting", "Legal", "Real Estate", "Media",
@@ -304,10 +306,6 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
 
   const totalSteps = 4;
   const progress = (step / totalSteps) * 100;
-
-  function toggleMulti(value: string, list: string[], setList: (v: string[]) => void) {
-    setList(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
-  }
 
   function addSkill() {
     const s = skillInput.trim().replace(/\s+/g, " ");
@@ -712,22 +710,14 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">
                   What are your LinkedIn goals? <span className="text-red-500">*</span>
                 </h3>
-                <div className="flex flex-wrap gap-2">
-                  {CONTENT_GOALS.map((goal) => (
-                    <button
-                      key={goal}
-                      type="button"
-                      onClick={() => toggleMulti(goal, contentGoals, setContentGoals)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
-                        contentGoals.includes(goal)
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/10"
-                      }`}
-                    >
-                      {goal}
-                    </button>
-                  ))}
-                </div>
+                <ChipMultiSelect
+                  options={CONTENT_GOALS}
+                  value={contentGoals}
+                  onChange={setContentGoals}
+                  accent="blue"
+                  inputId="onboarding-custom-goal"
+                  addPlaceholder="Add your own goal..."
+                />
               </div>
 
               <div>
@@ -738,22 +728,14 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                   Each post in a batch is written in a different style, so pick at least{" "}
                   {MIN_CONTENT_STYLES} - otherwise all five posts come out the same shape.
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {CONTENT_STYLES.map((style) => (
-                    <button
-                      key={style}
-                      type="button"
-                      onClick={() => toggleMulti(style, contentStyles, setContentStyles)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium border-2 transition-all ${
-                        contentStyles.includes(style)
-                          ? "border-indigo-500 bg-indigo-500 text-white"
-                          : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/10"
-                      }`}
-                    >
-                      {style}
-                    </button>
-                  ))}
-                </div>
+                <ChipMultiSelect
+                  options={CONTENT_STYLES}
+                  value={contentStyles}
+                  onChange={setContentStyles}
+                  accent="indigo"
+                  inputId="onboarding-custom-style"
+                  addPlaceholder="Add a style in your own words..."
+                />
                 <Counter value={contentStyles.length} min={MIN_CONTENT_STYLES} />
               </div>
             </div>
