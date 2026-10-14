@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 // POST /api/content/bulk
 // Body: { action: "schedule-time" | "status" | "delete", postIds: string[], time?: string, status?: string }
@@ -50,6 +51,21 @@ export async function POST(req: NextRequest) {
     if (!sub.allowed) {
       return NextResponse.json(
         { error: sub.reason, subscriptionRequired: true },
+        { status: 403 }
+      );
+    }
+  }
+
+  // Scheduling gate - per action, for the same reason the subscription gate
+  // above is. "delete" and a move back to "draft" stay open; anything that arms
+  // posts for the auto-post cron is blocked while the profile is incomplete.
+  const armsSchedule =
+    action === "schedule-time" || (action === "status" && status === "ready");
+  if (armsSchedule) {
+    const profile = await checkProfileReady(session.user.id);
+    if (!profile.ready) {
+      return NextResponse.json(
+        { error: profile.message, profileIncomplete: true, gaps: profile.gaps },
         { status: 403 }
       );
     }

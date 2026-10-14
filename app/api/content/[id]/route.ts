@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
 import { isImageCategoryId } from "@/lib/image-categories";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -35,6 +36,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const VALID_STATUSES = ["draft", "ready", "published"];
   if ("status" in body && !VALID_STATUSES.includes(body.status)) {
     return NextResponse.json({ error: "Invalid status value" }, { status: 400 });
+  }
+
+  // Scheduling gate, applied per-intent rather than to the whole route.
+  //
+  // Plain edits stay open on purpose: the editor autosaves through this handler,
+  // and someone fixing their profile should still be able to tidy the drafts
+  // they already have. What is blocked is ARMING a post - moving it to "ready"
+  // or giving it a scheduledAt is what hands it to the auto-post cron, and a
+  // post written before a new onboarding input existed must not publish itself.
+  const armsSchedule =
+    body.status === "ready" || ("scheduledAt" in body && !!body.scheduledAt);
+  if (armsSchedule) {
+    const profile = await checkProfileReady(session.user.id);
+    if (!profile.ready) {
+      return NextResponse.json(
+        { error: profile.message, profileIncomplete: true, gaps: profile.gaps },
+        { status: 403 }
+      );
+    }
   }
 
   // Validate hashtags if provided

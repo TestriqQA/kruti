@@ -26,6 +26,20 @@ import { safeJsonParse } from "@/lib/utils";
  */
 
 /** A headline shorter than this is a job title, not positioning. */
+/**
+ * Bumped BY HAND whenever onboarding starts asking for something new - a new
+ * entry in ProfileGapKey, or a threshold raised far enough that profiles which
+ * used to qualify no longer do.
+ *
+ * Gating never reads this. Every gate calls assessProfile() directly, so a new
+ * requirement starts blocking generation, images and scheduling the moment it
+ * ships. The version exists only so the "we need one more thing" email goes out
+ * exactly once per requirement change: User.profileAlertVersion records which
+ * version a given account has already been told about, and 0 (the default)
+ * means every existing account gets told once.
+ */
+export const PROFILE_REQUIREMENTS_VERSION = 1;
+
 export const MIN_HEADLINE_CHARS = 15;
 
 /**

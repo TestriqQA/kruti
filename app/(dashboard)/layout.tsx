@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { replyCutoff } from "@/lib/support";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import TrialEndingPopup from "@/components/TrialEndingPopup";
+import ProfileIncompletePopup from "@/components/ProfileIncompletePopup";
+import { checkProfileReady } from "@/lib/profile-guard";
+import type { ProfileGap } from "@/lib/profile-completeness";
 
 /** What the paywall says, depending on how the user lost access. */
 function lockReason(status: string): string {
@@ -59,6 +62,23 @@ export default async function DashboardLayout({ children }: { children: React.Re
     });
   } catch (err) {
     console.error("[dashboard-layout] support unread count failed:", err);
+  }
+
+  // Profile gate, surfaced in the UI.
+  //
+  // The real block is server-side - every generation, image and scheduling
+  // route calls checkProfileReady() - so this only explains WHY those buttons
+  // stopped working. Without it, a user whose profile fell behind a newly added
+  // onboarding input just collects 403s with no idea what changed.
+  //
+  // Guarded for the same reason as the badge above: this layout is shared by
+  // every page in the (dashboard) group, so a failed query must degrade to "no
+  // popup", never to seven 500s. The gates still hold if this goes quiet.
+  let profileGaps: ProfileGap[] = [];
+  try {
+    profileGaps = (await checkProfileReady(session.user.id)).gaps;
+  } catch (err) {
+    console.error("[dashboard-layout] profile readiness check failed:", err);
   }
 
   const showTrialBanner =
@@ -116,6 +136,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Final 24 hours of the trial: dismissible nudge, access unaffected. */}
       {!state.locked && state.isLastDay && <TrialEndingPopup hoursLeft={hoursLeft} />}
+
+      {/* Onboarding asks for something this account does not have yet: post
+          writing, images and scheduling are paused server-side until it is
+          filled in. Suppressed behind the paywall, which is the bigger problem
+          and already tells the user what to do. */}
+      {!state.locked && profileGaps.length > 0 && (
+        <ProfileIncompletePopup gaps={profileGaps} />
+      )}
     </>
   );
 }

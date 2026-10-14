@@ -6,6 +6,7 @@ import {
   runTrialReminders,
   runImageCleanup,
   runTokenRefresh,
+  runProfileAlerts,
 } from "@/lib/scheduler";
 
 /**
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
     trialReminders: await runTrialReminders(),
     imageCleanup: await runImageCleanup(),
     tokenRefresh: await runTokenRefresh(),
+    profileAlerts: await runProfileAlerts(),
   };
 
   return NextResponse.json({ ok: true, results });
