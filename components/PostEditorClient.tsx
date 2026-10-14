@@ -978,10 +978,10 @@ export default function PostEditorClient({
       <div className="pt-1">
         <button
           onClick={() => router.push("/posts")}
-          className="ring-focus -ml-2 flex h-8 items-center gap-1.5 rounded-control px-2 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+          className="ring-focus group flex h-9 items-center gap-2 rounded-control border border-edge bg-card px-3.5 text-[13.5px] font-semibold text-text shadow-lift transition-colors hover:border-brand-edge hover:bg-brand-tint hover:text-brand"
           title="Back to the list of all your posts"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
+          <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
           All posts
         </button>
 
@@ -1008,29 +1008,32 @@ export default function PostEditorClient({
             {/* Steps through the same ordered list the posts page shows. The
                 count is here because "Previous"/"Next" on their own never said
                 what they moved between. */}
-            <div className="flex items-center gap-1">
+            <div className="flex items-stretch overflow-hidden rounded-control border border-edge bg-card shadow-lift">
               <button
                 onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
                 disabled={!prevPostId}
-                className="ring-focus flex h-8 items-center gap-1 rounded-control border border-edge px-2.5 text-[13px] text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                className="ring-focus flex h-9 items-center gap-1.5 px-3.5 text-[13.5px] font-semibold text-text transition-colors hover:bg-brand-tint hover:text-brand disabled:cursor-not-allowed disabled:bg-transparent disabled:text-text-3"
                 title={prevPostId ? "Open the previous post" : "This is the first post"}
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="h-4 w-4" />
                 Previous post
               </button>
               {postIndex && postTotal ? (
-                <span className="nums px-2 text-xs text-text-3" title="Your posts, in scheduled order">
+                <span
+                  className="nums flex items-center border-x border-edge bg-card-muted px-3 text-[12.5px] font-medium text-text-2"
+                  title="Your posts, in scheduled order"
+                >
                   {postIndex} of {postTotal}
                 </span>
               ) : null}
               <button
                 onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
                 disabled={!nextPostId}
-                className="ring-focus flex h-8 items-center gap-1 rounded-control border border-edge px-2.5 text-[13px] text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+                className="ring-focus flex h-9 items-center gap-1.5 px-3.5 text-[13.5px] font-semibold text-text transition-colors hover:bg-brand-tint hover:text-brand disabled:cursor-not-allowed disabled:bg-transparent disabled:text-text-3"
                 title={nextPostId ? "Open the next post" : "This is the last post"}
               >
                 Next post
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="h-4 w-4" />
               </button>
             </div>
           </div>
