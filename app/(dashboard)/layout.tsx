@@ -75,8 +75,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // every page in the (dashboard) group, so a failed query must degrade to "no
   // popup", never to seven 500s. The gates still hold if this goes quiet.
   let profileGaps: ProfileGap[] = [];
+  // Optimistic default: if the check below fails we show a full ring rather
+  // than scaring the user with 0%. The server gates are what actually hold.
+  let profileCompletion = 100;
   try {
-    profileGaps = (await checkProfileReady(session.user.id)).gaps;
+    const profile = await checkProfileReady(session.user.id);
+    profileGaps = profile.gaps;
+    profileCompletion = profile.completion;
   } catch (err) {
     console.error("[dashboard-layout] profile readiness check failed:", err);
   }
@@ -99,7 +104,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         id="app-shell"
         className="flex h-screen bg-[#F6F8FB] text-slate-900 antialiased dark:bg-[#0A0E14] dark:text-slate-100"
       >
-        <Sidebar user={session.user} supportUnread={supportUnread} />
+        <Sidebar
+          user={session.user}
+          supportUnread={supportUnread}
+          profileCompletion={profileCompletion}
+        />
         <main className="flex-1 overflow-y-auto scroll-gutter-stable flex flex-col">
           {showTrialBanner && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/50 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
