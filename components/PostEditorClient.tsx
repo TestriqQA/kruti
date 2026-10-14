@@ -42,6 +42,7 @@ import { formatInTimeZone } from "date-fns-tz";
 import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
+import { raiseProfileGate } from "@/lib/profile-gate";
 import { IMAGE_CATEGORY_GROUPS, DEFAULT_IMAGE_CATEGORY, getImageCategory } from "@/lib/image-categories";
 
 interface Post {
@@ -277,6 +278,12 @@ export default function PostEditorClient({
         body: JSON.stringify({ postId: post.id }),
       });
       const updated = await res.json();
+      // Refused for an incomplete profile: the popup explains it, and there is
+      // no new version to undo back from.
+      if (raiseProfileGate(updated)) {
+        setPreviousVersion(null);
+        return;
+      }
       if (updated.title) setTitle(updated.title);
       if (updated.body) setBody(updated.body);
       toast("Post regenerated - click Undo to restore previous version", "success");
@@ -377,6 +384,7 @@ export default function PostEditorClient({
         body: JSON.stringify({ postId: post.id }),
       });
       const data = await res.json();
+      if (raiseProfileGate(data)) return;
       if (!res.ok || data.error) {
         toast(data.error || "Failed to generate image", "error");
         if (data.remaining !== undefined) setImageGenRemaining(data.remaining);
@@ -526,6 +534,9 @@ export default function PostEditorClient({
         case "error":
           if (ev.remaining !== undefined && ev.remaining !== null) setImageGenRemaining(ev.remaining);
           update({ ...prog, running: false, error: ev.message || "Carousel generation failed" });
+          // A profile block is not a fault to retry, so it gets the dialog
+          // rather than a red toast the user would dismiss and click again.
+          if (raiseProfileGate(ev)) break;
           toast(ev.message || "Failed to generate carousel", "error");
           break;
       }
@@ -852,6 +863,10 @@ export default function PostEditorClient({
         body: JSON.stringify({ postId: post.id }),
       });
       const data = await res.json();
+      if (raiseProfileGate(data)) {
+        setShowVariants(false);
+        return;
+      }
       if (data.variants) {
         setVariants(data.variants);
       } else {
@@ -885,6 +900,10 @@ export default function PostEditorClient({
         body: JSON.stringify({ postId: post.id }),
       });
       const data = await res.json();
+      if (raiseProfileGate(data)) {
+        setShowRepurpose(false);
+        return;
+      }
       if (data.results) {
         setRepurposeResults(data.results);
       } else {

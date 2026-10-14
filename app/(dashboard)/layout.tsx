@@ -141,9 +141,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           writing, images and scheduling are paused server-side until it is
           filled in. Suppressed behind the paywall, which is the bigger problem
           and already tells the user what to do. */}
-      {!state.locked && profileGaps.length > 0 && (
-        <ProfileIncompletePopup gaps={profileGaps} />
-      )}
+      {!state.locked && <ProfileIncompletePopup gaps={profileGaps} />}
     </>
   );
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertCircle, ArrowRight, X } from "lucide-react";
 import type { ProfileGap } from "@/lib/profile-completeness";
+import { PROFILE_BLOCKED_EVENT } from "@/lib/profile-gate";
 
 /**
  * What an incomplete profile actually costs the user, in their words. Kept in
@@ -22,52 +23,84 @@ const DISMISS_KEY = "profileGapsDismissed";
  * Shown when onboarding asks for something this account does not have yet -
  * typically because a NEW required input shipped after the user signed up.
  *
- * The real block is server-side: every generation, image and scheduling route
- * calls checkProfileReady(). This dialog exists so the user understands WHY
- * their buttons stopped working, instead of collecting 403s.
+ * It comes up two ways, and they behave differently on purpose:
  *
- * Deliberately NOT a hard lock like SubscriptionLock. The fix lives behind the
+ *  - On load, from `serverGaps`. This one is dismissible and the dismissal
+ *    sticks for the tab session, keyed on the gap set: fix some fields but not
+ *    all, or ship another new input, and the signature changes so it returns.
+ *
+ *  - On a blocked action, from the PROFILE_BLOCKED_EVENT that every generate
+ *    and schedule handler raises instead of a red toast. This one ignores the
+ *    dismissal entirely and fires on every click. A dismissed dialog must not
+ *    turn the Generate button into a button that silently does nothing.
+ *
+ * Deliberately NOT a hard lock like SubscriptionLock: the fix lives behind the
  * sidebar - /onboarding and /settings - so trapping the page would trap the user
- * away from the one thing they need to do. It is dismissible, remembered for the
- * tab session only, and keyed on the gap set: fix some fields but not all, or
- * ship another new input, and the signature changes so it comes straight back.
+ * away from the one thing they need to do.
  */
-export default function ProfileIncompletePopup({ gaps }: { gaps: ProfileGap[] }) {
+export default function ProfileIncompletePopup({
+  gaps: serverGaps,
+}: {
+  gaps: ProfileGap[];
+}) {
   const [open, setOpen] = useState(false);
+  const [gaps, setGaps] = useState<ProfileGap[]>(serverGaps);
 
-  // Which gaps this is about. Order-independent so a reordered assessProfile()
-  // does not look like a new requirement.
-  const signature = gaps
+  // Which gaps the session dismissal was for. Order-independent so a reordered
+  // assessProfile() does not look like a new requirement.
+  const serverSignature = serverGaps
     .map((g) => g.key)
     .sort()
     .join(",");
 
+  // Keep the dialog honest after a navigation that fixed some of the gaps -
+  // the layout re-renders with a fresh list.
   useEffect(() => {
+    setGaps(serverGaps);
+  }, [serverGaps]);
+
+  useEffect(() => {
+    if (serverGaps.length === 0) return;
     // Read on mount only - rendering straight from sessionStorage would mismatch
     // the server-rendered HTML.
     try {
-      if (sessionStorage.getItem(DISMISS_KEY) !== signature) setOpen(true);
+      if (sessionStorage.getItem(DISMISS_KEY) !== serverSignature) setOpen(true);
     } catch {
       setOpen(true); // storage blocked - just show it
     }
-  }, [signature]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverSignature]);
+
+  // A request was just refused. Show what that request needed, whatever this
+  // page was rendered with, and ignore any dismissal.
+  useEffect(() => {
+    function onBlocked(e: Event) {
+      const detail = (e as CustomEvent<{ gaps?: ProfileGap[] }>).detail;
+      const fresh = detail?.gaps ?? [];
+      setGaps(fresh.length > 0 ? fresh : serverGaps);
+      setOpen(true);
+    }
+    window.addEventListener(PROFILE_BLOCKED_EVENT, onBlocked);
+    return () => window.removeEventListener(PROFILE_BLOCKED_EVENT, onBlocked);
+  }, [serverGaps]);
 
   function dismiss() {
     try {
-      sessionStorage.setItem(DISMISS_KEY, signature);
+      sessionStorage.setItem(DISMISS_KEY, serverSignature);
     } catch {
       /* ignore - dismissal just won't persist */
     }
     setOpen(false);
   }
 
-  if (!open) return null;
+  if (!open || gaps.length === 0) return null;
 
   return (
     <div
-      // Above TrialEndingPopup (z-150), below SubscriptionLock (z-200): this is
-      // the harder blocker of the two nudges, but a lapsed subscription still
-      // outranks it.
+      // Above the pipeline/variant modals (z-50) and TrialEndingPopup (z-150),
+      // below SubscriptionLock (z-200): this outranks the other nudges because
+      // it is blocking a click the user just made, but a lapsed subscription
+      // still outranks it.
       className="fixed inset-0 z-[160] flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"

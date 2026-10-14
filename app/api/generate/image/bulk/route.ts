@@ -11,6 +11,7 @@ import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
 import { resolveImageCategory, usesCodeRender } from "@/lib/image-categories";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { ndjsonResponse } from "@/lib/ndjson";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 // Streaming route: emits step-by-step NDJSON progress so the client can show the
 // whole pipeline (preflight -> per-post brief/render/save -> summary).
@@ -48,6 +49,22 @@ export async function POST(req: NextRequest) {
       return;
     }
     send({ type: "preflight", key: "subscription", status: "done" });
+
+    // Content-quality gate, same contract as the single-image route. This one
+    // can spend up to ten model calls in a run, so it is the most expensive
+    // thing an incomplete profile could otherwise reach.
+    const profile = await checkProfileReady(userId);
+    if (!profile.ready) {
+      send({ type: "preflight", key: "profile", status: "error", message: profile.message });
+      send({
+        type: "error",
+        message: profile.message,
+        profileIncomplete: true,
+        gaps: profile.gaps,
+      });
+      return;
+    }
+    send({ type: "preflight", key: "profile", status: "done" });
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
