@@ -133,6 +133,48 @@ export default function PostEditorClient({
 }) {
   const router = useRouter();
   const { toast } = useToast();
+
+  /**
+   * True once the header - and the navigation in it - has gone behind the
+   * sticky toolbar, which is when the toolbar takes those controls over.
+   *
+   * Measured against the scroll container rather than the window: the dashboard
+   * shell scrolls <main>, not the document, so window scroll events never fire
+   * here.
+   */
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [navStuck, setNavStuck] = useState(false);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const scroller = el.closest("main");
+    if (!scroller) return;
+
+    // The toolbar is one row and the controls added below are sized to keep it
+    // that way, so its height is a constant here and this threshold cannot
+    // oscillate against its own effect.
+    const TOOLBAR_H = 62;
+
+    // Measured straight out of the scroll handler rather than inside a
+    // requestAnimationFrame: rAF is starved whenever the page is not painting
+    // - a background tab, a hidden pane - and the toolbar would then keep
+    // whatever state it was last left in. Two reads of an already-computed
+    // layout box are cheap, and React drops the re-render when the boolean has
+    // not changed, so a scroll costs nothing per event.
+    const measure = () => {
+      const top = scroller.getBoundingClientRect().top;
+      setNavStuck(el.getBoundingClientRect().bottom <= top + TOOLBAR_H);
+    };
+
+    measure();
+    scroller.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      scroller.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
   const { data: sessionData } = useSession();
   const isTrialExpired = sessionData?.user?.subscriptionStatus === "trialing" &&
     sessionData?.user?.trialEnd != null && new Date(sessionData.user.trialEnd) < new Date();
@@ -975,7 +1017,7 @@ export default function PostEditorClient({
     <div className="space-y-5">
       {/* Header. Moving between posts is navigation, so it lives up here with
           the title rather than in the bar of things you do to a post. */}
-      <div className="pt-1">
+      <div ref={headerRef} className="pt-1">
         <button
           onClick={() => router.push("/posts")}
           className="ring-focus group flex h-9 items-center gap-2 rounded-control border border-edge bg-card px-3.5 text-[13.5px] font-semibold text-text shadow-lift transition-colors hover:border-brand-edge hover:bg-brand-tint hover:text-brand"
@@ -1092,6 +1134,50 @@ export default function PostEditorClient({
           header and deleting to Post details, which is what got this down to
           one row. */}
       <div className="sticky top-0 z-30 flex flex-wrap items-center gap-2 rounded-card border border-edge bg-card/95 px-4 py-3 shadow-lift backdrop-blur-md">
+        {/* Only while the header's copies are out of view, so the two are never
+            both on screen saying the same thing. */}
+        {navStuck && (
+          <>
+            <button
+              onClick={() => router.push("/posts")}
+              className="ring-focus group flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm font-medium text-text transition-colors hover:border-brand-edge hover:bg-brand-tint hover:text-brand"
+              title="Back to the list of all your posts"
+            >
+              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-0.5" />
+              All posts
+            </button>
+
+            <div className="flex items-stretch overflow-hidden rounded-control border border-edge">
+              <button
+                onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
+                disabled={!prevPostId}
+                aria-label="Open the previous post"
+                className="ring-focus flex h-9 items-center px-2.5 text-text transition-colors hover:bg-brand-tint hover:text-brand disabled:cursor-not-allowed disabled:bg-transparent disabled:text-text-3"
+                title={prevPostId ? "Open the previous post" : "This is the first post"}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span
+                className="nums flex items-center border-x border-edge bg-card-muted px-2.5 text-[12.5px] font-medium text-text-2"
+                title="Your posts, in scheduled order"
+              >
+                {postIndex && postTotal ? `${postIndex} of ${postTotal}` : "Posts"}
+              </span>
+              <button
+                onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
+                disabled={!nextPostId}
+                aria-label="Open the next post"
+                className="ring-focus flex h-9 items-center px-2.5 text-text transition-colors hover:bg-brand-tint hover:text-brand disabled:cursor-not-allowed disabled:bg-transparent disabled:text-text-3"
+                title={nextPostId ? "Open the next post" : "This is the last post"}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+
+            <span className="h-5 w-px flex-shrink-0 bg-edge" aria-hidden />
+          </>
+        )}
+
         <button
           onClick={handleCopy}
           className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text"
