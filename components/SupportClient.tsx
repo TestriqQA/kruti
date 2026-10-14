@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LifeBuoy,
   ImagePlus,
   X,
   Loader2,
@@ -336,13 +335,13 @@ export default function SupportClient({
     // One attribute exempts this whole subtree from the paywall lock, so a user
     // whose trial lapsed can still reach us. See components/SubscriptionLock.tsx.
     <div data-allow-when-locked="">
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-text flex items-center gap-2">
-          <LifeBuoy className="w-6 h-6 text-brand" />
+      <div className="mb-6 pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
           Help &amp; Support
         </h1>
-        <p className="text-text-2 mt-1">
-          Tell us what went wrong. Our replies show up on the right.
+        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+          Tell us what went wrong and we will pick it up. Your conversation stays on the right,
+          and a reply shows up there without you having to refresh.
         </p>
       </div>
 
@@ -355,8 +354,8 @@ export default function SupportClient({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         {/* ── Left: raise a ticket ─────────────────────────────── */}
         <div className="space-y-6 min-w-0">
-          <section className="bg-card rounded-card p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-3">
+          <section className="card p-6">
+            <h2 className="eyebrow">
               Sent with your ticket
             </h2>
             <div className="mt-3 flex items-center gap-3">
@@ -382,7 +381,7 @@ export default function SupportClient({
             </p>
           </section>
 
-          <section className="bg-card rounded-card p-5 space-y-5">
+          <section className="card p-6 space-y-5">
             <div>
               <label
                 htmlFor="ticket-description"
@@ -481,7 +480,7 @@ export default function SupportClient({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-brand ring-focus inline-flex h-11 items-center gap-2 rounded-control px-5 text-[14px] font-semibold disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -502,7 +501,7 @@ export default function SupportClient({
         {/* ── Right: your tickets and our replies ──────────────── */}
         <aside className="space-y-3 min-w-0 lg:sticky lg:top-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-3">
+            <h2 className="eyebrow">
               Your tickets
             </h2>
             {totalUnread > 0 && (
@@ -551,15 +550,15 @@ export default function SupportClient({
           )}
 
           {tickets.length === 0 ? (
-            <div className="border border-dashed border-edge rounded-card p-6 text-center">
-              <MessageSquare className="w-6 h-6 text-text-3 mx-auto mb-2" />
+            <div className="rounded-card border border-dashed border-edge bg-card-muted/60 px-6 py-10 text-center">
+              <MessageSquare className="mx-auto mb-2.5 h-7 w-7 text-text-3" />
               <p className="text-xs text-text-3">
                 Nothing raised yet. Replies from our team will appear here.
               </p>
             </div>
           ) : shown.length === 0 ? (
-            <div className="border border-dashed border-edge rounded-card p-6 text-center">
-              <MessageSquare className="w-6 h-6 text-text-3 mx-auto mb-2" />
+            <div className="rounded-card border border-dashed border-edge bg-card-muted/60 px-6 py-10 text-center">
+              <MessageSquare className="mx-auto mb-2.5 h-7 w-7 text-text-3" />
               <p className="text-xs text-text-3">
                 No {filter.replace("_", " ")} tickets.
               </p>
