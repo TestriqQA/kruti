@@ -52,8 +52,8 @@ export interface ModalTicket {
 
 const STATUS_STYLE: Record<string, string> = {
   open: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  in_progress: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
-  closed: "bg-gray-100 text-gray-600 dark:bg-white/[0.08] dark:text-slate-400",
+  in_progress: "bg-blue-100 text-blue-800 dark:bg-brand/15 dark:text-blue-300",
+  closed: "bg-gray-100 text-gray-600  ",
 };
 
 const clockTime = (iso: string) =>
@@ -130,7 +130,7 @@ export default function TicketDetailModal({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl dark:bg-gray-900"
+        className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-card bg-white shadow-lift-lg dark:bg-gray-900"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -140,7 +140,7 @@ export default function TicketDetailModal({
         <div className="flex items-start gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
           <Avatar src={ticket.user.image} name={ticket.user.name} size={40} />
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <p className="truncate text-sm font-semibold text-gray-900">
               {ticket.user.name || "Unknown user"}
             </p>
             <p className="truncate text-xs text-gray-500 dark:text-gray-400">
@@ -162,7 +162,7 @@ export default function TicketDetailModal({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="flex-shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-white/[0.06] dark:hover:text-gray-300"
+            className="flex-shrink-0 rounded-control p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <X className="h-4 w-4" />
           </button>
@@ -205,7 +205,7 @@ export default function TicketDetailModal({
                     type="button"
                     onClick={() => setLightbox(i)}
                     title={`${s.name} (${formatBytes(s.size)})`}
-                    className="group relative h-24 w-24 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700"
+                    className="group relative h-24 w-24 overflow-hidden rounded-control border border-gray-200 dark:border-gray-700"
                   >
                     <PostImage
                       src={s.url}
@@ -227,10 +227,10 @@ export default function TicketDetailModal({
               <h3 className="mt-6 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
                 Replies sent
               </h3>
-              <div className="mt-2 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-white/[0.03]">
+              <div className="mt-2 overflow-hidden rounded-control border border-gray-200 bg-gray-50 dark:border-gray-700">
                 <div className="flex items-center gap-2 border-b border-gray-200 bg-white/60 px-3 py-2 dark:border-gray-700 dark:bg-white/[0.04]">
-                  <MessageSquare className="h-3 w-3 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-                  <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                  <MessageSquare className="h-3 w-3 flex-shrink-0 text-brand" />
+                  <span className="text-[11px] font-semibold text-brand">
                     Conversation
                   </span>
                   <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-gray-400 dark:text-gray-500">
@@ -245,7 +245,7 @@ export default function TicketDetailModal({
                   {groupConversation(ticket.replies).map((day) => (
                     <div key={day.dayKey} className="space-y-2">
                       <div className="flex justify-center">
-                        <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-500 shadow-sm dark:bg-white/[0.08] dark:text-gray-400">
+                        <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-gray-500 shadow-lift dark:text-gray-400">
                           {day.label}
                         </span>
                       </div>
@@ -273,10 +273,10 @@ export default function TicketDetailModal({
                                   <div className="max-w-[85%]">
                                     <div
                                       className={cn(
-                                        "rounded-2xl px-3 py-1.5",
+                                        "rounded-card px-3 py-1.5",
                                         fromUser
-                                          ? "border border-gray-200 bg-white text-gray-700 dark:border-gray-700 dark:bg-white/[0.08] dark:text-gray-200"
-                                          : "bg-blue-600 text-white",
+                                          ? "border border-gray-200 bg-white text-gray-700 dark:border-gray-700  dark:text-gray-200"
+                                          : "bg-brand text-white",
                                         last && (fromUser ? "rounded-bl-sm" : "rounded-br-sm")
                                       )}
                                     >
@@ -344,7 +344,7 @@ export default function TicketDetailModal({
         {/* ── Footer: the actions ──────────────────────────────── */}
         <div className="border-t border-gray-100 px-5 py-4 dark:border-gray-800">
           {closed ? (
-            <div className="flex items-start gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-white/[0.04]">
+            <div className="flex items-start gap-2 rounded-control border border-gray-200 bg-gray-50 px-3 py-2.5 dark:border-gray-700 dark:bg-white/[0.04]">
               <Lock className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" />
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 This ticket is closed. Replies and status changes are locked &mdash; a closed
@@ -358,13 +358,13 @@ export default function TicketDetailModal({
                 value={draft}
                 onChange={(e) => onDraftChange(e.target.value.slice(0, MAX_REPLY_CHARS))}
                 placeholder="Reply to this user..."
-                className="w-full resize-y rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-white/[0.04] dark:text-gray-100"
+                className="w-full resize-y rounded-control border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25 dark:border-gray-700 dark:bg-white/[0.04]"
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   onClick={onSendReply}
                   disabled={draft.trim().length < 2 || sending}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 rounded-control bg-brand px-3 py-1.5 text-xs text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {sending ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -384,7 +384,7 @@ export default function TicketDetailModal({
                         key={s}
                         onClick={() => onSetStatus(s)}
                         disabled={busy}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs capitalize text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.06]"
+                        className="rounded-control border border-gray-200 px-3 py-1.5 text-xs capitalize text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300"
                       >
                         {busy ? (
                           <Loader2 className="inline h-3 w-3 animate-spin" />
@@ -403,7 +403,7 @@ export default function TicketDetailModal({
                       <button
                         onClick={() => onSetStatus(CLOSED_STATUS)}
                         disabled={busy}
-                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        className="rounded-control bg-bad px-3 py-1.5 text-xs text-white transition-colors hover:bg-red-700 disabled:opacity-50"
                       >
                         {busy ? (
                           <Loader2 className="inline h-3 w-3 animate-spin" />
@@ -414,7 +414,7 @@ export default function TicketDetailModal({
                       <button
                         onClick={() => onConfirmClose(false)}
                         disabled={busy}
-                        className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-white/[0.06]"
+                        className="rounded-control border border-gray-200 px-3 py-1.5 text-xs text-gray-600 transition-colors hover:bg-gray-100 disabled:opacity-50 dark:border-gray-700 dark:text-gray-300"
                       >
                         Cancel
                       </button>
@@ -423,7 +423,7 @@ export default function TicketDetailModal({
                     <button
                       onClick={() => onConfirmClose(true)}
                       disabled={busy}
-                      className="rounded-lg border border-red-300 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
+                      className="rounded-control border border-red-300 px-3 py-1.5 text-xs text-red-600 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-500/40 dark:text-red-400 dark:hover:bg-red-500/10"
                     >
                       Mark closed
                     </button>
@@ -464,7 +464,7 @@ export default function TicketDetailModal({
                 type="button"
                 onClick={() => setLightbox(null)}
                 aria-label="Close image"
-                className="flex-shrink-0 rounded-lg p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
+                className="flex-shrink-0 rounded-control p-1.5 text-white/70 hover:bg-white/10 hover:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -485,7 +485,7 @@ export default function TicketDetailModal({
               <img
                 src={shots[lightbox].url}
                 alt={shots[lightbox].name}
-                className="max-h-[75vh] min-h-0 rounded-lg object-contain"
+                className="max-h-[75vh] min-h-0 rounded-control object-contain"
               />
               {shots.length > 1 && (
                 <button

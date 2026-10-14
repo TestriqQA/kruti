@@ -59,17 +59,17 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
       onClick={dismiss}
     >
       <div
-        className="my-auto w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#0D131F]"
+        className="my-auto w-full max-w-md rounded-card border border-edge bg-white p-6 shadow-lift-lg dark:bg-[#0D131F]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+          <div className="flex h-11 w-11 items-center justify-center rounded-control bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
             <Clock className="h-5 w-5" />
           </div>
           <button
             onClick={dismiss}
             aria-label="Dismiss"
-            className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-white/[0.06] dark:hover:text-slate-300"
+            className="rounded-control p-2 text-text-3 transition-colors hover:bg-slate-100 hover:text-text-2 dark:hover:text-text-3"
           >
             <X className="h-4 w-4" />
           </button>
@@ -77,16 +77,16 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
 
         <h2
           id="trial-ending-title"
-          className="mt-4 font-display text-xl font-bold text-slate-900 dark:text-white"
+          className="mt-4 font-display text-xl font-bold text-text"
         >
           Your free trial ends today
         </h2>
-        <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
+        <p className="mt-1.5 text-sm leading-relaxed text-text-2">
           You have {timeLabel} left. Subscribe now to keep generating posts and
           publishing to LinkedIn without interruption.
         </p>
 
-        <div className="mt-5 inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-white/10">
+        <div className="mt-5 inline-flex rounded-control border border-edge p-0.5">
           {(["INR", "USD"] as Currency[]).map((c) => (
             <button
               key={c}
@@ -94,8 +94,8 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
               className={cn(
                 "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
                 currency === c
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                  ? "bg-brand text-white"
+                  : "text-text-2 hover:text-text  dark:hover:text-slate-200"
               )}
             >
               {c}
@@ -104,18 +104,18 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
         </div>
 
         <div className="mt-4 flex items-baseline gap-1.5">
-          <span className="font-display text-3xl font-bold text-slate-900 dark:text-white">
+          <span className="font-display text-3xl font-bold text-text">
             {PRICE[currency].symbol}
             {PRICE[currency].amount}
           </span>
-          <span className="text-sm text-slate-500 dark:text-slate-400">/month</span>
+          <span className="text-sm text-text-2">/month</span>
         </div>
 
         <ul className="mt-4 space-y-2">
           {INCLUDED.map((item) => (
             <li
               key={item}
-              className="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300"
+              className="flex items-start gap-2 text-sm text-text-2"
             >
               <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-emerald-500" />
               {item}
@@ -126,7 +126,7 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
         <button
           onClick={subscribe}
           disabled={loading}
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:opacity-60"
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-control bg-brand px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
         >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {loading ? "Opening payment..." : "Subscribe now"}
@@ -134,7 +134,7 @@ export default function TrialEndingPopup({ hoursLeft }: { hoursLeft: number }) {
 
         <button
           onClick={dismiss}
-          className="mt-3 w-full text-center text-xs text-slate-400 transition-colors hover:text-slate-600 dark:hover:text-slate-300"
+          className="mt-3 w-full text-center text-xs text-text-3 transition-colors hover:text-text-2 dark:hover:text-text-3"
         >
           Remind me later
         </button>

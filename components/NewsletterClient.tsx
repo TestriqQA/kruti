@@ -39,10 +39,10 @@ interface Props {
 
 function statusBadge(status: string) {
   if (status === "sent")
-    return <span className="px-2 py-0.5 rounded-full text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 font-medium">Sent</span>;
+    return <span className="px-2 py-0.5 rounded-full text-xs bg-ok-tint text-ok font-medium">Sent</span>;
   if (status === "scheduled")
-    return <span className="px-2 py-0.5 rounded-full text-xs bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 font-medium">Scheduled</span>;
-  return <span className="px-2 py-0.5 rounded-full text-xs bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400 font-medium">Draft</span>;
+    return <span className="px-2 py-0.5 rounded-full text-xs bg-brand-tint text-blue-700 dark:text-blue-400 font-medium">Scheduled</span>;
+  return <span className="px-2 py-0.5 rounded-full text-xs bg-card-muted text-text-2 font-medium">Draft</span>;
 }
 
 export default function NewsletterClient({ newsletters: initial, currentMonth, currentYear }: Props) {
@@ -88,16 +88,16 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-gray-100 flex items-center gap-2">
-            <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <h1 className="text-2xl font-bold font-display text-text flex items-center gap-2">
+            <Mail className="w-6 h-6 text-brand" />
             Newsletter Planner
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{newsletters.length} newsletter{newsletters.length !== 1 ? "s" : ""} created</p>
+          <p className="text-text-2 mt-1">{newsletters.length} newsletter{newsletters.length !== 1 ? "s" : ""} created</p>
         </div>
         <button
           onClick={handleGenerate}
           disabled={generating || isTrialExpired}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 disabled:opacity-70"
+          className="flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control font-medium hover:opacity-90 disabled:opacity-70"
           title={isTrialExpired ? "Subscribe to generate newsletters" : undefined}
         >
           {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
@@ -106,16 +106,16 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
       </div>
 
       {newsletters.length === 0 ? (
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm p-12 text-center">
-          <Mail className="w-12 h-12 text-slate-200 dark:text-slate-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">No newsletters yet</h3>
-          <p className="text-slate-500 dark:text-slate-400 mb-6">
+        <div className="card p-12 text-center">
+          <Mail className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-text mb-2">No newsletters yet</h3>
+          <p className="text-text-2 mb-6">
             Generate your first newsletter - AI creates it from your content pillars and profile.
           </p>
           <button
             onClick={handleGenerate}
             disabled={generating || isTrialExpired}
-            className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium"
+            className="inline-flex items-center gap-2 bg-brand hover:bg-brand-hover text-white px-5 py-2.5 rounded-control font-medium"
           >
             {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
             {isTrialExpired ? "Subscribe to Generate" : "Generate Newsletter"}
@@ -251,19 +251,19 @@ function NewsletterCard({
 
   return (
     <>
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm overflow-hidden">
+      <div className="card overflow-hidden">
         {/* Header row */}
         <div
-          className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
+          className="flex items-center justify-between px-5 py-4 cursor-pointer hover:bg-card-muted transition-colors"
           onClick={onToggle}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 bg-purple-100 dark:bg-purple-900/30 rounded-control flex items-center justify-center flex-shrink-0">
               <Mail className="w-5 h-5 text-purple-700 dark:text-purple-400" />
             </div>
             <div className="min-w-0">
-              <p className="font-semibold text-slate-900 dark:text-gray-100 text-sm truncate">{newsletter.title}</p>
-              <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5">
+              <p className="font-semibold text-text text-sm truncate">{newsletter.title}</p>
+              <p className="text-xs text-text-2 mt-0.5 flex items-center gap-1.5">
                 {formatDate(newsletter.createdAt)}
                 {" · "}
                 {statusBadge(newsletter.status)}
@@ -288,9 +288,9 @@ function NewsletterCard({
             <button
               onClick={handleCopy}
               title="Copy text"
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-edge rounded-control hover:bg-card-muted transition-colors"
             >
-              {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-slate-500" />}
+              {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-text-2" />}
               {copied ? "Copied" : "Copy"}
             </button>
 
@@ -298,9 +298,9 @@ function NewsletterCard({
               <button
                 onClick={() => setShowScheduleModal(true)}
                 title="Schedule"
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors"
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 border border-edge rounded-control hover:bg-card-muted transition-colors"
               >
-                <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                <Calendar className="w-3.5 h-3.5 text-text-2" />
                 {newsletter.status === "scheduled" ? "Reschedule" : "Schedule"}
               </button>
             )}
@@ -310,7 +310,7 @@ function NewsletterCard({
                 onClick={handleSendNow}
                 disabled={sending}
                 title="Send now to your email"
-                className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-blue-600 text-white rounded-lg hover:opacity-90 disabled:opacity-60 transition-colors"
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-brand text-white rounded-control hover:opacity-90 disabled:opacity-60 transition-colors"
               >
                 {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 Send Now
@@ -320,18 +320,18 @@ function NewsletterCard({
             <button
               onClick={() => setShowDeleteConfirm(true)}
               title="Delete"
-              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              className="p-1.5 text-text-3 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-control transition-colors"
             >
               <Trash2 className="w-4 h-4" />
             </button>
 
-            {expanded ? <ChevronUp className="w-4 h-4 text-slate-400 ml-1" /> : <ChevronDown className="w-4 h-4 text-slate-400 ml-1" />}
+            {expanded ? <ChevronUp className="w-4 h-4 text-text-3 ml-1" /> : <ChevronDown className="w-4 h-4 text-text-3 ml-1" />}
           </div>
         </div>
 
         {/* Expanded content */}
         {expanded && content && (
-          <div className="border-t border-slate-100 dark:border-white/10 p-6 space-y-6">
+          <div className="border-t border-edge-soft p-6 space-y-6">
             {/* Edit / Save toggle */}
             {!isSent && (
               <div className="flex items-center justify-end gap-2">
@@ -339,14 +339,14 @@ function NewsletterCard({
                   <>
                     <button
                       onClick={() => { setEditing(false); setEditContent(content); }}
-                      className="text-xs px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300"
+                      className="text-xs px-3 py-1.5 border border-edge rounded-control hover:bg-card-muted text-text-2"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={handleSaveEdit}
                       disabled={saving}
-                      className="flex items-center gap-1 text-xs px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:opacity-90 disabled:opacity-60"
+                      className="flex items-center gap-1 text-xs px-3 py-1.5 bg-brand text-white rounded-control hover:opacity-90 disabled:opacity-60"
                     >
                       {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                       Save Changes
@@ -355,7 +355,7 @@ function NewsletterCard({
                 ) : (
                   <button
                     onClick={() => { setEditing(true); setEditContent(content); }}
-                    className="flex items-center gap-1 text-xs px-3 py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300"
+                    className="flex items-center gap-1 text-xs px-3 py-1.5 border border-edge rounded-control hover:bg-card-muted text-text-2"
                   >
                     <Pencil className="w-3.5 h-3.5" />
                     Edit Content
@@ -365,42 +365,42 @@ function NewsletterCard({
             )}
 
             {/* Subject Line */}
-            <div className="bg-slate-50 dark:bg-white/[0.06] rounded-xl px-4 py-3">
-              <p className="text-xs text-slate-500 font-semibold mb-1">SUBJECT LINE</p>
+            <div className="bg-card-muted rounded-control px-4 py-3">
+              <p className="text-xs text-text-2 font-semibold mb-1">SUBJECT LINE</p>
               {editing && editContent ? (
                 <input
                   value={editContent.subject}
                   onChange={(e) => updateEditField("subject", e.target.value)}
-                  className="w-full text-sm font-semibold text-slate-900 dark:text-gray-100 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="w-full text-sm font-semibold text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                 />
               ) : (
-                <p className="text-sm font-semibold text-slate-900 dark:text-gray-100">{content.subject}</p>
+                <p className="text-sm font-semibold text-text">{content.subject}</p>
               )}
             </div>
 
             {/* Introduction */}
             <div>
-              <h3 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Introduction</h3>
+              <h3 className="text-xs font-semibold text-text-2 uppercase tracking-wide mb-2">Introduction</h3>
               {editing && editContent ? (
                 <div className="space-y-2">
                   <input
                     value={editContent.intro.hook}
                     onChange={(e) => updateEditField("intro.hook", e.target.value)}
-                    className="w-full text-sm font-medium text-slate-800 dark:text-gray-200 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full text-sm font-medium text-text dark:text-gray-200 bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                     placeholder="Hook..."
                   />
                   <textarea
                     value={editContent.intro.preview}
                     onChange={(e) => updateEditField("intro.preview", e.target.value)}
                     rows={2}
-                    className="w-full text-sm text-slate-600 dark:text-slate-400 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                    className="w-full text-sm text-text-2 bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                     placeholder="Preview..."
                   />
                 </div>
               ) : (
                 <>
-                  <p className="text-sm text-slate-800 dark:text-gray-200 leading-relaxed font-medium">{content.intro.hook}</p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mt-2">{content.intro.preview}</p>
+                  <p className="text-sm text-text dark:text-gray-200 leading-relaxed font-medium">{content.intro.hook}</p>
+                  <p className="text-sm text-text-2 leading-relaxed mt-2">{content.intro.preview}</p>
                 </>
               )}
             </div>
@@ -413,27 +413,27 @@ function NewsletterCard({
                     <input
                       value={section.heading}
                       onChange={(e) => updateEditField(`sections.${i}.heading`, e.target.value)}
-                      className="w-full font-semibold text-slate-900 dark:text-gray-100 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
+                      className="w-full font-semibold text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
                     />
                     <textarea
                       value={section.content}
                       onChange={(e) => updateEditField(`sections.${i}.content`, e.target.value)}
                       rows={4}
-                      className="w-full text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                      className="w-full text-sm text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                     />
                     <input
                       value={section.keyTakeaway}
                       onChange={(e) => updateEditField(`sections.${i}.keyTakeaway`, e.target.value)}
-                      className="w-full text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      className="w-full text-xs text-brand bg-brand-tint border border-brand-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                       placeholder="Key takeaway..."
                     />
                   </div>
                 ) : (
                   <>
-                    <h3 className="font-semibold text-slate-900 dark:text-gray-100 mb-2">{section.heading}</h3>
-                    <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">{section.content}</p>
-                    <div className="mt-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg px-3 py-2">
-                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">Key Takeaway: {section.keyTakeaway}</p>
+                    <h3 className="font-semibold text-text mb-2">{section.heading}</h3>
+                    <p className="text-sm text-text leading-relaxed whitespace-pre-wrap">{section.content}</p>
+                    <div className="mt-2 bg-brand-tint rounded-control px-3 py-2">
+                      <p className="text-xs text-brand font-medium">Key Takeaway: {section.keyTakeaway}</p>
                     </div>
                   </>
                 )}
@@ -441,57 +441,57 @@ function NewsletterCard({
             ))}
 
             {/* Featured Insight */}
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-5">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-card p-5">
               {editing && editContent ? (
                 <div className="space-y-2">
                   <textarea
                     value={editContent.featuredInsight.quote}
                     onChange={(e) => updateEditField("featuredInsight.quote", e.target.value)}
                     rows={2}
-                    className="w-full text-base font-semibold text-slate-900 dark:text-gray-100 italic bg-white/70 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                    className="w-full text-base font-semibold text-text italic bg-white/70 border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                   />
                   <input
                     value={editContent.featuredInsight.context}
                     onChange={(e) => updateEditField("featuredInsight.context", e.target.value)}
-                    className="w-full text-sm text-slate-600 dark:text-slate-400 bg-white/70 dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full text-sm text-text-2 bg-white/70 border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                   />
                 </div>
               ) : (
                 <>
-                  <p className="text-base font-semibold text-slate-900 dark:text-gray-100 italic mb-2">
+                  <p className="text-base font-semibold text-text italic mb-2">
                     &ldquo;{content.featuredInsight.quote}&rdquo;
                   </p>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{content.featuredInsight.context}</p>
+                  <p className="text-sm text-text-2">{content.featuredInsight.context}</p>
                 </>
               )}
             </div>
 
             {/* CTA */}
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-5">
+            <div className="bg-brand-tint rounded-control p-5">
               {editing && editContent ? (
                 <div className="space-y-2">
                   <input
                     value={editContent.cta.heading}
                     onChange={(e) => updateEditField("cta.heading", e.target.value)}
-                    className="w-full font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
+                    className="w-full font-bold text-brand bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 text-sm"
                   />
                   <textarea
                     value={editContent.cta.text}
                     onChange={(e) => updateEditField("cta.text", e.target.value)}
                     rows={2}
-                    className="w-full text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none"
+                    className="w-full text-sm text-text bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25 resize-none"
                   />
                   <input
                     value={editContent.cta.action}
                     onChange={(e) => updateEditField("cta.action", e.target.value)}
-                    className="w-full text-sm font-semibold text-blue-600 dark:text-blue-400 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full text-sm font-semibold text-brand bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
                   />
                 </div>
               ) : (
                 <>
-                  <h3 className="font-bold text-blue-600 dark:text-blue-400 mb-2">{content.cta.heading}</h3>
-                  <p className="text-sm text-slate-700 dark:text-slate-300 mb-3">{content.cta.text}</p>
-                  <p className="text-sm font-semibold text-blue-600 dark:text-blue-400">{content.cta.action}</p>
+                  <h3 className="font-bold text-brand mb-2">{content.cta.heading}</h3>
+                  <p className="text-sm text-text mb-3">{content.cta.text}</p>
+                  <p className="text-sm font-semibold text-brand">{content.cta.action}</p>
                 </>
               )}
             </div>
@@ -501,10 +501,10 @@ function NewsletterCard({
               <input
                 value={editContent.signoff}
                 onChange={(e) => updateEditField("signoff", e.target.value)}
-                className="w-full text-sm text-slate-600 dark:text-slate-400 italic bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="w-full text-sm text-text-2 italic bg-card border border-edge rounded-control px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-brand/25"
               />
             ) : (
-              <p className="text-sm text-slate-600 dark:text-slate-400 italic">{content.signoff}</p>
+              <p className="text-sm text-text-2 italic">{content.signoff}</p>
             )}
           </div>
         )}
@@ -522,22 +522,22 @@ function NewsletterCard({
       {/* Delete confirm */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-gray-100 mb-2">Delete Newsletter?</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6">
+            <h3 className="text-lg font-semibold text-text mb-2">Delete Newsletter?</h3>
+            <p className="text-sm text-text-2 mb-6">
               &ldquo;{newsletter.title}&rdquo; will be permanently removed.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 px-4 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06]"
+                className="flex-1 px-4 py-2 border border-edge rounded-control text-sm font-medium text-text hover:bg-card-muted"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 disabled:opacity-60"
+                className="flex-1 px-4 py-2 bg-red-500 text-white rounded-control text-sm font-medium hover:bg-bad disabled:opacity-60"
               >
                 {deleting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Delete"}
               </button>
@@ -621,39 +621,39 @@ function ScheduleModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-2xl w-full max-w-sm p-6">
+      <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+          <h3 className="text-lg font-semibold text-text flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-brand" />
             Schedule Newsletter
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+          <button onClick={onClose} className="text-text-3 hover:text-text-2 dark:hover:text-text-3">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+        <p className="text-xs text-text-2 mb-4">
           Newsletter will be sent to your account email at the scheduled time.
         </p>
 
         <div className="space-y-3 mb-5">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Date</label>
+            <label className="block text-xs font-semibold text-text mb-1.5">Date</label>
             <input
               type="date"
               value={date}
               min={new Date().toISOString().split("T")[0]}
               onChange={(e) => setDate(e.target.value)}
-              className="w-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="w-full border border-edge bg-card text-text rounded-control px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/25"
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Time</label>
+            <label className="block text-xs font-semibold text-text mb-1.5">Time</label>
             <input
               type="time"
               value={time}
               onChange={(e) => setTime(e.target.value)}
-              className="w-full border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-gray-100 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+              className="w-full border border-edge bg-card text-text rounded-control px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand/25"
             />
           </div>
         </div>
@@ -665,21 +665,21 @@ function ScheduleModal({
             <button
               onClick={handleUnschedule}
               disabled={saving}
-              className="px-3 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/[0.06] disabled:opacity-60"
+              className="px-3 py-2 border border-edge rounded-control text-sm text-text-2 hover:bg-card-muted disabled:opacity-60"
             >
               Unschedule
             </button>
           )}
           <button
             onClick={onClose}
-            className="flex-1 px-4 py-2 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06]"
+            className="flex-1 px-4 py-2 border border-edge rounded-control text-sm font-medium text-text hover:bg-card-muted"
           >
             Cancel
           </button>
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium hover:opacity-90 disabled:opacity-60"
+            className="flex-1 px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-control text-sm font-medium hover:opacity-90 disabled:opacity-60"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Save Schedule"}
           </button>

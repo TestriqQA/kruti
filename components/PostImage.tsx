@@ -58,7 +58,7 @@ export default function PostImage({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-1 bg-slate-100 dark:bg-white/[0.06] text-slate-400 dark:text-slate-500",
+        "flex flex-col items-center justify-center gap-1 bg-card-muted text-text-3",
         className
       )}
       role="img"

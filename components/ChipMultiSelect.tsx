@@ -6,12 +6,12 @@ import { cn } from "@/lib/utils";
 import { MAX_LIST_ITEMS, MAX_LIST_ITEM_CHARS } from "@/lib/profile-completeness";
 
 const ACCENT = {
-  blue: "border-blue-600 bg-blue-600 text-white",
+  blue: "border-blue-600 bg-brand text-white",
   indigo: "border-indigo-500 bg-indigo-500 text-white",
 } as const;
 
 const IDLE =
-  "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/20";
+  "border-edge text-text-2 hover:border-edge dark:hover:border-white/20";
 
 const norm = (s: string) => s.trim().replace(/\s+/g, " ");
 const same = (a: string, b: string) => norm(a).toLowerCase() === norm(b).toLowerCase();
@@ -139,13 +139,13 @@ export default function ChipMultiSelect({
           }}
           disabled={atCap}
           placeholder={atCap ? `Maximum ${MAX_LIST_ITEMS} reached` : addPlaceholder}
-          className="flex-1 px-4 py-2 text-sm rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
+          className="flex-1 px-4 py-2 text-sm rounded-control border border-edge bg-card text-text placeholder:text-text-3 focus:outline-none focus:ring-2 focus:ring-blue-500/40 disabled:opacity-60"
         />
         <button
           type="button"
           onClick={add}
           disabled={atCap || !norm(draft)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-slate-200 dark:border-white/10 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:bg-slate-50 dark:hover:bg-white/[0.06] disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-control border border-edge text-sm font-medium text-text transition-colors hover:bg-card-muted disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
           Add

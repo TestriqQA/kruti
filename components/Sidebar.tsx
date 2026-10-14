@@ -50,18 +50,18 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <aside className="w-64 bg-white dark:bg-[#0D131F] border-r border-slate-200 dark:border-white/10 flex flex-col">
+    <aside className="flex w-[232px] flex-shrink-0 flex-col border-r border-edge bg-card">
       {/* Logo */}
-      <div className="p-5 border-b border-slate-100 dark:border-white/10">
-        <Link href="/dashboard" className="flex items-center">
+      <div className="flex h-16 flex-shrink-0 items-center border-b border-edge-soft px-5">
+        <Link href="/dashboard" className="ring-focus flex items-center rounded-control">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-16 w-auto" />
+          <img src="/logo.png" alt="Kruti.io" className="h-10 w-auto" />
         </Link>
       </div>
 
       {/* User */}
-      <div className="p-4 border-b border-slate-100 dark:border-white/10">
-        <div className="flex items-center gap-3">
+      <div className="border-b border-edge-soft px-3 py-3">
+        <div className="flex items-center gap-2.5 rounded-control px-2 py-1.5">
           <ProfileCompletionRing
             src={user.image}
             name={user.name}
@@ -69,18 +69,16 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
             size={36}
           />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.name}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            <p className="truncate text-[13px] font-semibold text-text">{user.name}</p>
+            <p className="truncate text-[11.5px] text-text-3">{user.email}</p>
             {/* The ring alone shows there is something left; this says how much
                 and goes straight to the screen that fixes it. */}
             {profileCompletion >= 100 ? (
-              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
-                Profile complete
-              </p>
+              <p className="mt-0.5 text-[11px] font-semibold text-ok">Profile complete</p>
             ) : (
               <Link
                 href="/onboarding"
-                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline mt-0.5 inline-block"
+                className="mt-0.5 inline-block text-[11px] font-semibold text-brand hover:underline"
               >
                 Profile {profileCompletion}% - finish it
               </Link>
@@ -90,7 +88,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
         {navItems.map((item) => {
           const active =
             item.href === "/dashboard"
@@ -103,16 +101,22 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
               href={item.href}
               {...(item.allowWhenLocked ? { "data-allow-when-locked": "" } : {})}
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "ring-focus relative flex h-9 items-center gap-2.5 rounded-control px-3 text-[13px] font-medium transition-colors",
                 active
-                  ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-brand-tint text-brand"
+                  : "text-text-2 hover:bg-card-muted hover:text-text"
               )}
             >
-              <item.icon className={cn("w-4 h-4", active ? "text-blue-600 dark:text-blue-400" : "")} />
+              {active && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -left-3 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-brand"
+                />
+              )}
+              <item.icon className="h-[17px] w-[17px] flex-shrink-0" />
               {item.label}
               {item.href === "/support" && supportUnread > 0 && (
-                <span className="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-semibold text-center">
+                <span className="nums ml-auto min-w-[18px] rounded-full bg-brand px-1.5 py-0.5 text-center text-[10px] font-bold text-white">
                   {supportUnread}
                 </span>
               )}
@@ -123,17 +127,17 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
         {/* Admin link */}
         {user.role === "admin" && (
           <>
-            <div className="my-2 border-t border-slate-100 dark:border-white/10" />
+            <div className="my-2 border-t border-edge-soft" />
             <Link
               href="/admin"
               className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                "ring-focus flex h-9 items-center gap-2.5 rounded-control px-3 text-[13px] font-medium transition-colors",
                 pathname.startsWith("/admin")
-                  ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-bad-tint text-bad"
+                  : "text-text-2 hover:bg-card-muted hover:text-text"
               )}
             >
-              <Shield className={cn("w-4 h-4", pathname.startsWith("/admin") ? "text-red-700 dark:text-red-400" : "")} />
+              <Shield className="h-[17px] w-[17px] flex-shrink-0" />
               Admin Panel
             </Link>
           </>
@@ -141,12 +145,12 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </nav>
 
       {/* Bottom section: Dark mode + Sign out */}
-      <div className="p-3 border-t border-slate-100 dark:border-white/10 space-y-1">
+      <div className="flex-shrink-0 space-y-0.5 border-t border-edge-soft p-3">
         <button
           onClick={toggleTheme}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors w-full"
+          className="ring-focus flex h-9 w-full items-center gap-2.5 rounded-control px-3 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === "dark" ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
           {theme === "dark" ? "Light Mode" : "Dark Mode"}
         </button>
         {/* Exempt from the subscription lock: a locked user must always be able
@@ -154,9 +158,9 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
         <button
           data-allow-when-locked=""
           onClick={() => signOut({ callbackUrl: "/" })}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white transition-colors w-full"
+          className="ring-focus flex h-9 w-full items-center gap-2.5 rounded-control px-3 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="h-[17px] w-[17px]" />
           Sign Out
         </button>
       </div>

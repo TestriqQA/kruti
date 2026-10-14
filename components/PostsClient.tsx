@@ -73,46 +73,46 @@ function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string,
         className={cn(
           "flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md transition-colors",
           post.postedToLinkedIn
-            ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
-            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] cursor-pointer",
-          isWeekend && "text-amber-600 dark:text-amber-400"
+            ? "text-text-3 cursor-not-allowed"
+            : "text-text-2 hover:bg-card-muted cursor-pointer",
+          isWeekend && "text-warn"
         )}
       >
         <Clock className="w-3 h-3 flex-shrink-0" />
         <span>{displayDate}</span>
-        {displayTime && <span className="text-slate-400 dark:text-slate-500">{displayTime}</span>}
+        {displayTime && <span className="text-text-3">{displayTime}</span>}
         {isWeekend && <span className="text-[10px] text-amber-500 font-medium">Weekend</span>}
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-3 space-y-3 w-64">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Schedule Date & Time</p>
+          <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-edge rounded-control shadow-lift-lg p-3 space-y-3 w-64">
+            <p className="text-xs font-semibold text-text">Schedule Date & Time</p>
             <div className="space-y-2">
               <div>
-                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Date</label>
+                <label className="text-[10px] text-text-2 block mb-0.5">Date</label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className={cn(
-                    "w-full px-2 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-slate-200",
-                    isWeekend ? "border-amber-300 bg-amber-50 dark:bg-amber-900/20" : "border-slate-200 dark:border-white/10"
+                    "w-full px-2 py-1.5 text-xs border rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card ",
+                    isWeekend ? "border-amber-300 bg-warn-tint" : "border-edge"
                   )}
                 />
               </div>
               <div>
-                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Time</label>
+                <label className="text-[10px] text-text-2 block mb-0.5">Time</label>
                 <input
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-slate-200"
+                  className="w-full px-2 py-1.5 text-xs border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
                 />
               </div>
               {isWeekend && (
-                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <p className="text-[10px] text-warn flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   Weekend - posts may get less engagement
                 </p>
@@ -121,14 +121,14 @@ function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string,
             <div className="flex gap-2">
               <button
                 onClick={() => setOpen(false)}
-                className="flex-1 text-xs py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300 transition-colors"
+                className="flex-1 text-xs py-1.5 border border-edge rounded-control hover:bg-card-muted text-text-2 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !date}
-                className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
+                className="flex-1 text-xs py-1.5 bg-brand text-white rounded-control hover:bg-brand-hover disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
               >
                 {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                 Save
@@ -354,11 +354,11 @@ export default function PostsClient({
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-gray-100 flex items-center gap-2">
-            <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          <h1 className="font-display text-2xl font-bold text-text flex items-center gap-2">
+            <FileText className="w-6 h-6 text-brand" />
             All Posts
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">{posts.length} posts generated</p>
+          <p className="text-text-2 mt-1">{posts.length} posts generated</p>
         </div>
         {/* Generate without going back to the dashboard. */}
         <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
@@ -367,18 +367,18 @@ export default function PostsClient({
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-48">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-text-3 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search posts..."
-            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card"
           />
         </div>
         <select
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
         >
           <option value="all">All Types</option>
           <option value="thought-leadership">Thought Leadership</option>
@@ -390,7 +390,7 @@ export default function PostsClient({
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
         >
           <option value="all">All Status</option>
           <option value="draft">Draft</option>
@@ -400,7 +400,7 @@ export default function PostsClient({
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          className="select-field pl-3 pr-10 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card"
         >
           <option value="default">Sort: Default</option>
           <option value="date-asc">Date (Oldest first)</option>
@@ -409,7 +409,7 @@ export default function PostsClient({
         <a
           href="/api/content/export"
           download
-          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors text-slate-600 dark:text-slate-300"
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-edge rounded-control hover:bg-card-muted transition-colors text-text-2"
           title="Export all posts as CSV"
         >
           <Download className="w-4 h-4" />
@@ -420,10 +420,10 @@ export default function PostsClient({
       {/* Bulk action feedback */}
       {(bulkError || bulkSuccess) && (
         <div className={cn(
-          "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm",
+          "flex items-center gap-2 px-4 py-2.5 rounded-control text-sm",
           bulkError
-            ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
-            : "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+            ? "bg-bad-tint text-bad border border-bad/30"
+            : "bg-ok-tint text-ok border border-green-200 dark:border-green-800"
         )}>
           {bulkError ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
           {bulkError || bulkSuccess}
@@ -433,7 +433,7 @@ export default function PostsClient({
       {/* Image generation - shown independently of the selection, so it survives
           clearing the selection and navigating away and back. */}
       {imageGenerating && (
-        <div className="flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 dark:border-purple-800 dark:bg-purple-900/20">
+        <div className="flex items-center gap-3 rounded-control border border-purple-200 bg-purple-50 px-4 py-3 dark:border-purple-800 dark:bg-purple-900/20">
           <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-purple-600 dark:text-purple-400" />
           <span className="flex-1 text-sm text-purple-700 dark:text-purple-300">
             {imageStatus ?? "Generating images..."}
@@ -441,14 +441,14 @@ export default function PostsClient({
           {imagePipeline && (
             <button
               onClick={() => showPipeline("images")}
-              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-purple-300 px-3 py-1.5 text-sm text-purple-700 transition-colors hover:bg-purple-100/60 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900/30"
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-control border border-purple-300 px-3 py-1.5 text-sm text-purple-700 transition-colors hover:bg-purple-100/60 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900/30"
             >
               View pipeline
             </button>
           )}
           <button
             onClick={cancelImageGeneration}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-control border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
           >
             <X className="w-3.5 h-3.5" />
             Cancel
@@ -458,8 +458,8 @@ export default function PostsClient({
 
       {/* Bulk action bar */}
       {selectedCount > 0 && (
-        <div className="flex items-center gap-3 bg-blue-600/5 dark:bg-blue-600/10 border border-blue-600/20 rounded-xl px-4 py-3 flex-wrap">
-          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+        <div className="flex items-center gap-3 bg-brand/5 dark:bg-brand/10 border border-blue-600/20 rounded-control px-4 py-3 flex-wrap">
+          <span className="text-sm font-semibold text-brand">
             {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
           </span>
           <div className="flex-1" />
@@ -468,9 +468,9 @@ export default function PostsClient({
           <button
             onClick={() => setShowScheduleModal(true)}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 dark:border-white/10 rounded-lg hover:bg-white dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50 dark:text-slate-300"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-edge rounded-control hover:bg-white transition-colors disabled:opacity-50"
           >
-            <Calendar className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+            <Calendar className="w-3.5 h-3.5 text-text-2" />
             Schedule
           </button>
 
@@ -478,7 +478,7 @@ export default function PostsClient({
           <button
             onClick={handleBulkImageGen}
             disabled={bulkLoading || imageGenerating}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded-control hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
           >
             {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
             {imageGenerating ? "Generating..." : "Generate Images"}
@@ -488,7 +488,7 @@ export default function PostsClient({
           <button
             onClick={() => handleBulkStatus("ready")}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-control hover:bg-green-700 transition-colors disabled:opacity-50"
           >
             {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
             Mark Ready
@@ -498,7 +498,7 @@ export default function PostsClient({
           <button
             onClick={() => handleBulkStatus("draft")}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 dark:border-white/10 rounded-lg hover:bg-white dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50 dark:text-slate-300"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-edge rounded-control hover:bg-white transition-colors disabled:opacity-50"
           >
             Mark Draft
           </button>
@@ -507,7 +507,7 @@ export default function PostsClient({
           <button
             onClick={() => setShowDeleteConfirm(true)}
             disabled={bulkLoading}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-bad text-white rounded-control hover:bg-red-700 transition-colors disabled:opacity-50"
           >
             <Trash2 className="w-3.5 h-3.5" />
             Delete
@@ -516,7 +516,7 @@ export default function PostsClient({
           {/* Clear */}
           <button
             onClick={clearSelection}
-            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+            className="flex items-center gap-1 text-sm text-text-2 hover:text-text"
           >
             <X className="w-4 h-4" />
           </button>
@@ -524,13 +524,13 @@ export default function PostsClient({
       )}
 
       {/* Posts List */}
-      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm overflow-hidden">
+      <div className="card overflow-hidden">
         {/* Table header with select-all */}
         {sorted.length > 0 && (
-          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-edge-soft bg-card-muted">
             <button
               onClick={toggleSelectAll}
-              className="flex-shrink-0 text-slate-400 hover:text-blue-600 transition-colors"
+              className="flex-shrink-0 text-text-3 hover:text-blue-600 transition-colors"
               title={allFilteredSelected ? "Deselect all" : "Select all"}
             >
               {allFilteredSelected ? (
@@ -539,7 +539,7 @@ export default function PostsClient({
                 <Square className="w-4 h-4" />
               )}
             </button>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="text-xs text-text-2">
               {allFilteredSelected ? "Deselect all" : `Select all ${sorted.length}`}
             </span>
           </div>
@@ -548,18 +548,18 @@ export default function PostsClient({
         {sorted.length === 0 ? (
           <div className="py-16 text-center">
             <FileText className="w-12 h-12 text-slate-200 dark:text-white/10 mx-auto mb-3" />
-            <p className="text-slate-500 dark:text-slate-400">No posts found.</p>
+            <p className="text-text-2">No posts found.</p>
           </div>
         ) : (
-          <div className="divide-y divide-slate-50 dark:divide-white/10">
+          <div className="divide-y divide-edge-soft">
             {sorted.map((post) => {
               const isSelected = selected.has(post.id);
               return (
-                <div key={post.id} className={cn("flex items-start gap-3 px-5 py-4 transition-colors", isSelected ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-slate-50 dark:hover:bg-white/[0.06]")}>
+                <div key={post.id} className={cn("flex items-start gap-3 px-5 py-4 transition-colors", isSelected ? "bg-brand-tint" : "hover:bg-card-muted")}>
                   {/* Checkbox */}
                   <button
                     onClick={(e) => toggleSelect(post.id, e)}
-                    className="flex-shrink-0 mt-0.5 text-slate-300 dark:text-white/10 hover:text-blue-600 transition-colors"
+                    className="flex-shrink-0 mt-0.5 text-text-3 dark:text-white/10 hover:text-blue-600 transition-colors"
                   >
                     {isSelected ? (
                       <CheckSquare className="w-4 h-4 text-blue-600" />
@@ -576,25 +576,25 @@ export default function PostsClient({
                     {post.imageUrl ? (
                       <PostImage
                         src={post.imageUrl}
-                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                        className="w-12 h-12 rounded-control object-cover flex-shrink-0"
                         iconClassName="w-5 h-5"
                       />
                     ) : (
-                      <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0", getPostTypeColor(post.postType))}>
+                      <div className={cn("w-12 h-12 rounded-control flex items-center justify-center flex-shrink-0", getPostTypeColor(post.postType))}>
                         <FileText className="w-5 h-5" />
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-slate-900 dark:text-gray-100 truncate">{post.title}</p>
+                        <p className="text-sm font-semibold text-text truncate">{post.title}</p>
                         {post.postedToLinkedIn && (
-                          <span className="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                          <span className="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-ok-tint text-ok">
                             <Linkedin className="w-3 h-3" />
                             Posted
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{post.body.slice(0, 100)}</p>
+                      <p className="text-xs text-text-2 mt-0.5 line-clamp-1">{post.body.slice(0, 100)}</p>
                       <div className="flex items-center gap-2 mt-2 flex-wrap">
                         <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
                           {post.style || post.postType}
@@ -602,7 +602,7 @@ export default function PostsClient({
                         <span className={cn("text-xs px-2 py-0.5 rounded-full", getStatusColor(post.status))}>
                           {post.status}
                         </span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">{post.weekLabel}</span>
+                        <span className="text-xs text-text-3">{post.weekLabel}</span>
                       </div>
                       <InlineSchedule
                         post={post}
@@ -618,7 +618,7 @@ export default function PostsClient({
                   {!post.postedToLinkedIn && (
                     <button
                       onClick={(e) => handleDuplicate(post.id, e)}
-                      className="flex-shrink-0 mt-0.5 p-1.5 text-slate-300 dark:text-white/10 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      className="flex-shrink-0 mt-0.5 p-1.5 text-text-3 dark:text-white/10 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-control transition-colors"
                       title="Duplicate post"
                     >
                       <Copy className="w-4 h-4" />
@@ -634,24 +634,24 @@ export default function PostsClient({
       {/* Schedule Modal - time only (each post keeps its own date) */}
       {showScheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100">Set Time for {selectedCount} Post{selectedCount !== 1 ? "s" : ""}</h3>
-              <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+              <h3 className="text-lg font-bold text-text">Set Time for {selectedCount} Post{selectedCount !== 1 ? "s" : ""}</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="text-text-3 hover:text-text">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Posting Time</label>
+                <label className="block text-sm font-medium text-text mb-1">Posting Time</label>
                 <input
                   type="time"
                   value={scheduleTime}
                   onChange={(e) => setScheduleTime(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] dark:text-gray-100"
+                  className="w-full px-4 py-2.5 border border-edge rounded-control text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card"
                 />
               </div>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="text-xs text-text-3">
                 Each post keeps its existing scheduled date. Only the posting time is updated.
                 Posts without a date will be scheduled for tomorrow at this time.
                 Status will be set to Ready.
@@ -660,13 +660,13 @@ export default function PostsClient({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowScheduleModal(false)}
-                className="flex-1 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
+                className="flex-1 py-2.5 border border-edge rounded-control text-sm font-medium text-text hover:bg-card-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkSchedule}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium hover:opacity-90 transition-all"
+                className="flex-1 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-control text-sm font-medium hover:opacity-90 transition-all"
               >
                 Apply Time
               </button>
@@ -678,14 +678,14 @@ export default function PostsClient({
       {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/40 rounded-xl flex items-center justify-center flex-shrink-0">
-                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <div className="w-10 h-10 bg-bad-tint rounded-control flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-bad" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100">Delete {selectedCount} post{selectedCount !== 1 ? "s" : ""}?</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                <h3 className="text-lg font-bold text-text">Delete {selectedCount} post{selectedCount !== 1 ? "s" : ""}?</h3>
+                <p className="text-sm text-text-2 mt-1">
                   This cannot be undone. Already-published posts will not be affected.
                 </p>
               </div>
@@ -693,13 +693,13 @@ export default function PostsClient({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
+                className="flex-1 py-2.5 border border-edge rounded-control text-sm font-medium text-text hover:bg-card-muted transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkDelete}
-                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors"
+                className="flex-1 py-2.5 bg-bad text-white rounded-control text-sm font-medium hover:bg-red-700 transition-colors"
               >
                 Delete
               </button>

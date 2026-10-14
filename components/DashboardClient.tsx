@@ -109,14 +109,14 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
   }
 
   const statCards = [
-    { label: "Total Posts", value: stats.totalPosts, icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
-    { label: "Ready to Post", value: stats.readyPosts, icon: CheckCircle, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-900/30" },
-    { label: "Published", value: stats.publishedPosts, icon: Linkedin, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
-    { label: "Drafts", value: stats.draftPosts, icon: AlertCircle, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-900/30" },
+    { label: "Total posts", value: stats.totalPosts, icon: FileText, color: "text-text-3", href: "/posts" },
+    { label: "Ready to post", value: stats.readyPosts, icon: CheckCircle, color: "text-ok", href: "/posts" },
+    { label: "Published", value: stats.publishedPosts, icon: Linkedin, color: "text-brand", href: "/posts" },
+    { label: "Drafts", value: stats.draftPosts, icon: AlertCircle, color: "text-warn", href: "/posts" },
   ];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* ── Profile completeness ───────────────────────────────────────────
           This was a soft "tip" gated on `!headline || !industry`, which missed
           the fields that actually matter - summary, skills and target audience
@@ -125,21 +125,21 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           is exactly what is blocking the Generate button, and it links to the
           guided wizard rather than the Settings form. */}
       {profileGaps.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-4">
+        <div className="bg-warn-tint border border-warn/30 rounded-control px-4 py-4">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-warn flex-shrink-0 mt-0.5" />
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+              <p className="text-sm font-semibold text-text">
                 Finish your profile to start generating
               </p>
-              <p className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">
+              <p className="text-sm text-text-2 mt-0.5">
                 Your posts are written from your profile. Without these, every post reads like it
                 could have been written for anybody - which is why we pause generation until they
                 are filled in.
               </p>
               <ul className="mt-2.5 space-y-1">
                 {profileGaps.map((g) => (
-                  <li key={g.key} className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                  <li key={g.key} className="text-xs text-text-2">
                     <span className="font-semibold">{g.label}:</span> {g.hint}
                   </li>
                 ))}
@@ -147,14 +147,14 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
               <div className="mt-3 flex items-center gap-4 flex-wrap">
                 <Link
                   href="/onboarding"
-                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-xl transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-brand hover:bg-brand-hover px-4 py-2 rounded-control transition-colors"
                 >
                   Finish setup
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <Link
                   href="/settings"
-                  className="text-xs font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-100"
+                  className="text-xs font-medium text-text underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-100"
                 >
                   Or edit in Settings
                 </Link>
@@ -167,10 +167,10 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
       {/* Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-gray-100">
-            Good {mounted ? getTimeOfDay() : "day"}, {user?.name?.split(" ")[0] ?? "there"}!
+          <h1 className="font-display text-[26px] font-bold leading-tight tracking-[-0.02em] text-text">
+            Good {mounted ? getTimeOfDay() : "day"}, {user?.name?.split(" ")[0] ?? "there"}
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">
+          <p className="mt-1.5 max-w-3xl text-[14px] leading-relaxed text-text-2">
             {user?.headline ?? "Ready to build your LinkedIn presence?"}
           </p>
         </div>
@@ -180,7 +180,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           {isTrialExpired ? (
             <Link
               href="/subscribe"
-              className="flex items-center gap-2 bg-slate-300 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400 px-5 py-2.5 rounded-xl font-medium hover:bg-slate-400 dark:hover:bg-white/[0.08] transition-colors"
+              className="ring-focus flex h-10 items-center gap-2 rounded-control border border-edge bg-card px-4 text-[13.5px] font-semibold text-text-2 transition-colors hover:bg-card-muted"
             >
               <Lock className="w-4 h-4" />
               Subscribe to Generate Posts
@@ -189,7 +189,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           <button
             onClick={onGenerateClick}
             disabled={generating || limitReached}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-70 shadow-md shadow-blue-200 dark:shadow-blue-900/30"
+            className="ring-focus flex h-10 items-center gap-2 rounded-control bg-brand px-4 text-[13.5px] font-semibold text-white shadow-lift transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
           >
             {generating ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -201,23 +201,23 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           )}
           {limitReached ? (
             <div className="text-right">
-              <p className="text-xs text-red-500 dark:text-red-400">
+              <p className="nums text-[11.5px] font-medium text-bad">
                 {postsRemaining} of {postsLimit} posts remaining this cycle
               </p>
               {cycleResetDate && (
-                <p className="text-xs text-slate-400 dark:text-slate-500">
+                <p className="nums text-[11.5px] text-text-3">
                   Resets {formatShortDate(new Date(cycleResetDate))}
                 </p>
               )}
             </div>
           ) : (
             <div className="text-right">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="nums text-[11.5px] font-medium text-text-2">
                 {batchStart && batchEnd
-                  ? `${formatShortDate(batchStart)} - ${formatShortDate(batchEnd)}`
+                  ? `Lands ${formatShortDate(batchStart)} - ${formatShortDate(batchEnd)}`
                   : "No posting days selected"}
               </p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+              <p className="nums text-[11.5px] text-text-3">
                 {postsRemaining === Infinity ? "Unlimited posts remaining" : `${postsRemaining} of ${postsLimit} posts remaining`}
                 {cycleResetDate && postsRemaining !== Infinity && (
                   <> · resets {formatShortDate(new Date(cycleResetDate))}</>
@@ -229,28 +229,27 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
       </div>
 
       {/* Workflow Notice */}
-      <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3">
-        <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-        <div className="text-sm text-blue-800 dark:text-blue-300">
-          <p className="font-medium mb-1">How it works</p>
-          <p>
-            Your posts are created as drafts. For each post: review and edit the content, generate or upload an image, then mark as <span className="font-semibold">Ready to Publish</span>. Posts marked ready will auto-publish at their scheduled time.
-          </p>
-        </div>
+      <div className="flex items-start gap-2.5 rounded-control border border-edge bg-card-muted px-4 py-2.5">
+        <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-text-3" />
+        <p className="text-[12.5px] leading-relaxed text-text-2">
+          Posts arrive as drafts. Review each one, add an image, then mark it{" "}
+          <span className="font-semibold text-text">Ready to Publish</span> &mdash; anything marked
+          ready publishes itself at its scheduled time.
+        </p>
       </div>
 
       {/* Generation Progress */}
       {generating && progress.length > 0 && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
+        <div className="bg-brand-tint border border-brand-edge rounded-card p-6">
           <div className="flex items-center gap-3 mb-4">
-            <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
-            <h3 className="font-semibold text-blue-600 dark:text-blue-400 flex-1">
+            <Loader2 className="w-5 h-5 text-brand animate-spin" />
+            <h3 className="font-semibold text-brand flex-1">
               Generating your next {postsPerBatch} posts...
             </h3>
             {postPipeline && (
               <button
                 onClick={() => showPipeline("posts")}
-                className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors"
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-brand-edge text-brand rounded-control hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors"
               >
                 <ListChecks className="w-4 h-4" />
                 View pipeline
@@ -258,7 +257,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
             )}
             <button
               onClick={cancelGeneration}
-              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-bad/30 text-bad rounded-control hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
             >
               <XCircle className="w-4 h-4" />
               Cancel
@@ -266,7 +265,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           </div>
           <div className="space-y-2">
             {progress.map((msg, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+              <div key={i} className="flex items-center gap-2 text-sm text-brand">
                 <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
                 {msg}
               </div>
@@ -277,16 +276,16 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
 
       {/* Generation Error with Retry */}
       {generationError && !generating && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5">
+        <div className="bg-bad-tint border border-bad/30 rounded-card p-5">
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-bad flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <h3 className="font-semibold text-red-800 dark:text-red-300 text-sm">Generation failed</h3>
-              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{generationError}</p>
+              <h3 className="font-semibold text-bad text-sm">Generation failed</h3>
+              <p className="text-sm text-bad mt-1">{generationError}</p>
             </div>
             <button
               onClick={onGenerateClick}
-              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium flex-shrink-0"
+              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-bad hover:opacity-90 text-white rounded-control transition-colors font-medium flex-shrink-0"
             >
               <RefreshCw className="w-4 h-4" />
               Retry
@@ -296,35 +295,44 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* The number is the content, so it leads. The 40px tinted icon tile that
+          used to sit above it was the largest element in each card and carried
+          none of the information. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {statCards.map((stat) => (
-          <div key={stat.label} className="bg-white dark:bg-white/[0.03] rounded-2xl p-5 border border-slate-100 dark:border-white/10 shadow-sm">
-            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", stat.bg)}>
-              <stat.icon className={cn("w-5 h-5", stat.color)} />
+          <Link
+            key={stat.label}
+            href={stat.href}
+            className="card ring-focus group p-5 transition-colors hover:border-edge hover:bg-card-muted"
+          >
+            <div className="flex items-start justify-between">
+              <p className="eyebrow">{stat.label}</p>
+              <stat.icon className={cn("h-4 w-4", stat.color)} />
             </div>
-            <div className="text-2xl font-bold text-slate-900 dark:text-gray-100">{stat.value}</div>
-            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{stat.label}</div>
-          </div>
+            <p className="nums mt-3 font-display text-[28px] font-bold leading-none tracking-[-0.02em] text-text">
+              {stat.value}
+            </p>
+          </Link>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming / Recent Posts */}
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm">
-          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
-            <h2 className="font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+        <div className="card">
+          <div className="card-head">
+            <h2 className="card-title flex items-center gap-2">
               <Clock className="w-4 h-4 text-slate-400" />
               {mounted && upcomingPosts.length > 0 && upcomingPosts[0].scheduledAt && new Date(upcomingPosts[0].scheduledAt) > new Date()
                 ? "Upcoming Posts"
                 : "Recent Posts"}
             </h2>
-            <Link href="/posts" className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+            <Link href="/posts" className="text-sm text-brand hover:underline flex items-center gap-1">
               View all <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
           <div className="p-2">
             {upcomingPosts.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+              <div className="py-8 text-center text-text-2 text-sm">
                 {recentPlan
                   ? "No upcoming posts. Generate your next batch of content!"
                   : "Generate your first batch of posts to get started."}
@@ -334,19 +342,19 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
                 <Link
                   key={post.id}
                   href={`/posts/${post.id}`}
-                  className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
+                  className="flex items-start gap-3 p-3 rounded-control hover:bg-card-muted transition-colors"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">{post.title}</p>
+                    <p className="text-sm font-medium text-text truncate">{post.title}</p>
                     <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
                         {post.style || post.postType}
                       </span>
                       {post.scheduledAt && (
-                        <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(post.scheduledAt)}</span>
+                        <span className="text-xs text-text-2">{formatDate(post.scheduledAt)}</span>
                       )}
                       {post.postedToLinkedIn && (
-                        <span className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-blue-500/10 text-brand px-2 py-0.5 rounded-full">
                           Posted
                         </span>
                       )}
@@ -360,14 +368,14 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
         </div>
 
         {/* Content Strategy */}
-        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm">
-          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
-            <h2 className="font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+        <div className="card">
+          <div className="card-head">
+            <h2 className="card-title flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-slate-400" />
               Current Strategy
             </h2>
             {recentPlan && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="text-xs text-text-3">
                 Starting{" "}
                 {new Date(recentPlan.weekStart).toLocaleDateString("en-US", {
                   month: "short",
@@ -385,7 +393,7 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
             ) : (
               <div className="py-8 text-center">
                 <Sparkles className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-text-2">
                   Click &quot;Generate Next {postsPerBatch} Posts&quot; above to create your personalized strategy and content
                 </p>
               </div>
@@ -404,12 +412,12 @@ export default function DashboardClient({ user, recentPlan, stats, upcomingPosts
           <Link
             key={a.href}
             href={a.href}
-            className="flex items-center gap-3 p-4 rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm bg-white dark:bg-white/[0.03] hover:shadow-md transition-shadow"
+            className="flex items-center gap-3 p-4 rounded-card border border-edge-soft shadow-sm bg-white dark:bg-white/[0.03] hover:shadow-md transition-shadow"
           >
-            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", a.color)}>
+            <div className={cn("w-9 h-9 rounded-control flex items-center justify-center", a.color)}>
               <a.icon className="w-5 h-5" />
             </div>
-            <span className="text-sm font-medium text-slate-900 dark:text-gray-100 hidden sm:block">{a.label}</span>
+            <span className="text-sm font-medium text-text hidden sm:block">{a.label}</span>
             <ArrowRight className="w-4 h-4 text-slate-400 ml-auto" />
           </Link>
         ))}
@@ -450,13 +458,13 @@ function UserContentSetup({ positioning, contentStyles }: { positioning?: string
   if (!positioning && styles.length === 0) return null;
 
   return (
-    <div className="rounded-xl border border-slate-100 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.04] px-3 py-2.5">
+    <div className="rounded-control border border-edge-soft bg-slate-50/60 dark:bg-white/[0.04] px-3 py-2.5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Your content setup</p>
-        <Link href="/settings" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Edit</Link>
+        <Link href="/settings" className="text-xs text-brand hover:underline">Edit</Link>
       </div>
       {positioning && (
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+        <p className="text-xs text-text-2 mt-1.5">
           Positioning: <span className="font-medium text-slate-700 dark:text-slate-300">{positioning}</span>
         </p>
       )}
@@ -497,8 +505,8 @@ function StrategyPillars({ strategy }: { strategy: string }) {
     return (
       <div className="space-y-3">
         {parsed.weekTheme && (
-          <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
-            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">{parsed.weekTheme}</p>
+          <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-control">
+            <p className="text-xs font-semibold text-brand">{parsed.weekTheme}</p>
             {parsed.weekFocus && (
               <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">{parsed.weekFocus}</p>
             )}
@@ -509,7 +517,7 @@ function StrategyPillars({ strategy }: { strategy: string }) {
         {toneLine && (
           <div>
             <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Voice &amp; tone</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{toneLine}</p>
+            <p className="text-xs text-text-2">{toneLine}</p>
           </div>
         )}
 
@@ -537,7 +545,7 @@ function StrategyPillars({ strategy }: { strategy: string }) {
               <div key={i}>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{p.name}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{p.percentage}%</span>
+                  <span className="text-xs text-text-2">{p.percentage}%</span>
                 </div>
                 <div className="h-2 bg-slate-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
                   <div
@@ -545,26 +553,26 @@ function StrategyPillars({ strategy }: { strategy: string }) {
                     style={{ width: `${p.percentage}%` }}
                   />
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{p.description}</p>
+                <p className="text-xs text-text-2 mt-1">{p.description}</p>
               </div>
             ))}
           </div>
         )}
 
         {parsed.weeklyGoal && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.06] px-3 py-2 rounded-lg mt-2">
+          <p className="text-xs text-text-2 bg-slate-50 dark:bg-white/[0.06] px-3 py-2 rounded-control mt-2">
             Goal: {parsed.weeklyGoal}
           </p>
         )}
         {parsed.callToAction && (
-          <p className="text-xs text-slate-500 dark:text-slate-400 px-3">
+          <p className="text-xs text-text-2 px-3">
             <span className="font-medium text-slate-600 dark:text-slate-300">CTA:</span> {parsed.callToAction}
           </p>
         )}
       </div>
     );
   } catch {
-    return <p className="text-sm text-slate-500 dark:text-slate-400">Strategy data unavailable.</p>;
+    return <p className="text-sm text-text-2">Strategy data unavailable.</p>;
   }
 }
 

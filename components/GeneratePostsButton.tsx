@@ -61,7 +61,7 @@ export default function GeneratePostsButton({ recentPlan, postsRemaining, classN
             : `Generate your next ${POSTS_PER_BATCH} posts`
         }
         className={cn(
-          "flex flex-shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-blue-200 transition-opacity hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70 dark:shadow-blue-900/30",
+          "flex flex-shrink-0 items-center gap-2 rounded-control bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-lift shadow-blue-200 transition-opacity hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-70 dark:shadow-blue-900/30",
           className
         )}
       >
