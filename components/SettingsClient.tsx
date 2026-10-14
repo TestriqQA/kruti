@@ -654,8 +654,8 @@ export default function SettingsClient({ user }: { user: User | null }) {
           >
             <span
               className={cn(
-                "absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform",
-                humanMode ? "translate-x-8" : "translate-x-1"
+                "absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                humanMode ? "translate-x-7" : "translate-x-0"
               )}
             />
           </button>
