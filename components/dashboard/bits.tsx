@@ -26,16 +26,30 @@ export function StatCard({
   icon: Icon,
   tone,
   href,
+  onClick,
+  active = false,
 }: {
   label: string;
   value: number | string;
   note: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: keyof typeof STAT_TONE;
-  href: string;
+  /** Where the reading leads, when it leads somewhere. */
+  href?: string;
+  /** Or what it does in place - Support filters its own list. */
+  onClick?: () => void;
+  /** Marks a card whose onClick is the state currently in effect. */
+  active?: boolean;
 }) {
-  return (
-    <a href={href} className="card card-lift ring-focus flex items-start gap-4 px-5 py-5">
+  const interactive = Boolean(href || onClick);
+  const className = cn(
+    "card flex items-start gap-4 px-5 py-5 text-left",
+    interactive && "card-lift ring-focus",
+    active && "ring-2 ring-brand"
+  );
+
+  const body = (
+    <>
       <span
         className={cn(
           "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control",
@@ -51,8 +65,24 @@ export function StatCard({
         </span>
         <span className="mt-2 block text-[12px] leading-snug text-text-2">{note}</span>
       </span>
-    </a>
+    </>
   );
+
+  if (href) {
+    return (
+      <a href={href} className={className}>
+        {body}
+      </a>
+    );
+  }
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={active} className={className}>
+        {body}
+      </button>
+    );
+  }
+  return <div className={className}>{body}</div>;
 }
 
 /* ── Category pill ─────────────────────────────────────────────────────────

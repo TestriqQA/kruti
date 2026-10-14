@@ -15,8 +15,11 @@ import {
   CheckCheck,
   CheckCircle2,
   Lock,
+  Inbox,
+  Mail,
 } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { StatCard } from "@/components/dashboard/bits";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/utils";
 import {
@@ -60,9 +63,9 @@ interface Picked {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  open: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  in_progress: "bg-blue-100 text-blue-800 dark:bg-brand/15 dark:text-blue-300",
-  closed: "bg-slate-100 text-text-2  ",
+  open: "bg-warn-tint text-warn",
+  in_progress: "bg-brand-tint text-brand",
+  closed: "bg-card-muted text-text-2",
 };
 
 /** Time only - the date lives in the separator above the group. */
@@ -331,6 +334,12 @@ export default function SupportClient({
   // "closed" does not hide the fact that a reply is waiting elsewhere.
   const totalUnread = tickets.reduce((n, t) => n + unreadCount(t), 0);
 
+  // Read off the same array the column below renders, so raising or closing a
+  // ticket moves these at the same moment it moves the list.
+  const openCount = tickets.filter((t) => t.status === "open").length;
+  const activeCount = tickets.filter((t) => t.status === "in_progress").length;
+  const closedCount = tickets.filter((t) => t.status === "closed").length;
+
   return (
     // One attribute exempts this whole subtree from the paywall lock, so a user
     // whose trial lapsed can still reach us. See components/SubscriptionLock.tsx.
@@ -345,6 +354,56 @@ export default function SupportClient({
         </p>
       </div>
 
+      {/* Readings. Each card carries a line only it can say. */}
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Open"
+          value={openCount}
+          note={openCount > 0 ? "waiting on us" : "nothing waiting on us"}
+          icon={Inbox}
+          tone="warn"
+          onClick={() => setFilter(filter === "open" ? "all" : "open")}
+          active={filter === "open"}
+        />
+        <StatCard
+          label="In progress"
+          value={activeCount}
+          note={activeCount > 0 ? "we are on it" : "nothing in hand"}
+          icon={Clock}
+          tone="brand"
+          onClick={() => setFilter(filter === "in_progress" ? "all" : "in_progress")}
+          active={filter === "in_progress"}
+        />
+        <StatCard
+          label="Closed"
+          value={closedCount}
+          note={closedCount > 0 ? "settled all time" : "none closed yet"}
+          icon={CheckCircle2}
+          tone="ok"
+          onClick={() => setFilter(filter === "closed" ? "all" : "closed")}
+          active={filter === "closed"}
+        />
+        <StatCard
+          label="New replies"
+          value={totalUnread}
+          note={totalUnread > 0 ? "open the one waiting" : "nothing unread"}
+          icon={Mail}
+          tone="violet"
+          onClick={
+            totalUnread > 0
+              ? () => {
+                  // Recomputed on click rather than captured at mount, so this
+                  // still lands on a waiting ticket after you have read others.
+                  const next = tickets.find((t) => unreadCount(t) > 0);
+                  if (!next) return;
+                  setFilter("all");
+                  setOpenId(next.id);
+                }
+              : undefined
+          }
+        />
+      </div>
+
       {/* 60/40: form left, tickets right.
           The tickets column used to be pinned at a fixed 360px, so every pixel
           of extra width went to the form and the conversation stayed cramped.
@@ -353,35 +412,41 @@ export default function SupportClient({
           cannot blow the grid out past its track. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         {/* ── Left: raise a ticket ─────────────────────────────── */}
-        <div className="space-y-6 min-w-0">
-          <section className="card p-6">
-            <h2 className="eyebrow">
-              Sent with your ticket
-            </h2>
-            <div className="mt-3 flex items-center gap-3">
-              <Avatar src={user.image} name={user.name} size={40} />
+        <div className="min-w-0">
+          <section className="card p-6 space-y-5">
+            <div>
+              <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">
+                Raise a ticket
+              </h2>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-text-2">
+                One ticket per problem gets you a faster answer than one long one.
+              </p>
+            </div>
+
+            {/* What is attached, shown inside the form it is attached to rather
+                than as a card of its own above it. */}
+            <div className="flex items-center gap-3 rounded-control bg-card-muted px-3.5 py-3">
+              <Avatar src={user.image} name={user.name} size={36} />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-text truncate">
+                <p className="truncate text-[13.5px] font-medium text-text">
                   {user.name || "Your account"}
                 </p>
-                <p className="text-xs text-text-2 truncate">{user.email}</p>
+                <p className="truncate text-[12px] text-text-2">{user.email}</p>
               </div>
               <span
                 className={cn(
-                  "ml-auto flex-shrink-0 text-xs px-2.5 py-1 rounded-full capitalize",
+                  "ml-auto flex-shrink-0 rounded-full px-2.5 py-1 text-xs capitalize",
                   STATUS_STYLE.closed
                 )}
               >
                 {user.plan.replace("_", " ")}
               </span>
             </div>
-            <p className="mt-3 text-xs text-text-3">
-              Your name, email, plan and timezone ({user.timezone || "not set"}) are attached
-              automatically, so there is nothing to fill in here.
+            <p className="-mt-2 text-xs text-text-3">
+              Your name, email, plan and timezone ({user.timezone || "not set"}) ride along
+              automatically - nothing to fill in.
             </p>
-          </section>
 
-          <section className="card p-6 space-y-5">
             <div>
               <label
                 htmlFor="ticket-description"
@@ -500,39 +565,42 @@ export default function SupportClient({
 
         {/* ── Right: your tickets and our replies ──────────────── */}
         <aside className="space-y-3 min-w-0 lg:sticky lg:top-6">
-          <div className="flex items-center justify-between">
-            <h2 className="eyebrow">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">
               Your tickets
             </h2>
             {totalUnread > 0 && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand text-white">
+              <span className="flex-shrink-0 rounded-full bg-brand px-2.5 py-1 text-xs font-semibold text-white">
                 {totalUnread} new
               </span>
             )}
           </div>
 
           {tickets.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {(["all", ...TICKET_STATUSES] as const).map((s) => {
-                const count = s === "all" ? tickets.length : tickets.filter((t) => t.status === s).length;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setFilter(s)}
-                    aria-pressed={filter === s}
-                    className={cn(
-                      "text-[11px] px-2.5 py-1 rounded-control border transition-colors capitalize",
-                      filter === s
-                        ? "bg-brand text-white border-blue-600"
-                        : "border-edge text-text-2  hover:bg-card-muted"
-                    )}
-                  >
-                    {s.replace("_", " ")}
-                    <span className="ml-1 tabular-nums opacity-60">{count}</span>
-                  </button>
-                );
-              })}
+            <div>
+              <p className="eyebrow mb-1.5">Show</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["all", ...TICKET_STATUSES] as const).map((s) => {
+                  const count = s === "all" ? tickets.length : tickets.filter((t) => t.status === s).length;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setFilter(s)}
+                      aria-pressed={filter === s}
+                      className={cn(
+                        "ring-focus flex h-8 items-center gap-1.5 rounded-control border px-3 text-[12.5px] font-medium capitalize transition-colors",
+                        filter === s
+                          ? "border-brand bg-brand text-white"
+                          : "border-edge text-text-2 hover:border-brand-edge hover:text-text"
+                      )}
+                    >
+                      {s === "all" ? "All" : s.replace("_", " ")}
+                      <span className="tabular-nums opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
