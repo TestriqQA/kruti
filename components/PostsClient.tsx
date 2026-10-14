@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import * as Tooltip from "@radix-ui/react-tooltip";
 import {
   FileText, Search, Linkedin, Calendar, CheckSquare, Square, MinusSquare,
   Trash2, Clock, CheckCircle, Loader2, X, AlertCircle,
@@ -389,10 +388,14 @@ export default function PostsClient({
     return c;
   }, [decorated]);
 
-  const atRisk = useMemo(
-    () => decorated.filter((p) => p.state === "failed" || p.state === "missed").length,
+  // Failed or missed. The count is a link straight to the first one, because a
+  // number the user cannot reach is the thing the Overview review flagged.
+  const atRiskPosts = useMemo(
+    () => decorated.filter((p) => p.state === "failed" || p.state === "missed"),
     [decorated]
   );
+  const atRisk = atRiskPosts.length;
+  const firstAtRisk = atRiskPosts[0]?.id ?? "";
 
   const typeFacets = useMemo(() => {
     const seen = new Map<string, number>();
@@ -592,8 +595,6 @@ export default function PostsClient({
     ? "Unlimited on this account"
     : `${postsRemaining} of ${postsLimit} left this cycle`;
 
-  const firstFiled = weeks[0]?.label ?? null;
-
   return (
     <div className="space-y-7">
       {/* ═══ CHASSIS ════════════════════════════════════════════════════════ */}
@@ -665,13 +666,16 @@ export default function PostsClient({
               Library · {posts.length} posts · {weeks.length}{" "}
               {weeks.length === 1 ? "week" : "weeks"}
             </p>
-            <h1 className="mt-2.5 font-display text-[28px] font-bold leading-[1.1] tracking-[-0.03em] text-ink">
-              {posts.length === 0
-                ? "Nothing filed yet."
-                : firstFiled
-                  ? `Everything since ${firstFiled}.`
-                  : "Your archive."}
+            <h1 className="mt-2 font-display text-[28px] font-bold leading-[1.1] tracking-[-0.03em] text-ink">
+              All posts
             </h1>
+            <p className="mt-1.5 text-[13px] text-ink-muted">
+              {posts.length === 0
+                ? "Nothing written yet. Generate your first batch to start the archive."
+                : `${posts.length} posts across ${weeks.length} ${
+                    weeks.length === 1 ? "week" : "weeks"
+                  }, grouped by the week each batch was written for.`}
+            </p>
 
             <div className="relative mt-4 max-w-[420px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
@@ -701,71 +705,113 @@ export default function PostsClient({
           </div>
         </div>
 
-        {/* Instruments: the status ledger IS the status filter, so the control
-            lives in the reading rather than in another toolbar select. */}
-        <div className="grid h-[150px] grid-cols-[196px_minmax(0,1fr)]">
-          <div className="flex flex-col justify-center gap-0.5 px-5 py-4">
-            {(["all", "draft", "ready", "published"] as const).map((k) => {
-              const active = filterStatus === k;
-              return (
-                <button
-                  key={k}
-                  onClick={() => setFilterStatus(k)}
-                  className={cn(
-                    "focus-ring flex h-6 items-center gap-2 rounded-[3px] px-1 text-left transition-colors",
-                    active ? "bg-accent-soft" : "hover:bg-surface-sunken"
-                  )}
-                >
-                  {k === "all" ? (
-                    <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-ink-muted" />
-                  ) : (
-                    <span
-                      className={cn(
-                        "h-1.5 w-1.5 flex-shrink-0 rounded-full",
-                        STATE_DOT[k as OverviewStatus]
-                      )}
-                    />
-                  )}
-                  <span
+        {/* Filters. Everything here is a visible, labelled control - the
+            previous version hid the status filter inside an instrument readout
+            and the type/sort controls inside a borderless toolbar, which read
+            as decoration rather than as things you can press. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-7 py-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
+              Status
+            </span>
+            <div className="flex items-center rounded-control border border-line p-0.5">
+              {(["all", "draft", "ready", "published"] as const).map((k) => {
+                const active = filterStatus === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setFilterStatus(k)}
+                    aria-pressed={active}
                     className={cn(
-                      "w-[74px] flex-shrink-0 whitespace-nowrap text-[9.5px] font-semibold uppercase tracking-[0.12em]",
-                      active ? "text-accent" : "text-ink-muted"
+                      "focus-ring flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12px] font-semibold transition-colors",
+                      active
+                        ? "bg-accent text-accent-ink"
+                        : "text-ink-muted hover:bg-surface-sunken hover:text-ink"
                     )}
                   >
-                    {k === "all" ? "All posts" : STATE_WORD[k as OverviewStatus]}
-                  </span>
-                  <span
-                    className={cn(
-                      "tabular font-display text-[15px] font-bold tracking-[-0.02em]",
-                      active ? "text-accent" : "text-ink"
+                    {k !== "all" && (
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          active ? "bg-accent-ink" : STATE_DOT[k as OverviewStatus]
+                        )}
+                      />
                     )}
-                  >
-                    {counts[k]}
-                  </span>
-                </button>
-              );
-            })}
-            {atRisk > 0 && (
-              <p className="mt-1 px-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-danger">
-                {atRisk} at risk
-              </p>
-            )}
+                    {k === "all" ? "All" : STATE_WORD[k as OverviewStatus]}
+                    <span className={cn("tabular", active ? "opacity-80" : "text-ink-muted")}>
+                      {counts[k]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* THE FORE-EDGE — the stack of weekly issues, seen end-on. Column
-              height is that week's post count, colour mix is its outcome. */}
-          <div className="border-l border-line py-4 pl-6 pr-5">
-            <ForeEdge weeks={weeks} linkable={groupByWeek} />
-          </div>
+          <label className="flex items-center gap-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
+              Type
+            </span>
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="focus-ring h-9 cursor-pointer rounded-control border border-line bg-surface pl-3 pr-8 text-[12.5px] font-medium text-ink"
+            >
+              <option value="all">All types</option>
+              {typeFacets.map(([t, n]) => (
+                <option key={t} value={t}>
+                  {typeLabel(t)} ({n})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center gap-2">
+            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
+              Group
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="focus-ring h-9 cursor-pointer rounded-control border border-line bg-surface pl-3 pr-8 text-[12.5px] font-medium text-ink"
+            >
+              <option value="default">By week written</option>
+              <option value="date-asc">By date, oldest first</option>
+              <option value="date-desc">By date, newest first</option>
+            </select>
+          </label>
+
+          <div className="flex-1" />
+
+          {atRisk > 0 && (
+            <Link
+              href={`/posts/${firstAtRisk}`}
+              className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-danger/30 bg-danger-soft px-3 text-[12.5px] font-semibold text-danger"
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              {atRisk} need attention
+            </Link>
+          )}
+
+          <a
+            href="/api/content/export"
+            download
+            title="Export every post as CSV"
+            className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line px-3 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
+          >
+            <Download className="h-3.5 w-3.5" />
+            Export CSV
+          </a>
         </div>
       </section>
 
-      {/* ═══ SHELF RULE — sticky, so bulk actions stay reachable 150 rows down */}
+      {/* Selection bar. Sticky so it stays reachable 150 rows down, and every
+          bulk action is a real button - as buttons, which is what they were
+          and what they read as. */}
       {(sorted.length > 0 || selectedCount > 0) && (
-        <div className="sticky top-16 z-20 -mt-2 flex h-11 items-center gap-4 border-y border-line-strong bg-app">
+        <div className="sticky top-16 z-20 flex min-h-[52px] flex-wrap items-center gap-3 rounded-control border border-line bg-surface px-4 py-2">
           <button
             onClick={toggleSelectAll}
-            className="focus-ring flex flex-shrink-0 items-center gap-2 rounded px-1 text-[12px] font-semibold text-ink-muted transition-colors hover:text-ink"
+            className="focus-ring flex flex-shrink-0 items-center gap-2 rounded px-1 py-1 text-[12.5px] font-semibold text-ink-muted transition-colors hover:text-ink"
           >
             {allFilteredSelected ? (
               <CheckSquare className="h-4 w-4 text-accent" />
@@ -779,34 +825,45 @@ export default function PostsClient({
 
           {selectedCount > 0 ? (
             <>
-              <span className="tabular flex-shrink-0 text-[12px] font-semibold text-accent">
+              <span className="tabular flex-shrink-0 text-[12.5px] font-semibold text-accent">
                 {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
               </span>
               <div className="flex-1" />
+
               <button
                 onClick={() => setShowScheduleModal(true)}
                 disabled={bulkLoading}
-                className="focus-ring flex items-center gap-1.5 text-[12px] font-semibold text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+                className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
               >
-                <Calendar className="h-3.5 w-3.5" />
+                <Calendar className="h-3.5 w-3.5 text-ink-muted" />
                 Set time
               </button>
+
               <button
                 onClick={handleBulkImageGen}
                 disabled={bulkLoading || imageGenerating}
-                className="focus-ring flex items-center gap-1.5 text-[12px] font-semibold text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
+                className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
               >
                 {imageGenerating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-muted" />
                 ) : (
-                  <ImageIcon className="h-3.5 w-3.5" />
+                  <ImageIcon className="h-3.5 w-3.5 text-ink-muted" />
                 )}
                 {imageGenerating ? "Generating…" : "Generate images"}
               </button>
+
+              <button
+                onClick={() => handleBulkStatus("draft")}
+                disabled={bulkLoading}
+                className="focus-ring flex h-9 items-center rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
+              >
+                Mark draft
+              </button>
+
               <button
                 onClick={() => handleBulkStatus("ready")}
                 disabled={bulkLoading}
-                className="focus-ring flex items-center gap-1.5 text-[12px] font-semibold text-success transition-opacity hover:opacity-80 disabled:opacity-50"
+                className="focus-ring flex h-9 items-center gap-1.5 rounded-control bg-success px-3 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 {bulkLoading ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -815,62 +872,31 @@ export default function PostsClient({
                 )}
                 Mark ready
               </button>
-              <button
-                onClick={() => handleBulkStatus("draft")}
-                disabled={bulkLoading}
-                className="focus-ring text-[12px] font-semibold text-ink-muted transition-colors hover:text-ink disabled:opacity-50"
-              >
-                Mark draft
-              </button>
+
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={bulkLoading}
-                className="focus-ring flex items-center gap-1.5 text-[12px] font-semibold text-danger transition-opacity hover:opacity-80 disabled:opacity-50"
+                className="focus-ring flex h-9 items-center gap-1.5 rounded-control bg-danger px-3 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
               </button>
+
               <button
                 onClick={clearSelection}
                 aria-label="Clear selection"
-                className="focus-ring flex-shrink-0 rounded p-1 text-ink-muted hover:text-ink"
+                title="Clear selection"
+                className="focus-ring flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
               >
                 <X className="h-4 w-4" />
               </button>
             </>
           ) : (
             <>
-              <select
-                value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
-                className="focus-ring cursor-pointer rounded border-0 bg-transparent py-0 pl-0 pr-6 text-[12px] font-semibold text-ink-muted"
-              >
-                <option value="all">All types</option>
-                {typeFacets.map(([t, n]) => (
-                  <option key={t} value={t}>
-                    {typeLabel(t)} ({n})
-                  </option>
-                ))}
-              </select>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                className="focus-ring cursor-pointer rounded border-0 bg-transparent py-0 pl-0 pr-6 text-[12px] font-semibold text-ink-muted"
-              >
-                <option value="default">By week</option>
-                <option value="date-asc">Date, oldest first</option>
-                <option value="date-desc">Date, newest first</option>
-              </select>
               <div className="flex-1" />
-              <a
-                href="/api/content/export"
-                download
-                title="Export all posts as CSV"
-                className="focus-ring flex flex-shrink-0 items-center gap-1.5 text-[12px] font-semibold text-ink-muted transition-colors hover:text-ink"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Export CSV
-              </a>
+              <span className="tabular text-[12px] text-ink-muted">
+                Select posts to schedule, generate images or publish them together
+              </span>
             </>
           )}
         </div>
@@ -1121,108 +1147,5 @@ export default function PostsClient({
         </div>
       )}
     </div>
-  );
-}
-
-/* ── Fore-edge ─────────────────────────────────────────────────────────────── */
-
-function ForeEdge({
-  weeks,
-  linkable,
-}: {
-  weeks: { id: string; iso: string; label: string; theme: string | null; states: OverviewStatus[] }[];
-  linkable: boolean;
-}) {
-  // Lane budget: h-[150px] − py-4 (32) − axis (16 + 8) − footer (16) = 78px.
-  const PLOT = 78;
-  const SLOT = 10;
-  const MAX = Math.floor((PLOT - 14) / SLOT); // leave room for a +N token
-
-  if (weeks.length === 0) {
-    return (
-      <div className="flex h-full items-center">
-        <p className="text-[12px] text-ink-muted">
-          Each weekly batch becomes a column here once you generate one.
-        </p>
-      </div>
-    );
-  }
-
-  const cell = 100 / weeks.length;
-
-  return (
-    <Tooltip.Provider delayDuration={120}>
-      <div className="flex h-full flex-col">
-        <div className="relative flex-1">
-          {weeks.map((w, i) => {
-            const visible = w.states.slice(0, MAX);
-            const hidden = w.states.length - visible.length;
-            const isNewest = i === weeks.length - 1;
-            const inner = (
-              <>
-                {hidden > 0 && (
-                  <span className="tabular mb-0.5 block text-center text-[9.5px] font-semibold text-ink-muted">
-                    +{hidden}
-                  </span>
-                )}
-                <span className="flex flex-col-reverse items-center gap-1">
-                  {visible.map((s, k) => (
-                    <span
-                      key={k}
-                      className={cn("block h-1.5 w-[22px] rounded-full", STATE_DOT[s])}
-                    />
-                  ))}
-                </span>
-              </>
-            );
-            return (
-              <Tooltip.Root key={w.id}>
-                <Tooltip.Trigger asChild>
-                  {linkable ? (
-                    <a
-                      href={`#week-${w.id}`}
-                      className="focus-ring absolute bottom-0 flex -translate-x-1/2 flex-col items-center justify-end rounded"
-                      style={{ left: `${(i + 0.5) * cell}%` }}
-                    >
-                      {inner}
-                    </a>
-                  ) : (
-                    <span
-                      className="absolute bottom-0 flex -translate-x-1/2 flex-col items-center justify-end"
-                      style={{ left: `${(i + 0.5) * cell}%` }}
-                    >
-                      {inner}
-                    </span>
-                  )}
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content
-                    side="top"
-                    sideOffset={6}
-                    className="z-50 max-w-xs rounded-control border border-line bg-surface px-3 py-2 shadow-e3"
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-                      Week of {w.label}
-                      {isNewest && <span className="ml-1 text-accent">· current</span>}
-                    </p>
-                    {w.theme && (
-                      <p className="mt-1 text-[12.5px] leading-snug text-ink">{w.theme}</p>
-                    )}
-                    <p className="tabular mt-1 text-[11px] text-ink-muted">
-                      {w.states.length} posts
-                    </p>
-                  </Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center justify-between text-[9.5px] text-ink-muted">
-          <span>Oldest week held</span>
-          <span className="font-semibold text-accent">Current week</span>
-        </div>
-      </div>
-    </Tooltip.Provider>
   );
 }
