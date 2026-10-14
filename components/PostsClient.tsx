@@ -141,14 +141,20 @@ function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string,
   );
 }
 
+/** The status values the list can actually filter by. */
+const POST_STATUSES = ["draft", "ready", "published"];
+
 export default function PostsClient({
   posts: initialPosts,
   recentPlan,
   postsRemaining,
+  initialStatus = null,
 }: {
   posts: Post[];
   recentPlan: { strategy: string; weekStart: Date | string } | null;
   postsRemaining: number;
+  /** From ?status= on the URL, so overview aggregates land pre-filtered. */
+  initialStatus?: string | null;
 }) {
   const router = useRouter();
   // Image generation runs in GenerationProvider (above every page), so it keeps
@@ -178,7 +184,13 @@ export default function PostsClient({
   }, [lastImageBatch]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
+  // Seeded from ?status= so an aggregate link on the overview lands on the
+  // list it names. Validated against the real status values rather than
+  // trusted: an arbitrary query string would otherwise filter everything out
+  // and read as "you have no posts".
+  const [filterStatus, setFilterStatus] = useState(
+    initialStatus && POST_STATUSES.includes(initialStatus) ? initialStatus : "all"
+  );
 
   // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());

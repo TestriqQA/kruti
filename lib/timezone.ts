@@ -45,6 +45,29 @@ export function toZonedDayKey(
 }
 
 /**
+ * The day key `offsetDays` away from `from`, counted in the user's calendar
+ * rather than in UTC.
+ *
+ * Arithmetic is done on the day key, not on the instant: adding 86400000ms to a
+ * UTC timestamp lands on the wrong calendar day whenever the user's offset and
+ * the UTC day boundary disagree, which for Asia/Kolkata is every day between
+ * 18:30 and midnight UTC.
+ */
+export function zonedDayKey(
+  from: Date | string,
+  timezone: string = DEFAULT_TZ,
+  offsetDays: number = 0
+): string {
+  const base = new Date(`${toZonedDayKey(from, timezone)}T00:00:00Z`).getTime();
+  return new Date(base + offsetDays * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Midnight at the start of a zoned day key, as a UTC instant. */
+export function startOfZonedDay(dayKey: string, timezone: string = DEFAULT_TZ): Date {
+  return localTimeToUTC(dayKey, "00:00", timezone);
+}
+
+/**
  * Given a user's posting schedule and timezone, compute posting slots
  * for a given week as proper UTC Dates.
  *

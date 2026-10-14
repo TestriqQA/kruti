@@ -26,7 +26,7 @@
 }
 
 @layer base {
-  body { @apply bg-gray-50 text-gray-900; }
+  /* Superseded by the token rule in the design-tokens layer below. */
 
   /* Native UI (select popups, scrollbars, date/time pickers, autofill) is drawn by
      the browser, not by Tailwind. Without this it stays light while the app is

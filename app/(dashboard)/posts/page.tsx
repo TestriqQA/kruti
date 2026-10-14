@@ -5,7 +5,11 @@ import PostsClient from "@/components/PostsClient";
 import { format } from "date-fns";
 import { postsRemainingInCycle } from "@/lib/post-quota";
 
-export default async function PostsPage() {
+export default async function PostsPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string };
+}) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
 
@@ -44,6 +48,7 @@ export default async function PostsPage() {
       posts={allPosts}
       recentPlan={recentPlan}
       postsRemaining={postsRemainingInCycle(user?.role, subscription)}
+      initialStatus={searchParams?.status ?? null}
     />
   );
 }
