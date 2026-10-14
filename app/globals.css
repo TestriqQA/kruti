@@ -252,6 +252,10 @@ select.select-field::-ms-expand {
     --warn-tint: 255 251 235;
     --bad: 220 38 38;
     --bad-tint: 254 242 242;
+    --violet: 124 58 237;
+    --violet-tint: 243 240 255;
+    --pink: 219 39 119;
+    --pink-tint: 253 240 247;
 
     /* One shadow, barely there. Cards are separated by their border; the
        shadow only stops them sitting flat on the field. */
@@ -288,6 +292,10 @@ select.select-field::-ms-expand {
     --warn-tint: 52 36 8;
     --bad: 248 113 113;
     --bad-tint: 56 18 18;
+    --violet: 167 139 250;
+    --violet-tint: 42 32 68;
+    --pink: 244 114 182;
+    --pink-tint: 59 22 44;
 
     --lift: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 28px -18px rgb(0 0 0 / 0.9);
     --lift-hover: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 18px 36px -18px rgb(0 0 0 / 1);

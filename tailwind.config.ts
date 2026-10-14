@@ -38,6 +38,8 @@ const config: Config = {
         ok: { DEFAULT: t("ok"), tint: t("ok-tint") },
         warn: { DEFAULT: t("warn"), tint: t("warn-tint") },
         bad: { DEFAULT: t("bad"), tint: t("bad-tint") },
+        violet: { DEFAULT: t("violet"), tint: t("violet-tint") },
+        pink: { DEFAULT: t("pink"), tint: t("pink-tint") },
       },
       borderRadius: {
         card: "var(--radius-card)",

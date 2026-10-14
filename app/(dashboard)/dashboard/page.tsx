@@ -7,6 +7,7 @@ import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
 import { assessProfile } from "@/lib/profile-completeness";
+import { safeJsonParse } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -14,7 +15,7 @@ export default async function DashboardPage() {
 
   const now = new Date();
 
-  const [user, recentPlan, allPostCounts, newsletters, upcomingPosts] = await Promise.all([
+  const [user, recentPlan, allPostCounts, newsletters, trendRows, upcomingPosts] = await Promise.all([
     prisma.user.findUnique({
       where: { id: session.user.id },
       select: {
@@ -37,6 +38,14 @@ export default async function DashboardPage() {
       _count: { _all: true },
     }),
     prisma.newsletter.count({ where: { userId: session.user.id } }),
+    // Eight weeks of creation dates, for the sparkline on each stat card.
+    prisma.post.findMany({
+      where: {
+        plan: { userId: session.user.id },
+        createdAt: { gte: new Date(now.getTime() - 56 * 24 * 60 * 60 * 1000) },
+      },
+      select: { createdAt: true, status: true, postedToLinkedIn: true },
+    }),
     // Upcoming posts across ALL plans - scheduled in the future and not yet posted
     prisma.post.findMany({
       where: {
@@ -144,6 +153,27 @@ export default async function DashboardPage() {
   // preflight refuses with the same gaps.
   const profileGaps = assessProfile(user).gaps;
 
+  // Eight weekly buckets per stat, so each card carries its own shape rather
+  // than a decorative squiggle. Counted here because the client should receive
+  // numbers, not rows.
+  const bucketOf = (d: Date) =>
+    Math.min(7, Math.floor((now.getTime() - d.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+  const blank = () => [0, 0, 0, 0, 0, 0, 0, 0];
+  const trends = { total: blank(), ready: blank(), published: blank(), draft: blank() };
+  for (const row of trendRows) {
+    const i = 7 - bucketOf(new Date(row.createdAt));
+    if (i < 0 || i > 7) continue;
+    trends.total[i] += 1;
+    if (row.postedToLinkedIn || row.status === "published") trends.published[i] += 1;
+    else if (row.status === "ready") trends.ready[i] += 1;
+    else trends.draft[i] += 1;
+  }
+
+  function parseSkills(raw?: string | null): string[] {
+    const v = safeJsonParse<string[]>(raw ?? null, []);
+    return Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).slice(0, 6) : [];
+  }
+
   return (
     <DashboardClient
       user={user}
@@ -154,6 +184,8 @@ export default async function DashboardPage() {
           : null
       }
       stats={{ totalPosts, readyPosts, draftPosts, publishedPosts, newsletters }}
+      trends={trends}
+      skills={parseSkills(user?.skills)}
       upcomingPosts={postsToShow}
       batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}
