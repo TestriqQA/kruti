@@ -7,7 +7,6 @@ import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
 import { assessProfile } from "@/lib/profile-completeness";
-import { safeJsonParse } from "@/lib/utils";
 
 export default async function DashboardPage() {
   const session = await getServerSession(authOptions);
@@ -156,23 +155,32 @@ export default async function DashboardPage() {
   // Eight weekly buckets per stat, so each card carries its own shape rather
   // than a decorative squiggle. Counted here because the client should receive
   // numbers, not rows.
-  const bucketOf = (d: Date) =>
-    Math.min(7, Math.floor((now.getTime() - d.getTime()) / (7 * 24 * 60 * 60 * 1000)));
-  const blank = () => [0, 0, 0, 0, 0, 0, 0, 0];
-  const trends = { total: blank(), ready: blank(), published: blank(), draft: blank() };
-  for (const row of trendRows) {
-    const i = 7 - bucketOf(new Date(row.createdAt));
-    if (i < 0 || i > 7) continue;
-    trends.total[i] += 1;
-    if (row.postedToLinkedIn || row.status === "published") trends.published[i] += 1;
-    else if (row.status === "ready") trends.ready[i] += 1;
-    else trends.draft[i] += 1;
-  }
+  // Each stat card says something only IT can say, rather than four copies of
+  // the same sparkline. These are cheap derivations of rows the page already has.
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const madeThisMonth = trendRows.filter((r) => new Date(r.createdAt) >= startOfMonth).length;
+  const publishedThisMonth = trendRows.filter(
+    (r) => new Date(r.createdAt) >= startOfMonth && (r.postedToLinkedIn || r.status === "published")
+  ).length;
+  const nextOut = postsToShow.find(
+    (p) => !p.postedToLinkedIn && p.status === "ready" && p.scheduledAt
+  );
+  const oldestDraft = [...postsToShow]
+    .filter((p) => p.status === "draft" && p.scheduledAt)
+    .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())[0];
+  const asDate = (d: Date | string) =>
+    new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  function parseSkills(raw?: string | null): string[] {
-    const v = safeJsonParse<string[]>(raw ?? null, []);
-    return Array.isArray(v) ? v.filter((x) => typeof x === "string" && x.trim()).slice(0, 6) : [];
-  }
+  const cardNotes = {
+    total: madeThisMonth > 0 ? `${madeThisMonth} written this month` : "nothing written this month",
+    ready: nextOut?.scheduledAt
+      ? `next goes out ${asDate(nextOut.scheduledAt)}`
+      : "nothing queued to publish",
+    published: publishedThisMonth > 0 ? `${publishedThisMonth} this month` : "none yet this month",
+    draft: oldestDraft?.scheduledAt
+      ? `oldest due ${asDate(oldestDraft.scheduledAt)}`
+      : "nothing waiting",
+  };
 
   return (
     <DashboardClient
@@ -184,8 +192,7 @@ export default async function DashboardPage() {
           : null
       }
       stats={{ totalPosts, readyPosts, draftPosts, publishedPosts, newsletters }}
-      trends={trends}
-      skills={parseSkills(user?.skills)}
+      cardNotes={cardNotes}
       upcomingPosts={postsToShow}
       batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}

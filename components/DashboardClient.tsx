@@ -30,8 +30,7 @@ interface Props {
   user: { name?: string | null; headline?: string | null; industry?: string | null; image?: string | null; positioning?: string | null; contentStyles?: string | null } | null;
   recentPlan: { id: string; strategy: string; weekStart: Date } | null;
   stats: { totalPosts: number; readyPosts: number; draftPosts: number; publishedPosts: number; newsletters: number };
-  trends: { total: number[]; ready: number[]; published: number[]; draft: number[] };
-  skills: string[];
+  cardNotes: { total: string; ready: string; published: string; draft: string };
   upcomingPosts: Post[];
   batchDates: string[];
   postsRemaining: number;
@@ -60,7 +59,7 @@ const shortDate = (d: Date) =>
   d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
 export default function DashboardClient({
-  user, recentPlan, stats, trends, skills, upcomingPosts, batchDates,
+  user, recentPlan, stats, cardNotes, upcomingPosts, batchDates,
   postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate, profileGaps,
 }: Props) {
   // The run itself lives in GenerationProvider, above every page, so navigating
@@ -152,28 +151,20 @@ export default function DashboardClient({
             <span aria-hidden="true">&#128075;</span>
           </h1>
 
-          {/* Positioning plus the skills the model actually writes from, as
-              chips. These are real profile fields, not decoration. */}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {user?.positioning && (
-              <span className="text-[13.5px] font-semibold text-text-2">{user.positioning}</span>
-            )}
-            {skills.map((s) => (
-              <span
-                key={s}
-                className="rounded-full border border-edge bg-card px-3 py-1 text-[12.5px] font-medium text-text-2"
-              >
-                {s}
-              </span>
-            ))}
-          </div>
+          {/* The headline in full. It is the field every post is written
+              from, so it belongs here rather than a row of chips. */}
+          {user?.headline && (
+            <p className="mt-3 max-w-4xl text-[15px] leading-relaxed text-text-2">
+              {user.headline}
+            </p>
+          )}
         </div>
 
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-shrink-0 items-start">
           {isTrialExpired ? (
             <Link
               href="/subscribe"
-              className="ring-focus flex h-12 items-center gap-2.5 rounded-control bg-gradient-to-r from-violet to-brand px-6 text-[14.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgb(var(--brand)/0.7)] transition-all hover:brightness-110"
+              className="ring-focus flex h-12 items-center gap-2.5 btn-brand rounded-control px-6 text-[14.5px] font-semibold"
             >
               <Lock className="h-4 w-4" />
               Subscribe to Generate
@@ -182,7 +173,7 @@ export default function DashboardClient({
             <button
               onClick={onGenerateClick}
               disabled={generating || limitReached}
-              className="ring-focus group flex h-12 items-center gap-2.5 rounded-control bg-gradient-to-r from-violet to-brand px-6 text-[14.5px] font-semibold text-white shadow-[0_8px_24px_-8px_rgb(var(--brand)/0.7)] transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
+              className="ring-focus group flex h-12 items-center gap-2.5 btn-brand rounded-control px-6 text-[14.5px] font-semibold disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none"
             >
               {generating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -196,16 +187,6 @@ export default function DashboardClient({
             </button>
           )}
 
-          <p className="nums flex items-center gap-1.5 text-[12.5px] text-text-2">
-            <CalIcon className="h-3.5 w-3.5 text-text-3" />
-            {batchStart && batchEnd
-              ? `${shortDate(batchStart)} – ${shortDate(batchEnd)}`
-              : "No posting days selected"}
-            <span className="text-text-3">&bull;</span>
-            {postsRemaining === Infinity
-              ? "Unlimited posts remaining"
-              : `${postsRemaining} of ${postsLimit} remaining`}
-          </p>
         </div>
       </div>
 
@@ -326,10 +307,10 @@ export default function DashboardClient({
 
       {/* ── Stats ───────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Total posts" value={stats.totalPosts} icon={FileText} tone="brand" data={trends.total} href="/posts" />
-        <StatCard label="Ready to post" value={stats.readyPosts} icon={CheckCircle} tone="ok" data={trends.ready} href="/posts" />
-        <StatCard label="Published" value={stats.publishedPosts} icon={BarChart3} tone="violet" data={trends.published} href="/posts" />
-        <StatCard label="Drafts" value={stats.draftPosts} icon={Clock} tone="warn" data={trends.draft} href="/posts" />
+        <StatCard label="Total posts" value={stats.totalPosts} note={cardNotes.total} icon={FileText} tone="brand" href="/posts" />
+        <StatCard label="Ready to post" value={stats.readyPosts} note={cardNotes.ready} icon={CheckCircle} tone="ok" href="/posts?status=ready" />
+        <StatCard label="Published" value={stats.publishedPosts} note={cardNotes.published} icon={BarChart3} tone="violet" href="/posts?status=published" />
+        <StatCard label="Drafts" value={stats.draftPosts} note={cardNotes.draft} icon={Clock} tone="warn" href="/posts?status=draft" />
       </div>
 
       {/* ── Two columns ─────────────────────────────────────────────────── */}

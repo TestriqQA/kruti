@@ -361,6 +361,29 @@ select.select-field::-ms-expand {
     outline-offset: 2px;
   }
 
+  /* The primary action. Written as a real gradient rather than Tailwind
+     gradient stops, which do not resolve from rgb(var(--x)/<alpha-value>)
+     tokens and rendered as nothing. */
+  .btn-brand {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--violet)) 0%,
+      rgb(var(--brand)) 60%,
+      rgb(var(--brand-hover)) 100%
+    );
+    color: #fff;
+    box-shadow: 0 8px 22px -8px rgb(var(--brand) / 0.65);
+    transition: filter 180ms ease, box-shadow 180ms ease;
+  }
+  .btn-brand:hover:not(:disabled) {
+    filter: brightness(1.08);
+    box-shadow: 0 12px 28px -10px rgb(var(--brand) / 0.8);
+  }
+  .btn-brand:disabled {
+    filter: grayscale(0.4) opacity(0.6);
+    box-shadow: none;
+  }
+
   /* Label above a group of controls or a readout. */
   .eyebrow {
     font-size: 11px;

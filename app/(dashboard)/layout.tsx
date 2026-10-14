@@ -128,7 +128,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {/* max-w-7xl, matching the admin shell. The dashboard was capped a
               size narrower at 6xl, which left visible dead space either side on
               any normal laptop screen. */}
-          <div className="mx-auto w-full max-w-[1200px] flex-1 px-8 py-7">{children}</div>
+          <div className="mx-auto w-full max-w-[1560px] flex-1 px-8 py-6">{children}</div>
           <footer className="flex-shrink-0 border-t border-edge px-8 py-3">
             <nav className="flex justify-center gap-4">
               <Link href="/privacy" className="text-xs text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Privacy</Link>

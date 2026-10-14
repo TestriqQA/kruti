@@ -7,70 +7,50 @@ import { cn } from "@/lib/utils";
  * tiles, pills and bars cannot drift apart as the page changes.
  */
 
-/* ── Sparkline ─────────────────────────────────────────────────────────────
-   Eight weekly counts as thin bars. It is real data - posts created per week -
-   not a decorative squiggle, so the shape differs per card and per account. */
-export function Sparkline({
-  data,
-  className,
-}: {
-  data: number[];
-  className?: string;
-}) {
-  const max = Math.max(1, ...data);
-  return (
-    <div className={cn("flex h-7 items-end gap-[3px]", className)} aria-hidden="true">
-      {data.map((v, i) => (
-        <span
-          key={i}
-          className="w-[3px] rounded-full bg-current transition-[height] duration-500"
-          style={{ height: `${Math.max(12, (v / max) * 100)}%`, opacity: 0.35 + (i / data.length) * 0.65 }}
-        />
-      ))}
-    </div>
-  );
-}
-
-/* ── Stat card ─────────────────────────────────────────────────────────────── */
+/* ── Stat card ─────────────────────────────────────────────────────────────
+   Every card carries a line only IT can say - when the next post goes out, how
+   many landed this month, which draft is due first. Four identical sparklines
+   told the reader nothing about which card they were looking at. */
 
 const STAT_TONE = {
-  brand: { tile: "bg-brand-tint text-brand", spark: "text-brand" },
-  ok: { tile: "bg-ok-tint text-ok", spark: "text-ok" },
-  warn: { tile: "bg-warn-tint text-warn", spark: "text-warn" },
-  violet: { tile: "bg-violet-tint text-violet", spark: "text-violet" },
+  brand: "bg-brand-tint text-brand",
+  ok: "bg-ok-tint text-ok",
+  warn: "bg-warn-tint text-warn",
+  violet: "bg-violet-tint text-violet",
 } as const;
 
 export function StatCard({
   label,
   value,
+  note,
   icon: Icon,
   tone,
-  data,
   href,
 }: {
   label: string;
   value: number | string;
+  note: string;
   icon: React.ComponentType<{ className?: string }>;
   tone: keyof typeof STAT_TONE;
-  data: number[];
   href: string;
 }) {
-  const t = STAT_TONE[tone];
   return (
-    <a
-      href={href}
-      className="card card-lift ring-focus flex items-center gap-4 px-5 py-4"
-    >
-      <span className={cn("flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control", t.tile)}>
+    <a href={href} className="card card-lift ring-focus flex items-start gap-4 px-5 py-5">
+      <span
+        className={cn(
+          "flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-control",
+          STAT_TONE[tone]
+        )}
+      >
         <Icon className="h-5 w-5" />
       </span>
       <span className="min-w-0 flex-1">
         <span className="eyebrow block">{label}</span>
-        <span className="nums mt-1 block font-display text-[26px] font-bold leading-none tracking-[-0.02em] text-text">
+        <span className="nums mt-1.5 block font-display text-[30px] font-bold leading-none tracking-[-0.03em] text-text">
           {value}
         </span>
+        <span className="mt-2 block text-[12px] leading-snug text-text-2">{note}</span>
       </span>
-      <Sparkline data={data} className={cn("flex-shrink-0", t.spark)} />
     </a>
   );
 }

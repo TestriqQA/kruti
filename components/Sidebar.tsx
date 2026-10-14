@@ -88,7 +88,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+      <nav className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4">
         {navItems.map((item) => {
           const active =
             item.href === "/dashboard"
@@ -101,7 +101,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
               href={item.href}
               {...(item.allowWhenLocked ? { "data-allow-when-locked": "" } : {})}
               className={cn(
-                "ring-focus relative flex h-9 items-center gap-2.5 rounded-control px-3 text-[13px] font-medium transition-colors",
+                "ring-focus relative flex h-10 items-center gap-3 rounded-control px-3 text-[13.5px] font-medium transition-colors",
                 active
                   ? "bg-brand-tint text-brand"
                   : "text-text-2 hover:bg-card-muted hover:text-text"
@@ -131,7 +131,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
             <Link
               href="/admin"
               className={cn(
-                "ring-focus flex h-9 items-center gap-2.5 rounded-control px-3 text-[13px] font-medium transition-colors",
+                "ring-focus flex h-10 items-center gap-3 rounded-control px-3 text-[13.5px] font-medium transition-colors",
                 pathname.startsWith("/admin")
                   ? "bg-bad-tint text-bad"
                   : "text-text-2 hover:bg-card-muted hover:text-text"
@@ -145,10 +145,10 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
       </nav>
 
       {/* Bottom section: Dark mode + Sign out */}
-      <div className="flex-shrink-0 space-y-0.5 border-t border-edge-soft p-3">
+      <div className="flex-shrink-0 space-y-1 border-t border-edge-soft p-3">
         <button
           onClick={toggleTheme}
-          className="ring-focus flex h-9 w-full items-center gap-2.5 rounded-control px-3 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+          className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
           {theme === "dark" ? <Sun className="h-[17px] w-[17px]" /> : <Moon className="h-[17px] w-[17px]" />}
           {theme === "dark" ? "Light Mode" : "Dark Mode"}
@@ -158,7 +158,7 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
         <button
           data-allow-when-locked=""
           onClick={() => signOut({ callbackUrl: "/" })}
-          className="ring-focus flex h-9 w-full items-center gap-2.5 rounded-control px-3 text-[13px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+          className="ring-focus flex h-10 w-full items-center gap-3 rounded-control px-3 text-[13.5px] font-medium text-text-2 transition-colors hover:bg-card-muted hover:text-text"
         >
           <LogOut className="h-[17px] w-[17px]" />
           Sign Out
