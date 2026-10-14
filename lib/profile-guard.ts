@@ -36,6 +36,8 @@ export interface ProfileReadiness {
   /** Present when not ready - safe to show the user verbatim. */
   message?: string;
   gaps: ProfileGap[];
+  /** 0-100, for the completion ring. Same assessment, no second query. */
+  completion: number;
 }
 
 /**
@@ -56,8 +58,8 @@ export async function checkProfileReady(userId: string): Promise<ProfileReadines
     select: PROFILE_SELECT,
   });
 
-  const { complete, gaps } = assessProfile(user);
-  if (complete) return { ready: true, gaps: [] };
+  const { complete, gaps, completion } = assessProfile(user);
+  if (complete) return { ready: true, gaps: [], completion };
 
-  return { ready: false, message: profileGapMessage(gaps), gaps };
+  return { ready: false, message: profileGapMessage(gaps), gaps, completion };
 }

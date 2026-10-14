@@ -11,6 +11,7 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import { POSTS_PER_BATCH } from "@/lib/posting-schedule";
+import { raiseProfileGate, ProfileGateError, isProfileGateError } from "@/lib/profile-gate";
 import PipelineModal, {
   type PipelineState,
   type StepStatus,
@@ -418,6 +419,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
       let failure: string | null = null;
       let summary: string | null = null;
+      let gateBlocked = false;
 
       try {
         const res = await fetch("/api/generate/image/bulk", {
@@ -435,6 +437,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
           if (ev.type === "error") {
             failure = String(ev.message ?? "Image generation failed");
+            gateBlocked = raiseProfileGate(ev) || gateBlocked;
           } else if (ev.type === "done") {
             const images = (ev.images ?? []) as { id: string; imageUrl: string }[];
             setLastImageBatch(images.length > 0 ? images : null);
@@ -444,6 +447,10 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           }
         });
 
+        // Thrown ahead of the message so the catch can tell a refusal from a
+        // fault: the dialog is already up and a red toast under it would read
+        // as "retry", which will never clear this.
+        if (gateBlocked) throw new ProfileGateError();
         if (failure) throw new Error(failure);
 
         const text = summary ?? "Image generation finished";
@@ -458,6 +465,11 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
             p ? { ...p, running: false, error: "Cancelled by you" } : p
           );
           toast("Image generation cancelled", "info");
+        } else if (isProfileGateError(err)) {
+          setImageStatus("Finish your profile to generate images.");
+          setImagePipeline((p) =>
+            p ? { ...p, running: false, error: "Profile incomplete" } : p
+          );
         } else {
           console.error(err);
           const message = err instanceof Error ? err.message : "Image generation failed";
@@ -495,6 +507,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       try {
         // ── Stage A: strategy ──
         let failure: string | null = null;
+        let gateBlocked = false;
         let planId: string | null = null;
         let weekTheme: string | null = null;
         let reused = false;
@@ -513,6 +526,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           setPostPipeline((p) => (p ? applyPostEvent(p, ev, "strategy") : p));
           if (ev.type === "error") {
             failure = String(ev.message ?? "Strategy generation failed");
+            gateBlocked = raiseProfileGate(ev) || gateBlocked;
           } else if (ev.type === "done") {
             planId = ev.plan?.id ?? null;
             weekTheme = ev.strategy?.weekTheme ?? null;
@@ -520,6 +534,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           }
         });
 
+        if (gateBlocked) throw new ProfileGateError();
         if (failure) throw new Error(failure);
         if (!planId) throw new Error("Strategy generation failed. Please try again.");
 
@@ -544,6 +559,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           setPostPipeline((p) => (p ? applyPostEvent(p, ev, "posts") : p));
           if (ev.type === "error") {
             failure = String(ev.message ?? "Posts generation failed");
+            gateBlocked = raiseProfileGate(ev) || gateBlocked;
           } else if (ev.type === "done") {
             created = Number(ev.count ?? 0);
             remaining = ev.postsRemaining ?? null;
@@ -552,6 +568,7 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           }
         });
 
+        if (gateBlocked) throw new ProfileGateError();
         if (failure) throw new Error(failure);
 
         const text = `${created} draft posts created${
@@ -573,6 +590,12 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
           setError(null);
           setPostPipeline((p) => (p ? { ...p, running: false, error: "Cancelled by you" } : p));
           toast("Generation cancelled", "info");
+        } else if (isProfileGateError(err)) {
+          setError(null);
+          log("Paused - your profile needs a few more details.");
+          setPostPipeline((p) =>
+            p ? { ...p, running: false, error: "Profile incomplete" } : p
+          );
         } else {
           console.error(err);
           const message = err instanceof Error ? err.message : "Something went wrong";

@@ -58,6 +58,10 @@ model User {
   tonePrefs           String?       @db.Text // JSON: formal/casual/inspirational
   // Onboarding & content preferences
   onboardingCompleted Boolean       @default(false)
+  // Highest PROFILE_REQUIREMENTS_VERSION this account has been emailed about.
+  // 0 = never told, which is why every existing user is notified once when a
+  // new onboarding input ships.
+  profileAlertVersion Int           @default(0)
   contentGoals        String?       @db.Text // JSON: ["Lead Generation", "Brand Awareness"]
   positioning         String?       // "Thought Leader" | "Industry Expert" | etc.
   contentStyles       String?       @db.Text // JSON: ["Narrative", "How-to", ...]

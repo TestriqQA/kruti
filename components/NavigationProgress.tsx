@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { LOADING_START_EVENT, LOADING_END_EVENT } from "@/lib/loading-indicator";
 
 /**
  * Global navigation loader.
@@ -107,6 +108,24 @@ export function NavigationProgress() {
     // We intentionally react only to route changes here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, search]);
+
+  // Work that is not a navigation, driven by the code doing the work.
+  //
+  // The detectors below only see route changes. A blocking fetch, a hard
+  // `window.location.href` assignment, or a slow React transition are all
+  // invisible to them, so the caller raises the loader itself. Same two stages,
+  // same timings - the onboarding wizard must not get a different loader from
+  // the rest of the app.
+  useEffect(() => {
+    const onStart = () => start();
+    const onEnd = () => done();
+    window.addEventListener(LOADING_START_EVENT, onStart);
+    window.addEventListener(LOADING_END_EVENT, onEnd);
+    return () => {
+      window.removeEventListener(LOADING_START_EVENT, onStart);
+      window.removeEventListener(LOADING_END_EVENT, onEnd);
+    };
+  }, [start, done]);
 
   // Detect the start of a navigation.
   useEffect(() => {

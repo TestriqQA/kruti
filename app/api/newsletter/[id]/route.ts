@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { checkActiveSubscription } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 // PATCH /api/newsletter/:id - schedule or update status
 export async function PATCH(
@@ -31,6 +32,18 @@ export async function PATCH(
 
   const body = await req.json();
   const updateData: Record<string, unknown> = {};
+
+  // Scheduling gate, same rule as posts: a newsletter can still be edited and
+  // saved, but not handed to the send cron while the profile is incomplete.
+  if (body.scheduledAt || body.status === "scheduled") {
+    const profile = await checkProfileReady(session.user.id);
+    if (!profile.ready) {
+      return NextResponse.json(
+        { error: profile.message, profileIncomplete: true, gaps: profile.gaps },
+        { status: 403 }
+      );
+    }
+  }
 
   if ("scheduledAt" in body) {
     updateData.scheduledAt = body.scheduledAt ? new Date(body.scheduledAt) : null;

@@ -1,24 +1,45 @@
 import { prisma } from "@/lib/prisma";
 import { postToLinkedIn } from "@/lib/linkedin-post";
 import { getTokenStatus, refreshAccessToken } from "@/lib/linkedin-token";
-import { sendNewsletterEmail, sendTrialReminderEmail, type NewsletterContent } from "@/lib/email";
+import {
+  sendNewsletterEmail,
+  sendTrialReminderEmail,
+  sendProfileUpdateEmail,
+  type NewsletterContent,
+} from "@/lib/email";
 import { cleanupOldImages } from "@/lib/image-cleanup";
 import { replyCutoff } from "@/lib/support";
+import { assessProfile, PROFILE_REQUIREMENTS_VERSION } from "@/lib/profile-completeness";
+import { PROFILE_SELECT } from "@/lib/profile-guard";
 
 // ─── Auto-Post Job ──────────────────────────────────────────────────────────
 // Finds posts with status "ready" that are due (past-due or within the next
 // 5 minutes) and publishes them to LinkedIn. Called every 5 min by Vercel Cron.
 // Posts older than 72 hours past their scheduled time are skipped as stale.
-export async function runAutoPost(): Promise<{ posted: number; failed: number; skippedStale: number }> {
+// How many due posts to consider in one run. Only ever ONE is published; the
+// rest are candidates in case the first few are held back by the profile gate.
+const AUTO_POST_CANDIDATES = 20;
+
+export async function runAutoPost(): Promise<{
+  posted: number;
+  failed: number;
+  skippedStale: number;
+  skippedIncompleteProfile: number;
+}> {
   let posted = 0;
   let failed = 0;
   let skippedStale = 0;
+  let skippedIncompleteProfile = 0;
 
   const now = new Date();
   const windowEnd = new Date(now.getTime() + 5 * 60 * 1000); // 5 min ahead (matches cron interval)
   const staleThreshold = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
 
-  const duePosts = await prisma.post.findMany({
+  // Over-fetched on purpose. The profile gate below runs in JS - completeness
+  // is not expressible as a Prisma filter - so fetching a single row would let
+  // one user whose profile fell behind a newly added onboarding input wedge the
+  // whole queue: their post would be skipped and nobody else's would go out.
+  const candidates = await prisma.post.findMany({
     where: {
       status: "ready",
       postedToLinkedIn: false,
@@ -34,13 +55,37 @@ export async function runAutoPost(): Promise<{ posted: number; failed: number; s
         },
       },
     },
-    include: { plan: true },
-    // Auto-post at most ONE post per run so two posts never publish together.
-    // Any backlog drains one post per 5-min cron cycle; the user can publish the
-    // rest manually from the schedule/editor.
+    include: { plan: { include: { user: { select: PROFILE_SELECT } } } },
     orderBy: { scheduledAt: "asc" },
-    take: 1,
+    take: AUTO_POST_CANDIDATES,
   });
+
+  // Profile gate, the same rule the generation and scheduling routes apply.
+  //
+  // A post can be armed under one set of onboarding requirements and only come
+  // due after a new input has shipped. Publishing it anyway would put content on
+  // the user's LinkedIn that we have already told them is too generic to
+  // generate - so it waits, untouched, until they finish their profile. Nothing
+  // is lost: the row keeps its scheduledAt and goes out on a later cycle, and
+  // the 72-hour stale window above is what eventually retires it.
+  //
+  // Still at most ONE post per run, so two posts never publish together; any
+  // backlog drains one post per 5-min cron cycle.
+  const duePosts: typeof candidates = [];
+  for (const candidate of candidates) {
+    if (!assessProfile(candidate.plan.user).complete) {
+      skippedIncompleteProfile++;
+      continue;
+    }
+    duePosts.push(candidate);
+    break;
+  }
+
+  if (skippedIncompleteProfile > 0) {
+    console.warn(
+      `[Cron:auto-post] ⚠️ ${skippedIncompleteProfile} post(s) held back - profile incomplete`
+    );
+  }
 
   if (duePosts.length > 0) {
     console.log(`[Cron:auto-post] Found ${duePosts.length} post(s) due for publishing`);
@@ -90,7 +135,7 @@ export async function runAutoPost(): Promise<{ posted: number; failed: number; s
     }
   }
 
-  return { posted, failed, skippedStale };
+  return { posted, failed, skippedStale, skippedIncompleteProfile };
 }
 
 // ─── Newsletter Send Job ─────────────────────────────────────────────────────
@@ -304,4 +349,82 @@ export async function runSupportReplyCleanup(): Promise<{ deleted: number }> {
     console.log(`[Cron:support-cleanup] Deleted ${count} expired admin repl${count === 1 ? "y" : "ies"}`);
   }
   return { deleted: count };
+}
+
+// ─── Profile Alert Job ───────────────────────────────────────────────────────
+// Tells a user, once per requirements change, that onboarding now asks for
+// something their account does not have yet - and that post writing, images and
+// scheduling stay paused until they fill it in.
+//
+// Dedupe is by VERSION, not by date: User.profileAlertVersion holds the highest
+// PROFILE_REQUIREMENTS_VERSION the account has already heard about, so bumping
+// that one constant is the single action that triggers a fresh round of emails.
+// Accounts that already satisfy the new requirements are marked as told without
+// being mailed, which keeps the daily scan small and converging.
+const PROFILE_ALERT_BATCH = 50;
+
+export async function runProfileAlerts(): Promise<{
+  sent: number;
+  failed: number;
+  alreadyComplete: number;
+}> {
+  let sent = 0;
+  let failed = 0;
+  let alreadyComplete = 0;
+
+  const users = await prisma.user.findMany({
+    where: {
+      // Accounts that finished onboarding under the OLD requirements. Someone
+      // mid-signup is already being asked for everything, so mailing them would
+      // just be noise.
+      onboardingCompleted: true,
+      email: { not: null },
+      profileAlertVersion: { lt: PROFILE_REQUIREMENTS_VERSION },
+    },
+    select: { id: true, name: true, email: true, ...PROFILE_SELECT },
+    take: PROFILE_ALERT_BATCH,
+  });
+
+  const setupUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3002"}/onboarding`;
+
+  for (const user of users) {
+    const { complete, gaps } = assessProfile(user);
+
+    if (complete) {
+      alreadyComplete++;
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { profileAlertVersion: PROFILE_REQUIREMENTS_VERSION },
+      });
+      continue;
+    }
+
+    const result = await sendProfileUpdateEmail({
+      to: user.email!,
+      userName: user.name || "there",
+      gaps: gaps.map((g) => ({ label: g.label, hint: g.hint })),
+      setupUrl,
+    });
+
+    if (!result.success) {
+      // Deliberately left un-bumped: tomorrow's run retries this address.
+      failed++;
+      console.error(`[Cron:profile-alerts] Send failed for ${user.id}: ${result.error}`);
+      continue;
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { profileAlertVersion: PROFILE_REQUIREMENTS_VERSION },
+    });
+    sent++;
+  }
+
+  if (users.length > 0) {
+    console.log(
+      `[Cron:profile-alerts] sent=${sent} failed=${failed} alreadyComplete=${alreadyComplete}`
+    );
+  }
+
+  return { sent, failed, alreadyComplete };
 }

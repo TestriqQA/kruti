@@ -8,6 +8,9 @@ import { prisma } from "@/lib/prisma";
 import { replyCutoff } from "@/lib/support";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import TrialEndingPopup from "@/components/TrialEndingPopup";
+import ProfileIncompletePopup from "@/components/ProfileIncompletePopup";
+import { checkProfileReady } from "@/lib/profile-guard";
+import type { ProfileGap } from "@/lib/profile-completeness";
 
 /** What the paywall says, depending on how the user lost access. */
 function lockReason(status: string): string {
@@ -61,6 +64,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
     console.error("[dashboard-layout] support unread count failed:", err);
   }
 
+  // Profile gate, surfaced in the UI.
+  //
+  // The real block is server-side - every generation, image and scheduling
+  // route calls checkProfileReady() - so this only explains WHY those buttons
+  // stopped working. Without it, a user whose profile fell behind a newly added
+  // onboarding input just collects 403s with no idea what changed.
+  //
+  // Guarded for the same reason as the badge above: this layout is shared by
+  // every page in the (dashboard) group, so a failed query must degrade to "no
+  // popup", never to seven 500s. The gates still hold if this goes quiet.
+  let profileGaps: ProfileGap[] = [];
+  // Optimistic default: if the check below fails we show a full ring rather
+  // than scaring the user with 0%. The server gates are what actually hold.
+  let profileCompletion = 100;
+  try {
+    const profile = await checkProfileReady(session.user.id);
+    profileGaps = profile.gaps;
+    profileCompletion = profile.completion;
+  } catch (err) {
+    console.error("[dashboard-layout] profile readiness check failed:", err);
+  }
+
   const showTrialBanner =
     state.status === "trialing" &&
     !state.locked &&
@@ -79,7 +104,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         id="app-shell"
         className="flex h-screen bg-[#F6F8FB] text-slate-900 antialiased dark:bg-[#0A0E14] dark:text-slate-100"
       >
-        <Sidebar user={session.user} supportUnread={supportUnread} />
+        <Sidebar
+          user={session.user}
+          supportUnread={supportUnread}
+          profileCompletion={profileCompletion}
+        />
         <main className="flex-1 overflow-y-auto scroll-gutter-stable flex flex-col">
           {showTrialBanner && (
             <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/50 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
@@ -116,6 +145,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Final 24 hours of the trial: dismissible nudge, access unaffected. */}
       {!state.locked && state.isLastDay && <TrialEndingPopup hoursLeft={hoursLeft} />}
+
+      {/* Onboarding asks for something this account does not have yet: post
+          writing, images and scheduling are paused server-side until it is
+          filled in. Suppressed behind the paywall, which is the bigger problem
+          and already tells the user what to do. */}
+      {!state.locked && <ProfileIncompletePopup gaps={profileGaps} />}
     </>
   );
 }

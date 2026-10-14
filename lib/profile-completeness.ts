@@ -26,6 +26,20 @@ import { safeJsonParse } from "@/lib/utils";
  */
 
 /** A headline shorter than this is a job title, not positioning. */
+/**
+ * Bumped BY HAND whenever onboarding starts asking for something new - a new
+ * entry in ProfileGapKey, or a threshold raised far enough that profiles which
+ * used to qualify no longer do.
+ *
+ * Gating never reads this. Every gate calls assessProfile() directly, so a new
+ * requirement starts blocking generation, images and scheduling the moment it
+ * ships. The version exists only so the "we need one more thing" email goes out
+ * exactly once per requirement change: User.profileAlertVersion records which
+ * version a given account has already been told about, and 0 (the default)
+ * means every existing account gets told once.
+ */
+export const PROFILE_REQUIREMENTS_VERSION = 1;
+
 export const MIN_HEADLINE_CHARS = 15;
 
 /**
@@ -114,16 +128,29 @@ export function sanitizeProfileText(raw: unknown, maxChars: number): string {
   return raw.trim().slice(0, maxChars);
 }
 
-export type ProfileGapKey =
-  | "headline"
-  | "industry"
-  | "summary"
-  | "skills"
-  | "positioning"
-  | "contentGoals"
-  | "contentStyles"
-  | "targetAudience"
-  | "tone";
+/**
+ * Every field the gate checks - and therefore the denominator of the profile
+ * completion percentage.
+ *
+ * ProfileGapKey is DERIVED from this array rather than declared beside it, so a
+ * new required input cannot be added to the contract without landing here too.
+ * That is what makes the completion ring self-maintaining: ship a tenth input
+ * and every user who has not filled it in drops to 90% on their next page load,
+ * with no arithmetic to update anywhere.
+ */
+export const PROFILE_GAP_KEYS = [
+  "headline",
+  "industry",
+  "summary",
+  "skills",
+  "positioning",
+  "contentGoals",
+  "contentStyles",
+  "targetAudience",
+  "tone",
+] as const;
+
+export type ProfileGapKey = (typeof PROFILE_GAP_KEYS)[number];
 
 export interface ProfileGap {
   key: ProfileGapKey;
@@ -136,6 +163,14 @@ export interface ProfileGap {
 export interface ProfileAssessment {
   complete: boolean;
   gaps: ProfileGap[];
+  /**
+   * How much of the contract this profile satisfies, 0-100.
+   *
+   * Deliberately part of the assessment rather than a second function: a
+   * separate calculation could drift from the gate, and then the ring would
+   * promise 100% while a generate button still refused.
+   */
+  completion: number;
 }
 
 /** The shape every caller must select from the User row. */
@@ -205,6 +240,7 @@ export function assessProfile(user: ProfileInput | null | undefined): ProfileAss
   if (!user) {
     return {
       complete: false,
+      completion: 0,
       gaps: [
         {
           key: "headline",
@@ -293,7 +329,15 @@ export function assessProfile(user: ProfileInput | null | undefined): ProfileAss
     });
   }
 
-  return { complete: gaps.length === 0, gaps };
+  // Counted by KEY, not by gap: a field can fail for more than one reason
+  // (targetAudience is missing, or is still the old template) and must never
+  // cost the user twice.
+  const missing = new Set(gaps.map((g) => g.key)).size;
+  const completion = Math.round(
+    ((PROFILE_GAP_KEYS.length - missing) / PROFILE_GAP_KEYS.length) * 100
+  );
+
+  return { complete: gaps.length === 0, gaps, completion };
 }
 
 /**

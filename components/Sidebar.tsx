@@ -17,7 +17,7 @@ import {
   Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import Avatar from "@/components/Avatar";
+import ProfileCompletionRing from "@/components/ProfileCompletionRing";
 import { useTheme } from "@/components/ThemeProvider";
 
 const navItems = [
@@ -41,9 +41,11 @@ interface SidebarProps {
   };
   /** Unread, unexpired admin replies - badged on the Support link. */
   supportUnread?: number;
+  /** 0-100 from assessProfile(), drawn as a ring around the avatar. */
+  profileCompletion?: number;
 }
 
-export default function Sidebar({ user, supportUnread = 0 }: SidebarProps) {
+export default function Sidebar({ user, supportUnread = 0, profileCompletion = 100 }: SidebarProps) {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
 
@@ -60,10 +62,29 @@ export default function Sidebar({ user, supportUnread = 0 }: SidebarProps) {
       {/* User */}
       <div className="p-4 border-b border-slate-100 dark:border-white/10">
         <div className="flex items-center gap-3">
-          <Avatar src={user.image} name={user.name} size={36} fallbackClassName="bg-blue-600 text-white" />
+          <ProfileCompletionRing
+            src={user.image}
+            name={user.name}
+            percent={profileCompletion}
+            size={36}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-slate-900 dark:text-white truncate">{user.name}</p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+            {/* The ring alone shows there is something left; this says how much
+                and goes straight to the screen that fixes it. */}
+            {profileCompletion >= 100 ? (
+              <p className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 mt-0.5">
+                Profile complete
+              </p>
+            ) : (
+              <Link
+                href="/onboarding"
+                className="text-[11px] font-medium text-blue-600 dark:text-blue-400 hover:underline mt-0.5 inline-block"
+              >
+                Profile {profileCompletion}% - finish it
+              </Link>
+            )}
           </div>
         </div>
       </div>

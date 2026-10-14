@@ -14,6 +14,7 @@ import { resolveImageCategory, usesCodeRender } from "@/lib/image-categories";
 import { appendImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 const IMAGE_GEN_LIMIT_PER_POST = 2;
 
@@ -26,6 +27,19 @@ export async function POST(req: NextRequest) {
   const { allowed, reason } = await checkActiveSubscription(session.user.id);
   if (!allowed) {
     return NextResponse.json({ error: reason, subscriptionRequired: true }, { status: 403 });
+  }
+
+  // Content-quality gate, same contract as the text routes. The image is
+  // briefed from the post and the post is written from the profile, so artwork
+  // for a generic post is a model call the user throws away the moment their
+  // profile is filled in. Blocked with the gaps so the client can link straight
+  // to the fix.
+  const profile = await checkProfileReady(session.user.id);
+  if (!profile.ready) {
+    return NextResponse.json(
+      { error: profile.message, profileIncomplete: true, gaps: profile.gaps },
+      { status: 403 }
+    );
   }
 
   const rl = checkRateLimit(session.user.id, "image-gen", RATE_LIMITS.imageGeneration);
