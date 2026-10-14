@@ -940,21 +940,64 @@ export default function PostEditorClient({
     isPublished,
   });
 
-  const humanModeBg = humanMode ? "bg-brand" : "bg-slate-300 dark:bg-white/[0.12]";
+  const humanModeBg = humanMode ? "bg-brand" : "bg-edge";
+
+  /**
+   * The one thing worth saying at the top of this page: will this post go out,
+   * and when. Read off the live schedule state rather than the saved record, so
+   * it moves the moment you change the date below.
+   *
+   * "ready" is the status the auto-post cron actually selects on - a scheduled
+   * draft sits there forever, which is the mistake this line exists to prevent.
+   */
+  const scheduleLine = (() => {
+    if (post.postedToLinkedIn) {
+      return "Published to LinkedIn. Remove it to edit and post again.";
+    }
+    if (!scheduledDate) {
+      return "Not scheduled yet. Set a date below, or post it now.";
+    }
+    const when = new Date(`${scheduledDate}T${scheduledTime || "09:00"}`);
+    const day = Number.isNaN(when.getTime())
+      ? scheduledDate
+      : when.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+    return status === "ready"
+      ? `Goes out on its own on ${day} at ${scheduledTime}.`
+      : `Set for ${day} at ${scheduledTime}, but it will not go out until the status is Ready.`;
+  })();
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-5">
+      {/* Header */}
+      <div className="flex flex-wrap items-start justify-between gap-5 pt-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
+            Edit post
+          </h1>
+          <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+            {scheduleLine}
+          </p>
+        </div>
+        <span
+          className={cn(
+            "mt-2 flex-shrink-0 rounded-full border px-3 py-1 text-[12.5px] font-medium capitalize",
+            getPostTypeColor(post.postType)
+          )}
+        >
+          {post.style || post.postType}
+        </span>
+      </div>
       {/* Published banner */}
       {isPublished && (
-        <div className="flex items-center gap-3 bg-ok-tint border border-green-200 dark:border-green-800 rounded-control px-4 py-3">
+        <div className="flex items-center gap-3 bg-ok-tint border border-ok/30 rounded-control px-4 py-3">
           <CheckCircle className="w-5 h-5 text-ok flex-shrink-0" />
-          <p className="text-sm text-green-800 dark:text-green-300 flex-1">
+          <p className="text-sm text-ok flex-1">
             This post has been published to LinkedIn. Editing is disabled.
           </p>
           <button
             onClick={() => setShowUnpublishConfirm(true)}
             disabled={unpublishing}
-            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-control border border-green-300 dark:border-green-700 text-green-800 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 disabled:opacity-70 transition-colors whitespace-nowrap"
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-control border border-ok/40 text-ok hover:bg-ok-tint disabled:opacity-70 transition-colors whitespace-nowrap"
             title="Remove this post from LinkedIn so you can edit and post it again"
           >
             {unpublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Repeat2 className="w-4 h-4" />}
@@ -966,7 +1009,7 @@ export default function PostEditorClient({
       {/* Unpublish confirmation */}
       {showUnpublishConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-[#0D131F] rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-4">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-4">
             <h3 className="font-display text-lg font-bold text-text">
               Remove from LinkedIn?
             </h3>
@@ -983,7 +1026,7 @@ export default function PostEditorClient({
               </button>
               <button
                 onClick={handleUnpublish}
-                className="text-sm px-4 py-2 rounded-control bg-bad text-white hover:bg-red-700 transition-colors"
+                className="text-sm px-4 py-2 rounded-control bg-bad text-white hover:opacity-90 transition-colors"
               >
                 Remove &amp; edit
               </button>
@@ -993,11 +1036,11 @@ export default function PostEditorClient({
       )}
 
       {/* Floating toolbar: navigation + actions, stays in view while scrolling */}
-      <div className="sticky top-0 z-30 space-y-3 rounded-control border border-edge bg-white/95 dark:bg-[#0D131F]/95 backdrop-blur-sm shadow-lift px-4 py-3">
+      <div className="sticky top-0 z-30 space-y-2.5 rounded-card border border-edge bg-card/95 px-4 py-3 shadow-lift backdrop-blur-md">
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => router.push("/posts")}
-            className="flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-control text-text-2 hover:bg-card-muted transition-colors"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control px-2.5 text-sm text-text-2 transition-colors hover:bg-card-muted hover:text-text"
             title="Back to all posts"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -1007,7 +1050,7 @@ export default function PostEditorClient({
             <button
               onClick={() => prevPostId && router.push(`/posts/${prevPostId}`)}
               disabled={!prevPostId}
-              className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-control border border-edge text-text-2 hover:bg-card-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
               title={prevPostId ? "Previous post" : "No previous post"}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1016,16 +1059,13 @@ export default function PostEditorClient({
             <button
               onClick={() => nextPostId && router.push(`/posts/${nextPostId}`)}
               disabled={!nextPostId}
-              className="flex items-center gap-1 text-sm px-2.5 py-1.5 rounded-control border border-edge text-text-2 hover:bg-card-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              className="ring-focus flex h-9 items-center gap-1 rounded-control border border-edge px-2.5 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
               title={nextPostId ? "Next post" : "No next post"}
             >
               Next
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
-            {post.style || post.postType}
-          </span>
           {!isPublished && (
             <div className="ml-auto flex items-center gap-1.5">
               {autoSaveStatus === "saving" && (
@@ -1035,13 +1075,13 @@ export default function PostEditorClient({
                 </span>
               )}
               {autoSaveStatus === "saved" && (
-                <span className="text-xs text-green-500 dark:text-green-400 flex items-center gap-1">
+                <span className="text-xs text-ok flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" />
                   Saved
                 </span>
               )}
               {autoSaveStatus === "error" && (
-                <span className="text-xs text-red-500 dark:text-red-400 flex items-center gap-1">
+                <span className="text-xs text-bad flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   Save failed
                 </span>
@@ -1054,17 +1094,17 @@ export default function PostEditorClient({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 text-sm px-3 py-2 border border-edge rounded-control hover:bg-card-muted transition-colors"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text"
             title="Copy to clipboard"
           >
-            {copied ? <CheckCircle className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4 text-text-2" />}
+            {copied ? <CheckCircle className="w-4 h-4 text-ok" /> : <Copy className="w-4 h-4 text-text-2" />}
             {copied ? "Copied!" : "Copy"}
           </button>
 
           <button
             onClick={handleRepurpose}
             disabled={generatingRepurpose}
-            className="flex items-center gap-1.5 text-sm px-3 py-2 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 rounded-control hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-70 transition-colors"
+            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-3 text-sm text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
             title="Repurpose for other platforms"
           >
             {generatingRepurpose ? (
@@ -1088,7 +1128,7 @@ export default function PostEditorClient({
               value={status}
               onChange={(e) => setStatus(e.target.value)}
               disabled={post.postedToLinkedIn || isTrialExpired}
-              className="select-field text-sm pl-3 pr-10 py-2 border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 bg-card disabled:opacity-50 disabled:cursor-not-allowed"
+              className="select-field h-9 rounded-control border border-edge bg-card pl-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-brand/25 disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 post.postedToLinkedIn
                   ? "Published posts cannot change status"
@@ -1108,7 +1148,7 @@ export default function PostEditorClient({
             <button
               onClick={handlePublishClick}
               disabled={posting || isTrialExpired}
-              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-brand text-white rounded-control hover:bg-brand-hover transition-colors disabled:opacity-70"
+              className="btn-brand ring-focus flex h-9 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:cursor-not-allowed"
               title={isTrialExpired ? "Subscribe to post to LinkedIn" : undefined}
             >
               {posting ? (
@@ -1125,7 +1165,7 @@ export default function PostEditorClient({
               href={`https://www.linkedin.com/feed/update/${post.linkedinPostId ?? ""}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-ok-tint text-ok border border-green-200 dark:border-green-800 rounded-control hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors"
+              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-ok-tint text-ok border border-ok/30 rounded-control hover:bg-ok-tint transition-colors"
             >
               <CheckCircle className="w-4 h-4" />
               View on LinkedIn
@@ -1138,7 +1178,7 @@ export default function PostEditorClient({
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex items-center gap-1.5 text-sm px-4 py-2 bg-brand hover:bg-brand-hover text-white rounded-control hover:opacity-90 disabled:opacity-70"
+                className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge px-4 text-sm font-medium text-text-2 transition-colors hover:border-brand-edge hover:text-text disabled:opacity-70"
               >
                 {saving ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1151,7 +1191,7 @@ export default function PostEditorClient({
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(true)}
-                className="flex items-center gap-1.5 text-sm px-3 py-2 border border-bad/30 text-bad rounded-control hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-bad/30 px-3 text-sm text-bad transition-colors hover:bg-bad-tint"
                 title="Delete post"
               >
                 <Trash2 className="w-4 h-4" />
@@ -1163,7 +1203,7 @@ export default function PostEditorClient({
 
       {/* Post result alerts */}
       {postResult && (
-        <div className={cn("rounded-control p-4 flex items-start gap-3", postResult.success ? "bg-ok-tint border border-green-200 dark:border-green-800" : "bg-bad-tint border border-bad/30")}>
+        <div className={cn("rounded-control p-4 flex items-start gap-3", postResult.success ? "bg-ok-tint border border-ok/30" : "bg-bad-tint border border-bad/30")}>
           {postResult.success ? (
             <CheckCircle className="w-5 h-5 text-ok flex-shrink-0" />
           ) : (
@@ -1250,7 +1290,7 @@ export default function PostEditorClient({
                       onClick={() => {
                         setHashtags((prev) => prev.filter((_, idx) => idx !== i));
                       }}
-                      className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                      className="ml-0.5 opacity-0 group-hover:opacity-100 hover:text-bad transition-opacity"
                       title="Remove hashtag"
                     >
                       <X className="w-3 h-3" />
@@ -1340,7 +1380,7 @@ export default function PostEditorClient({
               {previousVersion && (
                 <button
                   onClick={handleUndoRegenerate}
-                  className="flex items-center gap-1.5 text-sm px-3 py-2 border border-warn/30 text-warn rounded-control hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors"
+                  className="flex items-center gap-1.5 text-sm px-3 py-2 border border-warn/30 text-warn rounded-control hover:bg-warn-tint transition-colors"
                   title="Restore previous version"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -1351,7 +1391,7 @@ export default function PostEditorClient({
               <button
                 onClick={handleGenerateVariants}
                 disabled={generatingVariants}
-                className="flex items-center gap-2 text-sm px-4 py-2 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400 rounded-control hover:bg-purple-50 dark:hover:bg-purple-900/30 disabled:opacity-70 transition-colors"
+                className="flex items-center gap-2 text-sm px-4 py-2 border border-violet/30 text-violet rounded-control hover:bg-violet-tint disabled:opacity-70 transition-colors"
               >
                 {generatingVariants ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1385,7 +1425,7 @@ export default function PostEditorClient({
           {/* Image Preview */}
           <div className="card overflow-hidden">
             <div className="p-4 border-b border-edge-soft flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-text">Post Image</h3>
+              <h3 className="font-display text-[15px] font-bold tracking-[-0.02em] text-text">Post image</h3>
               {imageUrl && (
                 <div className="flex items-center gap-1">
                   <button
@@ -1398,7 +1438,7 @@ export default function PostEditorClient({
                   {!isPublished && (
                     <button
                       onClick={handleRemoveImage}
-                      className="p-1.5 text-text-3 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-control transition-colors"
+                      className="p-1.5 text-text-3 hover:text-bad hover:bg-bad-tint rounded-control transition-colors"
                       title="Remove image"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1415,7 +1455,7 @@ export default function PostEditorClient({
                 <select
                   value={imageStyle}
                   onChange={(e) => handleImageStyleChange(e.target.value)}
-                  className="select-field w-full text-sm rounded-control border border-edge bg-white dark:bg-white/[0.04] text-text pl-2.5 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+                  className="select-field w-full text-sm rounded-control border border-edge bg-card text-text pl-2.5 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-brand/25"
                 >
                   {IMAGE_CATEGORY_GROUPS.map((g) => (
                     <optgroup key={g.group} label={g.group}>
@@ -1436,8 +1476,8 @@ export default function PostEditorClient({
             )}
             <div className="p-4">
               {documentUrl ? (
-                <div className="rounded-control border border-edge p-4 flex items-center gap-3 bg-slate-50 dark:bg-white/[0.04]">
-                  <div className="w-10 h-12 rounded bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-bad flex-shrink-0">
+                <div className="rounded-control border border-edge p-4 flex items-center gap-3 bg-card-muted dark:bg-white/[0.04]">
+                  <div className="w-10 h-12 rounded bg-bad-tint flex items-center justify-center text-bad flex-shrink-0">
                     <FileText className="w-5 h-5" />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1456,7 +1496,7 @@ export default function PostEditorClient({
                   {!isPublished && (
                     <button
                       onClick={handleRemoveDocument}
-                      className="p-1.5 text-text-3 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-control transition-colors flex-shrink-0"
+                      className="p-1.5 text-text-3 hover:text-bad hover:bg-bad-tint rounded-control transition-colors flex-shrink-0"
                       title="Remove PDF"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1502,7 +1542,7 @@ export default function PostEditorClient({
                         onClick={() => setCarouselIndex(i)}
                         className={cn(
                           "h-1.5 rounded-full transition-all",
-                          i === carouselIndex ? "w-5 bg-brand" : "w-1.5 bg-slate-300 dark:bg-white/20"
+                          i === carouselIndex ? "w-5 bg-brand" : "w-1.5 bg-edge"
                         )}
                         aria-label={`Go to slide ${i + 1}`}
                       />
@@ -1529,7 +1569,7 @@ export default function PostEditorClient({
                 <div
                   className={cn(
                     "aspect-square rounded-control bg-card-muted border-2 border-dashed border-edge flex flex-col items-center justify-center transition-colors",
-                    imageGenRemaining > 0 ? "cursor-pointer hover:bg-slate-100 dark:hover:bg-white/[0.08]" : "opacity-60"
+                    imageGenRemaining > 0 ? "cursor-pointer hover:bg-card-muted dark:hover:bg-white/[0.08]" : "opacity-60"
                   )}
                   onClick={imageGenRemaining > 0 ? handleGenerateImage : undefined}
                 >
@@ -1576,7 +1616,7 @@ export default function PostEditorClient({
                           className={cn(
                             "relative flex-shrink-0 w-14 h-14 rounded-control overflow-hidden border-2 transition-colors",
                             active
-                              ? "border-blue-600"
+                              ? "border-brand"
                               : "border-edge hover:border-edge dark:hover:border-white/25"
                           )}
                           title={isCarousel ? `Carousel - ${group.length} images` : "Single image"}
@@ -1639,7 +1679,7 @@ export default function PostEditorClient({
                   <button
                     onClick={handleGenerateCarousel}
                     disabled={generatingCarousel || imageGenRemaining <= 0}
-                    className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-blue-200 dark:border-blue-500/30 bg-blue-50/60 dark:bg-brand/10 text-brand rounded-control hover:bg-blue-100 dark:hover:bg-brand/20 disabled:opacity-70 transition-colors"
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-brand-edge bg-brand-tint text-brand rounded-control hover:bg-brand/15 disabled:opacity-70 transition-colors"
                     title={imageGenRemaining <= 0 ? "Generation limit reached" : "Generate 4 carousel images"}
                   >
                     {generatingCarousel ? (
@@ -1684,7 +1724,7 @@ export default function PostEditorClient({
                     {uploadingDoc ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (
-                      <FileText className="w-3.5 h-3.5 text-red-500" />
+                      <FileText className="w-3.5 h-3.5 text-bad" />
                     )}
                     {uploadingDoc ? "Uploading PDF..." : documentUrl ? "Replace PDF" : "Upload PDF"}
                   </button>
@@ -1693,7 +1733,7 @@ export default function PostEditorClient({
                   </p>
                   <p className={cn(
                     "text-[10px] mt-1 text-center",
-                    imageGenRemaining <= 0 ? "text-amber-500 dark:text-amber-400" : "text-text-3"
+                    imageGenRemaining <= 0 ? "text-warn" : "text-text-3"
                   )}>
                     {imageGenRemaining === Infinity
                       ? "Unlimited AI generations remaining"
@@ -1708,7 +1748,7 @@ export default function PostEditorClient({
 
           {/* Post Details */}
           <div className="card p-4 space-y-3">
-            <h3 className="text-sm font-semibold text-text">Post Details</h3>
+            <h3 className="font-display text-[15px] font-bold tracking-[-0.02em] text-text">Post details</h3>
             <div>
               <label className="text-xs text-text-2 mb-1 block">Status</label>
               <select
@@ -1904,7 +1944,7 @@ export default function PostEditorClient({
       {/* Pre-publish Checklist Modal */}
       {showPublishChecklist && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-[#0D131F] rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-brand-tint rounded-control flex items-center justify-center flex-shrink-0">
                 <svg className="w-5 h-5 text-brand" fill="currentColor" viewBox="0 0 24 24">
@@ -1920,11 +1960,11 @@ export default function PostEditorClient({
               {getPublishChecklist().map((item) => (
                 <div key={item.label} className="flex items-center gap-3 p-2.5 rounded-control bg-card-muted">
                   {item.passed ? (
-                    <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                    <CheckCircle className="w-5 h-5 text-ok flex-shrink-0" />
                   ) : (
-                    <AlertCircle className={cn("w-5 h-5 flex-shrink-0", item.optional ? "text-amber-400" : "text-red-500")} />
+                    <AlertCircle className={cn("w-5 h-5 flex-shrink-0", item.optional ? "text-warn" : "text-bad")} />
                   )}
-                  <span className={cn("text-sm", item.passed ? "text-text" : item.optional ? "text-amber-700 dark:text-amber-300" : "text-bad")}>
+                  <span className={cn("text-sm", item.passed ? "text-text" : item.optional ? "text-warn" : "text-bad")}>
                     {item.label}
                     {!item.passed && item.optional && <span className="text-xs text-text-3 ml-1">(optional)</span>}
                   </span>
@@ -1932,10 +1972,10 @@ export default function PostEditorClient({
               ))}
             </div>
             {!getPublishChecklist()[0].passed && (
-              <p className="text-xs text-red-500 dark:text-red-400">Post body must have at least 20 characters to publish.</p>
+              <p className="text-xs text-bad">Post body must have at least 20 characters to publish.</p>
             )}
             <p className="text-xs text-center text-text-3 flex items-center justify-center gap-1">
-              <svg className="w-3.5 h-3.5 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+              <svg className="w-3.5 h-3.5 text-ok flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
               Posted via LinkedIn&apos;s official API - safe &amp; compliant
             </p>
             <div className="flex gap-3">
@@ -1963,7 +2003,7 @@ export default function PostEditorClient({
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-[#0D131F] rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
+          <div className="bg-card rounded-card shadow-lift-lg w-full max-w-sm p-6 space-y-5">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 bg-bad-tint rounded-control flex items-center justify-center flex-shrink-0">
                 <Trash2 className="w-5 h-5 text-bad" />
@@ -1985,7 +2025,7 @@ export default function PostEditorClient({
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-2.5 bg-bad text-white rounded-control text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-bad text-white rounded-control text-sm font-medium hover:opacity-90 transition-colors disabled:opacity-70 flex items-center justify-center gap-2"
               >
                 {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                 Delete
