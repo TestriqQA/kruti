@@ -14,6 +14,7 @@ export default async function AdminTicketsPage() {
         description: true,
         screenshots: true,
         status: true,
+        category: true,
         createdAt: true,
         // Drives the "Last updated" column. Prisma maintains it via @updatedAt,
         // so it moves on a status change or an admin reply without us setting it.

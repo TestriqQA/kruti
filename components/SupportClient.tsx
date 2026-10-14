@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  LifeBuoy,
   ImagePlus,
   X,
   Loader2,
@@ -16,11 +15,15 @@ import {
   CheckCheck,
   CheckCircle2,
   Lock,
+  Inbox,
+  Mail,
 } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import { StatCard } from "@/components/dashboard/bits";
 import { useToast } from "@/components/Toast";
 import { cn } from "@/lib/utils";
 import {
+  TICKET_CATEGORIES,
   MAX_SCREENSHOTS,
   MAX_TOTAL_BYTES,
   MAX_ATTACHMENT_BYTES,
@@ -61,9 +64,9 @@ interface Picked {
 }
 
 const STATUS_STYLE: Record<string, string> = {
-  open: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
-  in_progress: "bg-blue-100 text-blue-800 dark:bg-blue-500/15 dark:text-blue-300",
-  closed: "bg-slate-100 text-slate-600 dark:bg-white/[0.08] dark:text-slate-400",
+  open: "bg-warn-tint text-warn",
+  in_progress: "bg-brand-tint text-brand",
+  closed: "bg-card-muted text-text-2",
 };
 
 /** Time only - the date lives in the separator above the group. */
@@ -90,6 +93,7 @@ export default function SupportClient({
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [picked, setPicked] = useState<Picked[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +119,8 @@ export default function SupportClient({
 
   const totalBytes = picked.reduce((n, p) => n + p.file.size, 0);
   const overBudget = totalBytes > MAX_TOTAL_BYTES;
-  const canSubmit = description.trim().length >= 10 && !overBudget && !submitting;
+  const canSubmit =
+    category !== "" && description.trim().length >= 10 && !overBudget && !submitting;
 
   // Tracked per REPLY, not per ticket. Latching on the ticket id meant the
   // second and every later reply on a ticket the user had already opened was
@@ -251,7 +256,7 @@ export default function SupportClient({
       const res = await fetch("/api/support", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: description.trim(), attachments }),
+        body: JSON.stringify({ category, description: description.trim(), attachments }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not raise the ticket.");
@@ -259,6 +264,7 @@ export default function SupportClient({
       picked.forEach((p) => URL.revokeObjectURL(p.preview));
       setPicked([]);
       setDescription("");
+      setCategory("");
       toast("Ticket raised. Our reply will appear here.", "success");
       router.refresh();
     } catch (err) {
@@ -332,18 +338,74 @@ export default function SupportClient({
   // "closed" does not hide the fact that a reply is waiting elsewhere.
   const totalUnread = tickets.reduce((n, t) => n + unreadCount(t), 0);
 
+  // Read off the same array the column below renders, so raising or closing a
+  // ticket moves these at the same moment it moves the list.
+  const openCount = tickets.filter((t) => t.status === "open").length;
+  const activeCount = tickets.filter((t) => t.status === "in_progress").length;
+  const closedCount = tickets.filter((t) => t.status === "closed").length;
+
   return (
     // One attribute exempts this whole subtree from the paywall lock, so a user
     // whose trial lapsed can still reach us. See components/SubscriptionLock.tsx.
     <div data-allow-when-locked="">
-      <div className="mb-6">
-        <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-gray-100 flex items-center gap-2">
-          <LifeBuoy className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+      <div className="mb-6 pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
           Help &amp; Support
         </h1>
-        <p className="text-slate-500 dark:text-slate-400 mt-1">
-          Tell us what went wrong. Our replies show up on the right.
+        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+          Tell us what went wrong and we will pick it up. Your conversation stays on the right,
+          and a reply shows up there without you having to refresh.
         </p>
+      </div>
+
+      {/* Readings. Each card carries a line only it can say. */}
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Open"
+          value={openCount}
+          note={openCount > 0 ? "waiting on us" : "nothing waiting on us"}
+          icon={Inbox}
+          tone="warn"
+          onClick={() => setFilter(filter === "open" ? "all" : "open")}
+          active={filter === "open"}
+        />
+        <StatCard
+          label="In progress"
+          value={activeCount}
+          note={activeCount > 0 ? "we are on it" : "nothing in hand"}
+          icon={Clock}
+          tone="brand"
+          onClick={() => setFilter(filter === "in_progress" ? "all" : "in_progress")}
+          active={filter === "in_progress"}
+        />
+        <StatCard
+          label="Closed"
+          value={closedCount}
+          note={closedCount > 0 ? "settled all time" : "none closed yet"}
+          icon={CheckCircle2}
+          tone="ok"
+          onClick={() => setFilter(filter === "closed" ? "all" : "closed")}
+          active={filter === "closed"}
+        />
+        <StatCard
+          label="New replies"
+          value={totalUnread}
+          note={totalUnread > 0 ? "open the one waiting" : "nothing unread"}
+          icon={Mail}
+          tone="violet"
+          onClick={
+            totalUnread > 0
+              ? () => {
+                  // Recomputed on click rather than captured at mount, so this
+                  // still lands on a waiting ticket after you have read others.
+                  const next = tickets.find((t) => unreadCount(t) > 0);
+                  if (!next) return;
+                  setFilter("all");
+                  setOpenId(next.id);
+                }
+              : undefined
+          }
+        />
       </div>
 
       {/* 60/40: form left, tickets right.
@@ -354,39 +416,82 @@ export default function SupportClient({
           cannot blow the grid out past its track. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
         {/* ── Left: raise a ticket ─────────────────────────────── */}
-        <div className="space-y-6 min-w-0">
-          <section className="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl p-5">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Sent with your ticket
-            </h2>
-            <div className="mt-3 flex items-center gap-3">
-              <Avatar src={user.image} name={user.name} size={40} />
+        <div className="min-w-0">
+          <section className="card p-6 space-y-5">
+            <div>
+              <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">
+                Raise a ticket
+              </h2>
+              <p className="mt-1 text-[13.5px] leading-relaxed text-text-2">
+                One ticket per problem gets you a faster answer than one long one.
+              </p>
+            </div>
+
+            {/* What is attached, shown inside the form it is attached to rather
+                than as a card of its own above it. */}
+            <div className="flex items-center gap-3 rounded-control bg-card-muted px-3.5 py-3">
+              <Avatar src={user.image} name={user.name} size={36} />
               <div className="min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">
+                <p className="truncate text-[13.5px] font-medium text-text">
                   {user.name || "Your account"}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+                <p className="truncate text-[12px] text-text-2">{user.email}</p>
               </div>
               <span
                 className={cn(
-                  "ml-auto flex-shrink-0 text-xs px-2.5 py-1 rounded-full capitalize",
+                  "ml-auto flex-shrink-0 rounded-full px-2.5 py-1 text-xs capitalize",
                   STATUS_STYLE.closed
                 )}
               >
                 {user.plan.replace("_", " ")}
               </span>
             </div>
-            <p className="mt-3 text-xs text-slate-400 dark:text-slate-500">
-              Your name, email, plan and timezone ({user.timezone || "not set"}) are attached
-              automatically, so there is nothing to fill in here.
+            <p className="-mt-2 text-xs text-text-3">
+              Your name, email, plan and timezone ({user.timezone || "not set"}) ride along
+              automatically - nothing to fill in.
             </p>
-          </section>
 
-          <section className="bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-2xl p-5 space-y-5">
+            <div>
+              <label
+                htmlFor="ticket-category"
+                className="block text-sm font-medium text-text mb-1.5"
+              >
+                What is this about?
+              </label>
+              <div className="relative">
+                <select
+                  id="ticket-category"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  className={cn(
+                    "w-full appearance-none rounded-control border border-edge bg-card py-2.5 pl-3 pr-10 text-sm",
+                    "focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/25",
+                    category === "" ? "text-text-3" : "text-text"
+                  )}
+                >
+                  <option value="" disabled>
+                    Choose the area your problem is in
+                  </option>
+                  {TICKET_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value} className="text-text">
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
+              </div>
+              {/* The hint for the chosen area, so the label does not have to
+                  carry every example it covers. */}
+              <p className="mt-1.5 text-xs text-text-3">
+                {TICKET_CATEGORIES.find((c) => c.value === category)?.hint ??
+                  "Picking the right area gets your ticket to the right person faster."}
+              </p>
+            </div>
+
             <div>
               <label
                 htmlFor="ticket-description"
-                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5"
+                className="block text-sm font-medium text-text mb-1.5"
               >
                 What went wrong?
               </label>
@@ -396,24 +501,24 @@ export default function SupportClient({
                 value={description}
                 onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION_CHARS))}
                 placeholder="What were you doing, what did you expect, and what happened instead?"
-                className="w-full px-3 py-2.5 text-sm border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-gray-100 placeholder:text-slate-400 resize-y"
+                className="w-full px-3 py-2.5 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card text-text placeholder:text-text-3 resize-y"
               />
-              <p className="mt-1 text-xs text-slate-400 dark:text-slate-500 text-right tabular-nums">
+              <p className="mt-1 text-xs text-text-3 text-right tabular-nums">
                 {description.length} / {MAX_DESCRIPTION_CHARS}
               </p>
             </div>
 
             <div>
               <div className="flex items-baseline justify-between mb-1.5 gap-2 flex-wrap">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Screenshots <span className="text-slate-400 font-normal">(optional)</span>
+                <label className="block text-sm font-medium text-text">
+                  Screenshots <span className="text-text-3 font-normal">(optional)</span>
                 </label>
                 <span
                   className={cn(
                     "text-xs tabular-nums",
                     overBudget
-                      ? "text-red-600 dark:text-red-400"
-                      : "text-slate-400 dark:text-slate-500"
+                      ? "text-bad"
+                      : "text-text-3"
                   )}
                 >
                   {picked.length} of {MAX_SCREENSHOTS} &middot; {formatBytes(totalBytes)} of{" "}
@@ -425,7 +530,7 @@ export default function SupportClient({
                 {picked.map((p, i) => (
                   <div
                     key={p.preview}
-                    className="relative w-24 h-24 rounded-xl overflow-hidden border border-slate-200 dark:border-white/10"
+                    className="relative w-24 h-24 rounded-control overflow-hidden border border-edge"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={p.preview} alt={p.file.name} className="w-full h-full object-cover" />
@@ -433,7 +538,7 @@ export default function SupportClient({
                       type="button"
                       onClick={() => removeAt(i)}
                       aria-label={`Remove ${p.file.name}`}
-                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-bad transition-colors"
                     >
                       <X className="w-3.5 h-3.5" />
                     </button>
@@ -447,7 +552,7 @@ export default function SupportClient({
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 flex flex-col items-center justify-center gap-1 text-slate-400 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-500/50 dark:hover:text-blue-400 transition-colors"
+                    className="w-24 h-24 rounded-control border-2 border-dashed border-edge dark:border-white/15 flex flex-col items-center justify-center gap-1 text-text-3 hover:border-blue-400 hover:text-blue-600 dark:hover:border-blue-500/50 dark:hover:text-blue-400 transition-colors"
                   >
                     <ImagePlus className="w-5 h-5" />
                     <span className="text-[11px]">Add</span>
@@ -463,16 +568,16 @@ export default function SupportClient({
                 onChange={(e) => addFiles(e.target.files)}
                 className="hidden"
               />
-              <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              <p className="mt-2 text-xs text-text-3">
                 PNG, JPG or WebP. Up to {MAX_SCREENSHOTS} images, {formatBytes(MAX_TOTAL_BYTES)} in
                 total.
               </p>
             </div>
 
             {error && (
-              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl px-4 py-3">
-                <AlertCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+              <div className="flex items-start gap-2 bg-bad-tint border border-bad/30 rounded-control px-4 py-3">
+                <AlertCircle className="w-4 h-4 text-bad flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-bad">{error}</p>
               </div>
             )}
 
@@ -481,7 +586,7 @@ export default function SupportClient({
                 type="button"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-brand ring-focus inline-flex h-11 items-center gap-2 rounded-control px-5 text-[14px] font-semibold disabled:cursor-not-allowed"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -490,10 +595,13 @@ export default function SupportClient({
                 )}
                 {submitting ? "Sending..." : "Raise ticket"}
               </button>
-              {description.trim().length > 0 && description.trim().length < 10 && (
-                <span className="text-xs text-slate-400 dark:text-slate-500">
-                  A little more detail, please.
-                </span>
+              {category === "" ? (
+                <span className="text-xs text-text-3">Pick an area first.</span>
+              ) : (
+                description.trim().length > 0 &&
+                description.trim().length < 10 && (
+                  <span className="text-xs text-text-3">A little more detail, please.</span>
+                )
               )}
             </div>
           </section>
@@ -501,39 +609,42 @@ export default function SupportClient({
 
         {/* ── Right: your tickets and our replies ──────────────── */}
         <aside className="space-y-3 min-w-0 lg:sticky lg:top-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-[17px] font-bold tracking-[-0.02em] text-text">
               Your tickets
             </h2>
             {totalUnread > 0 && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+              <span className="flex-shrink-0 rounded-full bg-brand px-2.5 py-1 text-xs font-semibold text-white">
                 {totalUnread} new
               </span>
             )}
           </div>
 
           {tickets.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {(["all", ...TICKET_STATUSES] as const).map((s) => {
-                const count = s === "all" ? tickets.length : tickets.filter((t) => t.status === s).length;
-                return (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setFilter(s)}
-                    aria-pressed={filter === s}
-                    className={cn(
-                      "text-[11px] px-2.5 py-1 rounded-lg border transition-colors capitalize",
-                      filter === s
-                        ? "bg-blue-600 text-white border-blue-600"
-                        : "border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06]"
-                    )}
-                  >
-                    {s.replace("_", " ")}
-                    <span className="ml-1 tabular-nums opacity-60">{count}</span>
-                  </button>
-                );
-              })}
+            <div>
+              <p className="eyebrow mb-1.5">Show</p>
+              <div className="flex flex-wrap gap-1.5">
+                {(["all", ...TICKET_STATUSES] as const).map((s) => {
+                  const count = s === "all" ? tickets.length : tickets.filter((t) => t.status === s).length;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setFilter(s)}
+                      aria-pressed={filter === s}
+                      className={cn(
+                        "ring-focus flex h-8 items-center gap-1.5 rounded-control border px-3 text-[12.5px] font-medium capitalize transition-colors",
+                        filter === s
+                          ? "border-brand bg-brand text-white"
+                          : "border-edge text-text-2 hover:border-brand-edge hover:text-text"
+                      )}
+                    >
+                      {s === "all" ? "All" : s.replace("_", " ")}
+                      <span className="tabular-nums opacity-60">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -541,7 +652,7 @@ export default function SupportClient({
               to sit inside each replies box, which repeated it per ticket and ate
               a banner's worth of space every time. */}
           {tickets.some((t) => t.replies.length > 0) && (
-            <p className="flex items-start gap-1.5 text-[10px] leading-snug text-slate-400 dark:text-slate-500">
+            <p className="flex items-start gap-1.5 text-[10px] leading-snug text-text-3">
               <Clock className="w-3 h-3 flex-shrink-0 mt-px" />
               <span>
                 Replies disappear {REPLY_TTL_DAYS} days after we send them, read or not &mdash;
@@ -551,16 +662,16 @@ export default function SupportClient({
           )}
 
           {tickets.length === 0 ? (
-            <div className="border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 text-center">
-              <MessageSquare className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+            <div className="rounded-card border border-dashed border-edge bg-card-muted/60 px-6 py-10 text-center">
+              <MessageSquare className="mx-auto mb-2.5 h-7 w-7 text-text-3" />
+              <p className="text-xs text-text-3">
                 Nothing raised yet. Replies from our team will appear here.
               </p>
             </div>
           ) : shown.length === 0 ? (
-            <div className="border border-dashed border-slate-200 dark:border-white/10 rounded-2xl p-6 text-center">
-              <MessageSquare className="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-              <p className="text-xs text-slate-400 dark:text-slate-500">
+            <div className="rounded-card border border-dashed border-edge bg-card-muted/60 px-6 py-10 text-center">
+              <MessageSquare className="mx-auto mb-2.5 h-7 w-7 text-text-3" />
+              <p className="text-xs text-text-3">
                 No {filter.replace("_", " ")} tickets.
               </p>
             </div>
@@ -577,10 +688,10 @@ export default function SupportClient({
                 <div
                   key={t.id}
                   className={cn(
-                    "rounded-2xl border transition-colors",
+                    "rounded-card border transition-colors",
                     unread
-                      ? "border-blue-400 dark:border-blue-500/50 bg-blue-50/60 dark:bg-blue-500/[0.07]"
-                      : "border-slate-200 dark:border-white/10 bg-white dark:bg-white/[0.03]"
+                      ? "border-blue-400 dark:border-blue-500/50 bg-blue-50/60 dark:bg-brand/[0.07]"
+                      : "border-edge bg-card"
                   )}
                 >
                   <button
@@ -590,10 +701,10 @@ export default function SupportClient({
                     className="w-full text-left px-4 py-3 flex items-start gap-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-slate-700 dark:text-slate-300 line-clamp-2">
+                      <p className="text-sm text-text line-clamp-2">
                         {t.description}
                       </p>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                      <p className="text-xs text-text-3 mt-1">
                         {shortDate(t.createdAt)}
                         {shots.length > 0 && ` · ${shots.length} shot${shots.length === 1 ? "" : "s"}`}
                         {t.replies.length > 0 &&
@@ -602,7 +713,7 @@ export default function SupportClient({
                     </div>
                     <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
                       {unread > 0 && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-600 text-white">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-brand text-white">
                           New reply
                         </span>
                       )}
@@ -616,7 +727,7 @@ export default function SupportClient({
                       </span>
                       <ChevronDown
                         className={cn(
-                          "w-3.5 h-3.5 text-slate-400 transition-transform",
+                          "w-3.5 h-3.5 text-text-3 transition-transform",
                           open && "rotate-180"
                         )}
                       />
@@ -624,23 +735,23 @@ export default function SupportClient({
                   </button>
 
                   {open && (
-                    <div className="px-4 pb-4 border-t border-slate-200/70 dark:border-white/10 pt-3 space-y-3">
+                    <div className="px-4 pb-4 border-t border-edge/70 pt-3 space-y-3">
                       {t.replies.length === 0 ? (
-                        <p className="text-xs text-slate-400 dark:text-slate-500">
+                        <p className="text-xs text-text-3">
                           No reply yet. We will answer here &mdash; and you can add anything you
                           forgot using the box below.
                         </p>
                       ) : (
                         /* The whole conversation in ONE box: a single expiry notice
                            at the top, then the messages as chat bubbles. */
-                        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.06] overflow-hidden">
+                        <div className="rounded-control border border-edge bg-card-muted overflow-hidden">
                           {/* ONE heading for the whole box - not repeated per message. */}
-                          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[0.04]">
-                            <MessageSquare className="w-3 h-3 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                            <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">
+                          <div className="flex items-center gap-1.5 px-3 py-2 border-b border-edge bg-white/70 dark:bg-white/[0.04]">
+                            <MessageSquare className="w-3 h-3 text-brand flex-shrink-0" />
+                            <span className="text-[11px] font-semibold text-brand">
                               Conversation
                             </span>
-                            <span className="ml-auto flex-shrink-0 text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
+                            <span className="ml-auto flex-shrink-0 text-[10px] text-text-3 tabular-nums">
                               {t.replies.length} message{t.replies.length === 1 ? "" : "s"}
                             </span>
                           </div>
@@ -653,7 +764,7 @@ export default function SupportClient({
                             {groupConversation(t.replies).map((day) => (
                               <div key={day.dayKey} className="space-y-2">
                                 <div className="flex justify-center">
-                                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-slate-500 shadow-sm dark:bg-white/[0.08] dark:text-slate-400">
+                                  <span className="rounded-full bg-white px-2.5 py-0.5 text-[10px] font-medium text-text-2 shadow-lift">
                                     {day.label}
                                   </span>
                                 </div>
@@ -682,15 +793,15 @@ export default function SupportClient({
                                           >
                                             <div
                                               className={cn(
-                                                "max-w-[85%] rounded-2xl px-3 py-1.5",
+                                                "max-w-[85%] rounded-card px-3 py-1.5",
                                                 mine
-                                                  ? "bg-blue-600 text-white"
-                                                  : "border border-slate-200 bg-white text-slate-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200",
+                                                  ? "bg-brand text-white"
+                                                  : "border border-edge bg-white text-text   ",
                                                 last && (mine ? "rounded-br-sm" : "rounded-bl-sm")
                                               )}
                                             >
                                               {first && !mine && (
-                                                <p className="mb-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300">
+                                                <p className="mb-0.5 text-[10px] font-semibold text-brand">
                                                   Kruti.io support
                                                 </p>
                                               )}
@@ -702,7 +813,7 @@ export default function SupportClient({
                                                   "mt-0.5 flex items-center justify-end gap-1 text-[10px] tabular-nums",
                                                   mine
                                                     ? "text-blue-100"
-                                                    : "text-slate-400 dark:text-slate-500"
+                                                    : "text-text-3"
                                                 )}
                                               >
                                                 <span>{clockTime(m.createdAt)}</span>
@@ -745,7 +856,7 @@ export default function SupportClient({
                               }))
                             }
                             placeholder="Reply to support..."
-                            className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] text-slate-900 dark:text-gray-100 placeholder:text-slate-400 resize-y"
+                            className="w-full px-3 py-2 text-sm border border-edge rounded-control focus:outline-none focus:ring-2 focus:ring-brand/25 focus:border-brand bg-card text-text placeholder:text-text-3 resize-y"
                           />
                           <div className="mt-1.5 flex items-center gap-2">
                             <button
@@ -754,7 +865,7 @@ export default function SupportClient({
                               disabled={
                                 (replyDrafts[t.id] || "").trim().length < 2 || replyingId === t.id
                               }
-                              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-control bg-brand text-white hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {replyingId === t.id ? (
                                 <Loader2 className="w-3 h-3 animate-spin" />
@@ -763,7 +874,7 @@ export default function SupportClient({
                               )}
                               Send
                             </button>
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
+                            <span className="text-[10px] text-text-3 tabular-nums">
                               {(replyDrafts[t.id] || "").length} / {MAX_REPLY_CHARS}
                             </span>
                           </div>
@@ -771,7 +882,7 @@ export default function SupportClient({
                       )}
 
                       {closed ? (
-                        <p className="flex items-start gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+                        <p className="flex items-start gap-1.5 text-[11px] text-text-3">
                           <Lock className="w-3 h-3 flex-shrink-0 mt-0.5" />
                           <span>
                             This ticket is closed and cannot be reopened. Raise a new one if you
@@ -780,14 +891,14 @@ export default function SupportClient({
                         </p>
                       ) : confirming ? (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          <span className="text-[11px] text-text-2">
                             Close for good? This cannot be undone.
                           </span>
                           <button
                             type="button"
                             onClick={() => handleClose(t.id)}
                             disabled={busyClosing}
-                            className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-control bg-bad text-white hover:bg-red-700 dark:hover:bg-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {busyClosing ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
@@ -800,7 +911,7 @@ export default function SupportClient({
                             type="button"
                             onClick={() => setConfirmCloseId(null)}
                             disabled={busyClosing}
-                            className="text-[11px] px-2.5 py-1 rounded-lg border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+                            className="text-[11px] px-2.5 py-1 rounded-control border border-edge text-text-2 hover:bg-card-muted transition-colors disabled:opacity-50"
                           >
                             Cancel
                           </button>
@@ -809,7 +920,7 @@ export default function SupportClient({
                         <button
                           type="button"
                           onClick={() => setConfirmCloseId(t.id)}
-                          className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                          className="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-control border border-red-300 dark:border-red-500/40 text-bad hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
                         >
                           <CheckCircle2 className="w-3 h-3" />
                           Close ticket

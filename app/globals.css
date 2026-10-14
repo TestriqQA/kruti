@@ -211,3 +211,185 @@ select.select-field::-ms-expand {
     animation: none;
   }
 }
+
+
+/* ===========================================================================
+   Surface & type refinement
+   ---------------------------------------------------------------------------
+   This does NOT introduce a new visual language. The dashboard keeps the layout
+   it has - white cards on a light field, a blue accent, the same navigation and
+   the same screens. What these variables do is make that language consistent:
+   one border colour instead of four, one card radius instead of three, one
+   shadow instead of a mix of `shadow-sm`, `shadow-md` and none, and a type
+   scale with real steps between its sizes.
+
+   Everything is expressed as space-separated RGB channels so Tailwind's
+   `<alpha-value>` works: `bg-card/60` -> `rgb(var(--card) / 0.6)`.
+   =========================================================================== */
+@layer base {
+  :root {
+    --field: 240 242 247;        /* page background - deliberately a step below
+                                    the card, so a borderless surface reads as
+                                    lifted rather than as a shape with no edge */
+    --card: 255 255 255;         /* card background */
+    --card-muted: 248 250 252;   /* nested / header strips inside a card */
+
+    --edge: 229 233 240;         /* the one border colour */
+    --edge-soft: 241 244 248;    /* internal dividers */
+
+    --text: 16 24 40;            /* primary */
+    --text-2: 71 84 103;         /* secondary */
+    --text-3: 134 146 165;       /* tertiary / meta */
+
+    --brand: 10 102 194;         /* LinkedIn blue, unchanged */
+    --brand-hover: 8 86 165;
+    --brand-tint: 238 245 255;
+    --brand-edge: 198 221 247;
+
+    --ok: 5 150 105;
+    --ok-tint: 236 253 245;
+    --warn: 217 119 6;
+    --warn-tint: 255 251 235;
+    --bad: 220 38 38;
+    --bad-tint: 254 242 242;
+    --violet: 124 58 237;
+    --violet-tint: 243 240 255;
+    --pink: 219 39 119;
+    --pink-tint: 253 240 247;
+
+    /* One shadow, barely there. Cards are separated by their border; the
+       shadow only stops them sitting flat on the field. */
+    /* Depth instead of outlines. A surface that floats needs no border, and
+       removing ~40 hairlines from a page is most of what makes it feel light. */
+    --lift: 0 1px 2px 0 rgb(16 24 40 / 0.04), 0 10px 24px -14px rgb(16 24 40 / 0.18);
+    --lift-hover: 0 2px 4px 0 rgb(16 24 40 / 0.05), 0 18px 36px -16px rgb(16 24 40 / 0.22);
+    --lift-lg: 0 24px 48px -12px rgb(16 24 40 / 0.18), 0 8px 16px -8px rgb(16 24 40 / 0.08);
+
+    --radius-card: 16px;
+    --radius-control: 10px;
+  }
+
+  .dark {
+    --field: 8 10 16;
+    --card: 17 22 32;
+    --card-muted: 22 28 40;
+
+    --edge: 36 44 59;
+    --edge-soft: 28 35 48;
+
+    --text: 237 242 249;
+    --text-2: 154 166 184;
+    --text-3: 113 126 146;
+
+    --brand: 71 148 232;
+    --brand-hover: 99 167 240;
+    --brand-tint: 18 36 58;
+    --brand-edge: 31 60 95;
+
+    --ok: 52 199 148;
+    --ok-tint: 8 44 35;
+    --warn: 245 182 66;
+    --warn-tint: 52 36 8;
+    --bad: 248 113 113;
+    --bad-tint: 56 18 18;
+    --violet: 167 139 250;
+    --violet-tint: 42 32 68;
+    --pink: 244 114 182;
+    --pink-tint: 59 22 44;
+
+    --lift: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 28px -18px rgb(0 0 0 / 0.9);
+    --lift-hover: 0 1px 0 0 rgb(255 255 255 / 0.06) inset, 0 18px 36px -18px rgb(0 0 0 / 1);
+    --lift-lg: 0 32px 64px -16px rgb(0 0 0 / 0.8);
+  }
+
+  body {
+    background-color: rgb(var(--field));
+    color: rgb(var(--text));
+  }
+
+  /* Numbers that sit in a column or change in place must not jitter. */
+  .nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer components {
+  /* The one card treatment. Replaces the mix of rounded-xl/2xl, four border
+     colours and three shadow levels that the pages had grown. */
+  /* The card carries no border. It is separated from the field by light, which
+     is what lets a page hold eight of them without reading as a grid of boxes. */
+  .card {
+    background-color: rgb(var(--card));
+    border-radius: var(--radius-card);
+    box-shadow: var(--lift);
+  }
+
+  .dark .card {
+    border: 1px solid rgb(var(--edge));
+  }
+
+  /* Opt in where a card is genuinely interactive. */
+  .card-lift {
+    transition: box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+                transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .card-lift:hover {
+    box-shadow: var(--lift-hover);
+    transform: translateY(-2px);
+  }
+
+  /* No rule under the title - space does the separating. */
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 20px 24px 12px;
+  }
+
+  .card-title {
+    font-size: 15.5px;
+    font-weight: 650;
+    letter-spacing: -0.015em;
+    color: rgb(var(--text));
+  }
+
+  /* One focus ring for the whole app, keyboard-only. */
+  .ring-focus:focus-visible {
+    outline: 2px solid rgb(var(--brand));
+    outline-offset: 2px;
+  }
+
+  /* The primary action. Written as a real gradient rather than Tailwind
+     gradient stops, which do not resolve from rgb(var(--x)/<alpha-value>)
+     tokens and rendered as nothing. */
+  .btn-brand {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--violet)) 0%,
+      rgb(var(--brand)) 60%,
+      rgb(var(--brand-hover)) 100%
+    );
+    color: #fff;
+    box-shadow: 0 8px 22px -8px rgb(var(--brand) / 0.65);
+    transition: filter 180ms ease, box-shadow 180ms ease;
+  }
+  .btn-brand:hover:not(:disabled) {
+    filter: brightness(1.08);
+    box-shadow: 0 12px 28px -10px rgb(var(--brand) / 0.8);
+  }
+  .btn-brand:disabled {
+    filter: grayscale(0.4) opacity(0.6);
+    box-shadow: none;
+  }
+
+  /* Label above a group of controls or a readout. */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: rgb(var(--text-3));
+  }
+}

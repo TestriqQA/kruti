@@ -54,6 +54,8 @@ export default async function PostEditorPage({ params }: { params: { id: string 
       showWatermark={showWatermark}
       prevPostId={prevPostId}
       nextPostId={nextPostId}
+      postIndex={idx >= 0 ? idx + 1 : null}
+      postTotal={siblings.length}
     />
   );
 }

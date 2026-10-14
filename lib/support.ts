@@ -26,6 +26,93 @@ export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 
 export const SCREENSHOT_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
+/**
+ * What the ticket is about.
+ *
+ * The values name real subsystems of this app rather than generic helpdesk
+ * buckets, so a category tells whoever triages it which part of the product to
+ * look at. Order is roughly how often a user hits each one.
+ *
+ * Stored as a plain string, like status, so adding a category later needs no
+ * migration - only an entry here.
+ */
+export const TICKET_CATEGORIES = [
+  {
+    value: "generation",
+    short: "Generation",
+    label: "Posts & content generation",
+    hint: "Strategy, post quality, regenerate, variants, repurpose",
+  },
+  {
+    value: "images",
+    short: "Images",
+    label: "Images & carousels",
+    hint: "Generated images, carousel slides, uploads",
+  },
+  {
+    value: "publishing",
+    short: "Publishing",
+    label: "Publishing to LinkedIn",
+    hint: "A post did not go out, failed publish, LinkedIn connection",
+  },
+  {
+    value: "scheduling",
+    short: "Scheduling",
+    label: "Scheduling & calendar",
+    hint: "Posting times, timezone, a post on the wrong day",
+  },
+  {
+    value: "newsletter",
+    short: "Newsletter",
+    label: "Newsletter",
+    hint: "Generating, editing or sending an issue",
+  },
+  {
+    value: "account",
+    short: "Account",
+    label: "Account & sign-in",
+    hint: "Login, onboarding, profile settings",
+  },
+  {
+    value: "billing",
+    short: "Billing",
+    label: "Billing & subscription",
+    hint: "Payments, trial, invoices, cancelling, refunds",
+  },
+  {
+    value: "other",
+    short: "Other",
+    label: "Something else",
+    hint: "Anything that does not fit the list",
+  },
+] as const;
+
+export type TicketCategory = (typeof TICKET_CATEGORIES)[number]["value"];
+
+/**
+ * What a ticket gets when none was chosen.
+ *
+ * Also what the server falls back to rather than rejecting a ticket over an
+ * unrecognised category: a dropdown is never a good enough reason to stop
+ * someone reaching support.
+ */
+export const DEFAULT_TICKET_CATEGORY: TicketCategory = "other";
+
+export function isTicketCategory(value: unknown): value is TicketCategory {
+  return TICKET_CATEGORIES.some((c) => c.value === value);
+}
+
+/** The full label, as the user form shows it. */
+export function ticketCategoryLabel(value: string | null | undefined): string {
+  return TICKET_CATEGORIES.find((c) => c.value === value)?.label ?? "Something else";
+}
+
+/** The compact form, for places that cannot afford the full label - the admin
+    queue is a table, and one long cell destroys the row rhythm it exists for. */
+export function ticketCategoryShort(value: string | null | undefined): string {
+  return TICKET_CATEGORIES.find((c) => c.value === value)?.short ?? "Other";
+}
+
 export const TICKET_STATUSES = ["open", "in_progress", "closed"] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 

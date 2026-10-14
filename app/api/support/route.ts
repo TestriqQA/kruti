@@ -9,7 +9,9 @@ import {
   MAX_TOTAL_BYTES,
   MAX_DESCRIPTION_CHARS,
   SUPPORT_BLOB_PREFIX,
+  DEFAULT_TICKET_CATEGORY,
   formatBytes,
+  isTicketCategory,
   type TicketAttachment,
 } from "@/lib/support";
 
@@ -39,6 +41,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const description = typeof body?.description === "string" ? body.description.trim() : "";
   const incoming = Array.isArray(body?.attachments) ? body.attachments : [];
+
+  // Falls back rather than rejecting. An unrecognised or missing category is
+  // not a good enough reason to stop someone reaching support, and a ticket
+  // filed under "other" is still a ticket we can read.
+  const category = isTicketCategory(body?.category) ? body.category : DEFAULT_TICKET_CATEGORY;
 
   if (description.length < 10) {
     return NextResponse.json(
@@ -108,9 +115,10 @@ export async function POST(req: NextRequest) {
     data: {
       userId,
       description,
+      category,
       screenshots: attachments.length > 0 ? JSON.stringify(attachments) : null,
     },
-    select: { id: true, status: true, createdAt: true },
+    select: { id: true, status: true, category: true, createdAt: true },
   });
 
   return NextResponse.json({ ticket });
