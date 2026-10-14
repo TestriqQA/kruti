@@ -8,6 +8,7 @@ import {
   Pencil, Save,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
+import { raiseProfileGate } from "@/lib/profile-gate";
 import { useSession } from "next-auth/react";
 
 interface Newsletter {
@@ -63,9 +64,12 @@ export default function NewsletterClient({ newsletters: initial, currentMonth, c
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month: currentMonth, year: currentYear }),
       });
-      if (res.ok) {
-        router.refresh();
+      if (!res.ok) {
+        // Was silently swallowed before, which made the button look broken.
+        raiseProfileGate(await res.json().catch(() => null));
+        return;
       }
+      router.refresh();
     } finally {
       setGenerating(false);
     }

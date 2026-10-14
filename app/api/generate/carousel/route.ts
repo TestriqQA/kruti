@@ -7,6 +7,7 @@ import { getCarouselPlan } from "@/lib/image-brief";
 import { appendImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 // Streaming route: emits step-by-step NDJSON progress so the client popup can show
 // the whole background pipeline (preflight -> plan -> per-slide render -> save).
@@ -59,6 +60,22 @@ export async function POST(req: NextRequest) {
           return finish();
         }
         send({ type: "preflight", key: "subscription", status: "done" });
+
+        // Content-quality gate, same contract as the text routes. Four slides
+        // is four model calls, so this is the most expensive thing an
+        // incomplete profile can spend.
+        const profile = await checkProfileReady(userId);
+        if (!profile.ready) {
+          send({ type: "preflight", key: "profile", status: "error", message: profile.message });
+          send({
+            type: "error",
+            message: profile.message,
+            profileIncomplete: true,
+            gaps: profile.gaps,
+          });
+          return finish();
+        }
+        send({ type: "preflight", key: "profile", status: "done" });
 
         // Rate limit
         const rl = checkRateLimit(userId, "image-gen", RATE_LIMITS.imageGeneration);

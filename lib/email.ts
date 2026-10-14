@@ -207,6 +207,97 @@ export async function sendTrialReminderEmail({
   }
 }
 
+// ── Profile Completeness Emails ──
+
+function buildProfileUpdateHtml({
+  userName,
+  gaps,
+  setupUrl,
+}: {
+  userName: string;
+  gaps: Array<{ label: string; hint: string }>;
+  setupUrl: string;
+}): string {
+  // Same treatment as the trial reminder: strip anything that could break out
+  // of the href, then escape what is left.
+  const safeUrl = escapeHtml(setupUrl.replace(/[<>"']/g, ""));
+  const items = gaps
+    .map(
+      (g) => `
+          <li style="margin-bottom:12px;">
+            <span style="font-size:15px;font-weight:600;color:#111827;">${escapeHtml(g.label)}</span><br/>
+            <span style="font-size:14px;color:#6B7280;line-height:1.6;">${escapeHtml(g.hint)}</span>
+          </li>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Finish your Kruti.io profile</title></head>
+<body style="margin:0;padding:0;background:#F3F4F6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:600px;margin:32px auto;background:#FFFFFF;border-radius:12px;overflow:hidden;">
+    <div style="background:#0A66C2;padding:26px 36px;">
+      <p style="margin:0;font-size:20px;font-weight:700;color:#FFFFFF;">Kruti.io</p>
+    </div>
+    <div style="padding:32px 36px;">
+      <h1 style="margin:0 0 16px 0;font-size:22px;font-weight:700;color:#111827;">We need one more thing from your profile</h1>
+      <p style="margin:0 0 16px 0;font-size:15px;color:#374151;line-height:1.7;">Hi ${escapeHtml(userName)},</p>
+      <p style="margin:0 0 16px 0;font-size:15px;color:#374151;line-height:1.7;">
+        Your posts are written from your profile, so we have added a few questions to your setup to keep them sounding like you rather than like anybody in your industry.
+      </p>
+      <p style="margin:0 0 20px 0;font-size:15px;color:#374151;line-height:1.7;">
+        Your account is missing the answers below, so <strong style="color:#111827;">post writing, image generation and scheduling are paused</strong> until they are filled in.
+      </p>
+      <ul style="margin:0 0 26px 0;padding-left:20px;">${items}
+      </ul>
+      <a href="${safeUrl}" style="display:inline-block;background:#0A66C2;color:#FFFFFF;font-size:15px;font-weight:600;text-decoration:none;padding:13px 28px;border-radius:8px;">Finish my profile</a>
+      <p style="margin:22px 0 0 0;font-size:14px;color:#6B7280;line-height:1.7;">
+        It takes about two minutes, and everything switches back on the moment you save &mdash; whether you are on the free trial or a paid plan.
+      </p>
+    </div>
+    <div style="background:#F9FAFB;padding:20px 36px;text-align:center;border-top:1px solid #E5E7EB;">
+      <p style="font-size:12px;color:#9CA3AF;margin:0;">Sent by Kruti.io &middot; Your AI LinkedIn content assistant</p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendProfileUpdateEmail({
+  to,
+  userName,
+  gaps,
+  setupUrl,
+}: {
+  to: string;
+  userName: string;
+  gaps: Array<{ label: string; hint: string }>;
+  setupUrl: string;
+}): Promise<{ success: boolean; error?: string }> {
+  if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY === "re_REPLACE_ME") {
+    console.log("[Email] Profile update request skipped - RESEND_API_KEY not configured");
+    return { success: true };
+  }
+
+  const from = process.env.FROM_EMAIL || "onboarding@resend.dev";
+
+  try {
+    const { error } = await getResend().emails.send({
+      from,
+      to,
+      subject: "Action needed: finish your Kruti.io profile",
+      html: buildProfileUpdateHtml({ userName, gaps, setupUrl }),
+    });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err?.message ?? "Email send failed" };
+  }
+}
+
 // ── Newsletter Emails ──
 
 export async function sendNewsletterEmail({

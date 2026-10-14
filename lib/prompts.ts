@@ -130,15 +130,32 @@ export function parseSelectedStyles(contentStylesStr: string | null | undefined)
  * post types only when no styles are stored). buildPostsPrompt uses this to build the
  * per-post plan, and the posts route uses the SAME assignment to persist each post's
  * style - so the badge shown to the user matches the style the post was written in.
+ *
+ * `offset` is where the rotation starts, and it is what makes a selection longer
+ * than a batch mean anything. Starting at 0 every time, a user with six styles
+ * and five posts per batch only ever saw the first five - the sixth was stored,
+ * listed in the profile context, and never written. That is every user who adds
+ * a style in their own words, because a custom entry is appended to the end of
+ * the list. The posts route passes the number of posts already in the plan, so
+ * consecutive batches sweep the whole selection.
+ *
+ * Both call sites for one batch MUST pass the same offset, or the badge on a
+ * saved post stops matching the style the writer was briefed with.
  */
 export function assignPostStyles(
   selectedStyles: string[],
   postTypes: string[],
-  postCount: number
+  postCount: number,
+  offset: number = 0
 ): string[] {
   const rotation = selectedStyles.length > 0 ? selectedStyles : postTypes;
-  return Array.from({ length: postCount }, (_, i) =>
-    rotation.length > 0 ? rotation[i % rotation.length] : "thought-leadership"
+  if (rotation.length === 0) {
+    return Array.from({ length: postCount }, () => "thought-leadership");
+  }
+  const start = ((offset % rotation.length) + rotation.length) % rotation.length;
+  return Array.from(
+    { length: postCount },
+    (_, i) => rotation[(start + i) % rotation.length]
   );
 }
 
@@ -290,7 +307,8 @@ export function buildPostsPrompt(
   researchBrief: string = "",
   selectedStyles: string[] = [],
   imageStyleGuide: string = "",
-  imageStyleIds: string = "infographic"
+  imageStyleIds: string = "infographic",
+  styleOffset: number = 0
 ): string {
   const rules = getRules(humanMode);
 
@@ -298,10 +316,23 @@ export function buildPostsPrompt(
   // (e.g. "Behind the Scenes", "Contrarian Take") so the batch reads as different
   // shapes, not one repeated post type. Uses the shared assignPostStyles so the saved
   // post.style (set in the route) matches what the writer was told for each post.
-  const perPostStyles = assignPostStyles(selectedStyles, postTypes, postCount);
+  const perPostStyles = assignPostStyles(selectedStyles, postTypes, postCount, styleOffset);
   const perPostPlan = perPostStyles
     .map((style, i) => {
-      const directive = STYLE_DIRECTIVES[String(style).trim().toLowerCase()] ?? "";
+      // A style the user typed themselves has no entry here. Leaving the
+      // directive empty labelled the post and said nothing else, so the writer
+      // fell back to its default shape and the user's own wording did nothing.
+      // Naming it as their words and telling the model to treat the label as
+      // the brief is what actually makes a custom answer count.
+      //
+      // Only when the rotation IS the user's styles: with none stored,
+      // assignPostStyles rotates the coarse post types instead, and those are
+      // not the user's words.
+      const directive =
+        STYLE_DIRECTIVES[String(style).trim().toLowerCase()] ??
+        (selectedStyles.length > 0
+          ? "This style is the user's own wording, not one of our presets. Treat the label itself as the brief and write the post in exactly that shape."
+          : "");
       return `Post ${i + 1} - STYLE: ${style}${directive ? ` - ${directive}` : ""}`;
     })
     .join("\n");

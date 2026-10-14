@@ -191,7 +191,17 @@ export async function POST(req: NextRequest) {
     const postTypesForPrompt = strategy.postTypes ?? allowedTypes;
     // Same assignment the prompt uses, so each saved post.style matches the style the
     // writer was told to use for that post (drives the per-post style badge).
-    const styleAssignment = assignPostStyles(selectedStyles, postTypesForPrompt, postCount);
+    // Where this batch starts in the style rotation. Without it the rotation
+    // restarts at index 0 every time, so any style past the fifth is stored and
+    // never written - including every style a user adds in their own words,
+    // since those are appended to the end of the list.
+    const postsInPlan = await prisma.post.count({ where: { planId: plan.id } });
+    const styleAssignment = assignPostStyles(
+      selectedStyles,
+      postTypesForPrompt,
+      postCount,
+      postsInPlan
+    );
 
     const prompt = buildPostsPrompt(
       profileContext,
@@ -205,7 +215,8 @@ export async function POST(req: NextRequest) {
       researchBrief,
       selectedStyles,
       imageStyleTaxonomyBlock(),
-      IMAGE_CATEGORIES.map((c) => c.id).join("|")
+      IMAGE_CATEGORIES.map((c) => c.id).join("|"),
+      postsInPlan
     );
 
     send({
