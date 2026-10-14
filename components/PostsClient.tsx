@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   FileText, Search, Linkedin, Calendar, CheckSquare, Square,
@@ -199,6 +199,54 @@ export default function PostsClient({
   // Sort
   const [sortBy, setSortBy] = useState<"default" | "date-asc" | "date-desc">("default");
 
+  // True once the page header has scrolled past. The toolbar is `sticky` either
+  // way; this only controls how it LOOKS when pinned, and whether it is holding
+  // the Generate action.
+  const [stuck, setStuck] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    // The page scrolls inside <main>, not the window, so both mechanisms are
+    // pointed at that element. Two of them on purpose: an observer rooted on
+    // the scroller is the right tool, and a scroll listener covers the cases
+    // where it does not deliver. Whichever fires first wins; the state is
+    // idempotent, and if neither runs the bar is still position:sticky and
+    // the action simply stays in the header.
+    const scroller = el.closest("main");
+    const measure = () => {
+      const top = scroller ? scroller.getBoundingClientRect().top : 0;
+      setStuck(el.getBoundingClientRect().top <= top);
+    };
+
+    let frame = 0;
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; measure(); });
+    };
+
+    measure();
+    scroller?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+
+    let io: IntersectionObserver | null = null;
+    if (typeof IntersectionObserver !== "undefined") {
+      io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
+        root: scroller,
+        threshold: 0,
+      });
+      io.observe(el);
+    }
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      scroller?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      io?.disconnect();
+    };
+  }, []);
+
   const filtered = posts.filter((p) => {
     const matchSearch =
       p.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -383,8 +431,9 @@ export default function PostsClient({
             or mark it ready to publish.
           </p>
         </div>
-        <div className="flex flex-shrink-0 items-start">
-          {/* Generate without going back to the dashboard. */}
+        {/* Generate without going back to the dashboard. Once the toolbar is
+            pinned this control moves into it, so there is never two of them. */}
+        <div className={cn("flex flex-shrink-0 items-start transition-opacity", stuck && "pointer-events-none opacity-0")}>
           <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
         </div>
       </div>
@@ -425,72 +474,6 @@ export default function PostsClient({
         />
       </div>
 
-      {/* Filters. Every control is labelled and looks like a control. */}
-      <div className="card flex flex-wrap items-center gap-3 px-4 py-3">
-        <div className="relative min-w-[240px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search titles and post text…"
-            className="ring-focus h-10 w-full rounded-control border border-edge bg-card pl-9 pr-3 text-[13.5px] text-text placeholder:text-text-3"
-          />
-        </div>
-
-        <label className="flex items-center gap-2">
-          <span className="eyebrow">Type</span>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="all">All types</option>
-            <option value="thought-leadership">Thought Leadership</option>
-            <option value="tips">Tips</option>
-            <option value="story">Story</option>
-            <option value="question">Question</option>
-            <option value="listicle">Listicle</option>
-          </select>
-        </label>
-
-        <label className="flex items-center gap-2">
-          <span className="eyebrow">Status</span>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="all">All status</option>
-            <option value="draft">Draft</option>
-            <option value="ready">Ready</option>
-            <option value="published">Published</option>
-          </select>
-        </label>
-
-        <label className="flex items-center gap-2">
-          <span className="eyebrow">Sort</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="default">By week</option>
-            <option value="date-asc">Date, oldest first</option>
-            <option value="date-desc">Date, newest first</option>
-          </select>
-        </label>
-
-        <a
-          href="/api/content/export"
-          download
-          title="Export every post as CSV"
-          className="ring-focus flex h-10 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text"
-        >
-          <Download className="h-4 w-4" />
-          Export CSV
-        </a>
-      </div>
-
       {/* Bulk action feedback */}
       {(bulkError || bulkSuccess) && (
         <div className={cn(
@@ -529,6 +512,95 @@ export default function PostsClient({
           </button>
         </div>
       )}
+
+      {/* Sentinel at the bar's resting position. The observer flips `stuck`
+          when it leaves the top of the scrollport - reading a scroll offset
+          would not work, because the page scrolls inside <main>, not the
+          window. */}
+      <div ref={sentinelRef} aria-hidden="true" className="h-px" />
+
+      <div
+        className={cn(
+          "sticky top-0 z-30 -mx-8 space-y-3 px-8 transition-[padding,background-color,box-shadow] duration-200",
+          stuck ? "border-b border-edge bg-field/92 py-3 shadow-lift backdrop-blur-md" : "py-0"
+        )}
+      >
+      {/* Filters. Every control is labelled and looks like a control. The
+          Generate action joins this row once the header has scrolled away, so
+          the primary action is never off screen. */}
+      <div className="flex items-center gap-3">
+        <div className="card flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-3">
+        <div className="relative min-w-[170px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search titles and post text…"
+            className="ring-focus h-10 w-full rounded-control border border-edge bg-card pl-9 pr-3 text-[13.5px] text-text placeholder:text-text-3"
+          />
+        </div>
+
+        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+          <span className="eyebrow">Type</span>
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="all">All types</option>
+            <option value="thought-leadership">Thought Leadership</option>
+            <option value="tips">Tips</option>
+            <option value="story">Story</option>
+            <option value="question">Question</option>
+            <option value="listicle">Listicle</option>
+          </select>
+        </label>
+
+        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+          <span className="eyebrow">Status</span>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="all">All status</option>
+            <option value="draft">Draft</option>
+            <option value="ready">Ready</option>
+            <option value="published">Published</option>
+          </select>
+        </label>
+
+        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+          <span className="eyebrow">Sort</span>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+          >
+            <option value="default">By week</option>
+            <option value="date-asc">Date, oldest first</option>
+            <option value="date-desc">Date, newest first</option>
+          </select>
+        </label>
+
+        <a
+          href="/api/content/export"
+          download
+          title="Export every post as CSV"
+          className="ring-focus flex h-10 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+        >
+          <Download className="h-4 w-4" />
+          {/* Collapses to its icon when pinned, so the bar stays one row. */}
+          <span className={cn(stuck && "hidden xl:inline")}>Export CSV</span>
+        </a>
+        </div>
+
+        {stuck && (
+          <div className="flex-shrink-0">
+            <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
+          </div>
+        )}
+      </div>
 
       {/* Bulk action bar */}
       {selectedCount > 0 && (
@@ -596,6 +668,8 @@ export default function PostsClient({
           </button>
         </div>
       )}
+
+      </div>
 
       {/* Posts List */}
       <div className="card overflow-hidden">
