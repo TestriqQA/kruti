@@ -1,41 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
-  FileText, Search, Linkedin, Calendar, CheckSquare, Square, MinusSquare,
+  FileText, Search, Linkedin, Calendar, CheckSquare, Square,
   Trash2, Clock, CheckCircle, Loader2, X, AlertCircle,
-  Image as ImageIcon, Copy, Download, Sparkles,
+  Image as ImageIcon, Copy, ArrowUpDown, Download,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, getPostTypeColor, getStatusColor } from "@/lib/utils";
 import PostImage from "@/components/PostImage";
 import GeneratePostsButton from "@/components/GeneratePostsButton";
 import { useGeneration } from "@/components/GenerationProvider";
-import { derivePostState } from "@/lib/dashboard-overview";
-import type { OverviewStatus } from "@/lib/dashboard-overview";
-import { Stepper, RuleHeader } from "@/components/dashboard/ledger";
-
-/**
- * The post library.
- *
- * Organising idea: this is not a list of posts, it is a bound volume of weekly
- * issues. Generation writes exactly POSTS_PER_BATCH posts against ONE
- * ContentPlan, so the archive's real grain is the week, and the week carries a
- * theme the user can read. The old screen knew this and threw it away - it
- * flattened eight plans into one run and then printed "Posts from Oct 6, 2025"
- * on every row, two hundred times. Here the repeated field becomes the
- * structure.
- *
- * THE TWO LAWS hold (see components/DashboardClient.tsx): one bordered
- * container (the chassis), and nothing is shown then hidden - titles wrap in
- * full, postError wraps in full, and there is no row excerpt to half-truncate.
- *
- * State is derived CLIENT-side on purpose. Shipping a server-derived state
- * would quietly break every optimistic update here: "mark ready" patches
- * `status`, and a row rendering a frozen server value would ignore it until the
- * refetch landed.
- */
 
 interface Post {
   id: string;
@@ -46,80 +22,18 @@ interface Post {
   status: string;
   body: string;
   imageUrl?: string | null;
-  carouselImages?: string | null;
-  documentUrl?: string | null;
-  postError?: string | null;
   postedToLinkedIn?: boolean;
   linkedinPostId?: string | null;
   weekLabel: string;
-  planId: string;
-  weekStartIso: string;
-  weekLabelShort: string;
-  weekTheme: string | null;
 }
 
-type Decorated = Post & { state: OverviewStatus };
-
-/** Legal `postType` values, including the two the schema comment allows. */
-const POST_TYPE_LABELS: Record<string, string> = {
-  "thought-leadership": "Thought Leadership",
-  tips: "Tips",
-  story: "Story",
-  question: "Question",
-  listicle: "Listicle",
-  poll: "Poll",
-  carousel: "Carousel",
-};
-const typeLabel = (t: string) => POST_TYPE_LABELS[t] ?? t;
-
-const STATE_WORD: Record<OverviewStatus, string> = {
-  draft: "Drafts",
-  ready: "Ready",
-  published: "Published",
-  missed: "Missed",
-  failed: "Failed",
-};
-
-const STATE_DOT: Record<OverviewStatus, string> = {
-  draft: "bg-warning/70",
-  ready: "bg-accent",
-  published: "bg-success",
-  missed: "bg-warning ring-[1.5px] ring-warning",
-  failed: "bg-danger ring-[1.5px] ring-danger",
-};
-
-/** The status values the list can actually filter by. */
-const POST_STATUSES = ["draft", "ready", "published"];
-
-/* ── Inline schedule ───────────────────────────────────────────────────────
-   Hand-rolled rather than Radix Popover, which is NOT a dependency here
-   (only avatar/dialog/dropdown-menu/progress/separator/tabs/tooltip are).
-   Escape and outside-click are wired explicitly to make up for it. */
-function InlineSchedule({
-  post,
-  onUpdate,
-}: {
-  post: Post;
-  onUpdate: (id: string, scheduledAt: string) => void;
-}) {
+// Schedule picker for individual posts - click to open picker popover
+function InlineSchedule({ post, onUpdate }: { post: Post; onUpdate: (id: string, scheduledAt: string) => void }) {
   const initDate = post.scheduledAt ? new Date(post.scheduledAt) : null;
   const [date, setDate] = useState(initDate ? initDate.toISOString().slice(0, 10) : "");
   const [time, setTime] = useState(initDate ? initDate.toTimeString().slice(0, 5) : "09:00");
   const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
 
   const isWeekend = (() => {
     if (!date) return false;
@@ -128,10 +42,10 @@ function InlineSchedule({
   })();
 
   const displayDate = initDate
-    ? initDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+    ? initDate.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
     : "No date";
   const displayTime = initDate
-    ? initDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })
+    ? initDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })
     : "";
 
   async function handleSave() {
@@ -152,86 +66,71 @@ function InlineSchedule({
   }
 
   return (
-    <div className="relative" onClick={(e) => e.preventDefault()}>
+    <div className="relative mt-1.5" onClick={(e) => e.preventDefault()}>
       <button
-        ref={triggerRef}
         onClick={() => !post.postedToLinkedIn && setOpen(!open)}
         disabled={post.postedToLinkedIn}
         className={cn(
-          "focus-ring -mx-1 rounded px-1 text-left transition-colors",
-          post.postedToLinkedIn ? "cursor-not-allowed" : "hover:bg-surface-sunken"
+          "flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-md transition-colors",
+          post.postedToLinkedIn
+            ? "text-slate-400 dark:text-slate-500 cursor-not-allowed"
+            : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/[0.06] cursor-pointer",
+          isWeekend && "text-amber-600 dark:text-amber-400"
         )}
       >
-        <span
-          className={cn(
-            "block text-[9.5px] font-semibold uppercase tracking-[0.12em]",
-            isWeekend ? "text-warning" : "text-ink-muted"
-          )}
-        >
-          {initDate ? initDate.toLocaleDateString("en-IN", { weekday: "short" }) : "—"}
-        </span>
-        <span className="tabular block text-[12.5px] font-semibold text-ink">{displayDate}</span>
-        {displayTime && (
-          <span className="tabular block text-[10.5px] text-ink-muted">{displayTime}</span>
-        )}
-        {isWeekend && (
-          <span className="block text-[9.5px] font-semibold text-warning">Weekend</span>
-        )}
+        <Clock className="w-3 h-3 flex-shrink-0" />
+        <span>{displayDate}</span>
+        {displayTime && <span className="text-slate-400 dark:text-slate-500">{displayTime}</span>}
+        {isWeekend && <span className="text-[10px] text-amber-500 font-medium">Weekend</span>}
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-50 mt-1 w-64 space-y-3 rounded-panel border border-line bg-surface p-3 shadow-e3">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Schedule
-            </p>
+          <div className="absolute left-0 top-full mt-1 z-50 bg-white dark:bg-white/[0.03] border border-slate-200 dark:border-white/10 rounded-xl shadow-lg p-3 space-y-3 w-64">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Schedule Date & Time</p>
             <div className="space-y-2">
-              <label className="block">
-                <span className="mb-1 block text-[11px] text-ink-muted">Date</span>
+              <div>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Date</label>
                 <input
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
                   className={cn(
-                    "focus-ring w-full rounded-control border bg-surface px-2 py-1.5 text-[12px] text-ink",
-                    isWeekend ? "border-warning/40" : "border-line"
+                    "w-full px-2 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-slate-200",
+                    isWeekend ? "border-amber-300 bg-amber-50 dark:bg-amber-900/20" : "border-slate-200 dark:border-white/10"
                   )}
                 />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-[11px] text-ink-muted">Time</span>
+              </div>
+              <div>
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 block mb-0.5">Time</label>
                 <input
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="focus-ring w-full rounded-control border border-line bg-surface px-2 py-1.5 text-[12px] text-ink"
+                  className="w-full px-2 py-1.5 text-xs border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.06] dark:text-slate-200"
                 />
-              </label>
+              </div>
               {isWeekend && (
-                <p className="flex items-start gap-1 text-[11px] leading-relaxed text-warning">
-                  <AlertCircle className="mt-0.5 h-3 w-3 flex-shrink-0" />
-                  Weekend &mdash; posts may get less engagement
+                <p className="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Weekend - posts may get less engagement
                 </p>
               )}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setOpen(false)}
-                className="focus-ring flex-1 rounded-control border border-line py-1.5 text-[12px] font-semibold text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+                className="flex-1 text-xs py-1.5 border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] text-slate-600 dark:text-slate-300 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !date}
-                className="focus-ring flex flex-1 items-center justify-center gap-1 rounded-control bg-accent py-1.5 text-[12px] font-semibold text-accent-ink transition-colors hover:bg-accent-hover disabled:opacity-50"
+                className="flex-1 text-xs py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors flex items-center justify-center gap-1"
               >
-                {saving ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-3 w-3" />
-                )}
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCircle className="w-3 h-3" />}
                 Save
               </button>
             </div>
@@ -242,68 +141,18 @@ function InlineSchedule({
   );
 }
 
-/* ── Artwork mark ──────────────────────────────────────────────────────────── */
-
-function ArtMark({ post }: { post: Post }) {
-  const slides = (() => {
-    if (!post.carouselImages) return 0;
-    try {
-      const a = JSON.parse(post.carouselImages);
-      return Array.isArray(a) ? a.length : 0;
-    } catch {
-      return 0;
-    }
-  })();
-
-  if (post.imageUrl) {
-    return (
-      <div>
-        <PostImage
-          src={post.imageUrl}
-          className="h-12 w-14 rounded-card object-cover ring-1 ring-line-strong"
-          iconClassName="h-4 w-4"
-        />
-        {slides > 1 && (
-          <span className="tabular mt-1 block text-[9.5px] font-semibold text-ink-muted">
-            {slides}&times;
-          </span>
-        )}
-      </div>
-    );
-  }
-  if (post.documentUrl) {
-    return (
-      <div className="flex h-12 w-14 items-center justify-center rounded-card bg-surface-sunken ring-1 ring-line-strong">
-        <span className="text-[9.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-          PDF
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="flex h-12 w-14 items-center justify-center rounded-card border border-dashed border-line-strong">
-      <FileText className="h-4 w-4 text-ink-muted" />
-    </div>
-  );
-}
-
-/* ── Page ──────────────────────────────────────────────────────────────────── */
-
 export default function PostsClient({
   posts: initialPosts,
   recentPlan,
   postsRemaining,
-  postsLimit,
-  initialStatus = null,
 }: {
   posts: Post[];
   recentPlan: { strategy: string; weekStart: Date | string } | null;
   postsRemaining: number;
-  postsLimit: number;
-  /** From ?status= on the URL, so overview aggregates land pre-filtered. */
-  initialStatus?: string | null;
 }) {
   const router = useRouter();
+  // Image generation runs in GenerationProvider (above every page), so it keeps
+  // going if the user navigates away mid-batch.
   const {
     imageGenerating,
     imageStatus,
@@ -313,7 +162,6 @@ export default function PostsClient({
     imagePipeline,
     showPipeline,
   } = useGeneration();
-
   const [posts, setPosts] = useState(initialPosts);
   // useState only seeds on the FIRST render, so without this the list ignores
   // every later router.refresh() and keeps showing stale rows - which is why
@@ -328,44 +176,38 @@ export default function PostsClient({
       prev.map((p) => (byId.has(p.id) ? { ...p, imageUrl: byId.get(p.id)! } : p))
     );
   }, [lastImageBatch]);
-
-  // Captured once after mount. Before it lands nothing can be "missed", which
-  // keeps the first client render byte-identical to the server's.
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => setNow(new Date()), []);
-
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState(
-    initialStatus && POST_STATUSES.includes(initialStatus) ? initialStatus : "all"
-  );
-  const [seededFromUrl] = useState(
-    () => !!(initialStatus && POST_STATUSES.includes(initialStatus))
-  );
+  const [filterStatus, setFilterStatus] = useState("all");
+
+  // Bulk selection
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Bulk action state
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+
+  // Schedule modal (time-only - each post keeps its own date)
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [scheduleTime, setScheduleTime] = useState("09:00");
+
+  // Delete confirm
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Sort
   const [sortBy, setSortBy] = useState<"default" | "date-asc" | "date-desc">("default");
 
-  const epoch = useMemo(() => new Date(0), []);
-  const decorated: Decorated[] = useMemo(
-    () => posts.map((p) => ({ ...p, state: derivePostState(p, now ?? epoch) })),
-    [posts, now, epoch]
-  );
-
-  const filtered = decorated.filter((p) => {
-    const q = search.toLowerCase();
+  const filtered = posts.filter((p) => {
     const matchSearch =
-      p.title.toLowerCase().includes(q) || p.body.toLowerCase().includes(q);
+      p.title.toLowerCase().includes(search.toLowerCase()) ||
+      p.body.toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === "all" || p.postType === filterType;
     const matchStatus = filterStatus === "all" || p.status === filterStatus;
     return matchSearch && matchType && matchStatus;
   });
 
+  // Apply sorting
   const sorted = [...filtered].sort((a, b) => {
     if (sortBy === "date-asc") {
       const aTime = a.scheduledAt ? new Date(a.scheduledAt).getTime() : Infinity;
@@ -380,53 +222,9 @@ export default function PostsClient({
     return 0;
   });
 
-  /* ── Readings. Derived from the LIVE array, so an optimistic bulk update
-        moves the ledger counts at the same instant it moves the rows. ─────── */
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: decorated.length, draft: 0, ready: 0, published: 0 };
-    for (const p of decorated) if (p.status in c) c[p.status] += 1;
-    return c;
-  }, [decorated]);
-
-  // Failed or missed. The count is a link straight to the first one, because a
-  // number the user cannot reach is the thing the Overview review flagged.
-  const atRiskPosts = useMemo(
-    () => decorated.filter((p) => p.state === "failed" || p.state === "missed"),
-    [decorated]
-  );
-  const atRisk = atRiskPosts.length;
-  const firstAtRisk = atRiskPosts[0]?.id ?? "";
-
-  const typeFacets = useMemo(() => {
-    const seen = new Map<string, number>();
-    for (const p of decorated) seen.set(p.postType, (seen.get(p.postType) ?? 0) + 1);
-    return Array.from(seen.entries()).sort((a, b) => b[1] - a[1]);
-  }, [decorated]);
-
-  /* ── The fore-edge: one column per weekly plan, oldest on the left. ─────── */
-  const weeks = useMemo(() => {
-    const byPlan = new Map<
-      string,
-      { id: string; iso: string; label: string; theme: string | null; states: OverviewStatus[] }
-    >();
-    for (const p of decorated) {
-      let w = byPlan.get(p.planId);
-      if (!w) {
-        w = { id: p.planId, iso: p.weekStartIso, label: p.weekLabelShort, theme: p.weekTheme, states: [] };
-        byPlan.set(p.planId, w);
-      }
-      w.states.push(p.state);
-    }
-    // posts arrive newest-plan-first, so reverse to run oldest -> newest and
-    // make the "Oldest week held" label on the left actually true.
-    return Array.from(byPlan.values()).reverse();
-  }, [decorated]);
-
   const filteredIds = sorted.map((p) => p.id);
   const allFilteredSelected =
     filteredIds.length > 0 && filteredIds.every((id) => selected.has(id));
-  const someFilteredSelected =
-    !allFilteredSelected && filteredIds.some((id) => selected.has(id));
 
   function toggleSelectAll() {
     if (allFilteredSelected) {
@@ -491,20 +289,16 @@ export default function PostsClient({
         setPosts((prev) => prev.filter((p) => !selected.has(p.id)));
         showFeedback(`${data.deleted} post${data.deleted !== 1 ? "s" : ""} deleted`);
       } else if (action === "schedule-time") {
-        // The route only touches rows that have not gone out, so the optimistic
-        // patch is scoped the same way - otherwise a published row paints Ready
-        // and is contradicted by the refresh.
+        // Update status to ready; actual date+time refreshed via router.refresh()
         setPosts((prev) =>
-          prev.map((p) =>
-            selected.has(p.id) && !p.postedToLinkedIn ? { ...p, status: "ready" } : p
-          )
+          prev.map((p) => selected.has(p.id) ? { ...p, status: "ready" } : p)
         );
         showFeedback(`${data.updated} post${data.updated !== 1 ? "s" : ""} scheduled`);
       } else if (action === "status" && extra && "status" in extra) {
         const newStatus = (extra as { status: string }).status;
         setPosts((prev) =>
           prev.map((p) =>
-            selected.has(p.id) && !p.postedToLinkedIn ? { ...p, status: newStatus } : p
+            selected.has(p.id) ? { ...p, status: newStatus } : p
           )
         );
         showFeedback(`${data.updated} post${data.updated !== 1 ? "s" : ""} updated`);
@@ -524,13 +318,16 @@ export default function PostsClient({
     setShowScheduleModal(false);
     bulkAction("schedule-time", { time: scheduleTime });
   }
+
   function handleBulkStatus(status: string) {
     bulkAction("status", { status });
   }
+
   function handleBulkDelete() {
     setShowDeleteConfirm(false);
     bulkAction("delete");
   }
+
   function handleBulkImageGen() {
     startImageGeneration(Array.from(selected));
     // The run is detached now, so it can no longer clear this for us.
@@ -552,593 +349,357 @@ export default function PostsClient({
   }
 
   const selectedCount = selected.size;
-  const filtersActive = search !== "" || filterType !== "all" || filterStatus !== "all";
-  function clearFilters() {
-    setSearch("");
-    setFilterType("all");
-    setFilterStatus("all");
-  }
-
-  /* ── Grouping. The week stays visible in every sort mode: it is the grain
-        the archive actually has. ────────────────────────────────────────── */
-  const groupByWeek = sortBy === "default";
-  const groups = useMemo(() => {
-    const out: { key: string; label: string; theme: string | null; rows: Decorated[] }[] = [];
-    const index = new Map<string, number>();
-    for (const p of sorted) {
-      const key = groupByWeek
-        ? `week-${p.planId}`
-        : p.scheduledAt
-          ? `month-${new Date(p.scheduledAt).toISOString().slice(0, 7)}`
-          : "month-none";
-      let i = index.get(key);
-      if (i === undefined) {
-        i = out.length;
-        index.set(key, i);
-        out.push({
-          key,
-          label: groupByWeek
-            ? `Week of ${p.weekLabelShort}`
-            : p.scheduledAt
-              ? new Date(p.scheduledAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })
-              : "Unscheduled",
-          theme: groupByWeek ? p.weekTheme : null,
-          rows: [],
-        });
-      }
-      out[i].rows.push(p);
-    }
-    return out;
-  }, [sorted, groupByWeek]);
-
-  const quotaCaption = !Number.isFinite(postsRemaining)
-    ? "Unlimited on this account"
-    : `${postsRemaining} of ${postsLimit} left this cycle`;
 
   return (
-    <div className="space-y-7">
-      {/* ═══ CHASSIS ════════════════════════════════════════════════════════ */}
-      <section className="animate-rise-in divide-y divide-line overflow-hidden rounded-panel border border-line bg-surface shadow-e1 motion-reduce:animate-none dark:shadow-none">
-        {/* State bands - one line each, never a card. Same grammar the Overview
-            chassis uses: border-l-[3px] + the tone's soft fill. */}
-        {imageGenerating && (
-          <div className="flex items-center gap-3 border-l-[3px] border-accent bg-accent-soft px-7 py-2.5">
-            <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-accent" />
-            <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
-              Images
-            </span>
-            <span className="min-w-0 flex-1 text-[12.5px] text-ink-muted">
-              {imageStatus ?? "Generating images…"}
-            </span>
-            {imagePipeline && (
-              <button
-                onClick={() => showPipeline("images")}
-                className="flex-shrink-0 text-[12px] font-semibold text-accent hover:underline"
-              >
-                View pipeline
-              </button>
-            )}
-            <button
-              onClick={cancelImageGeneration}
-              className="flex-shrink-0 text-[12px] font-semibold text-danger hover:underline"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-        {bulkError && (
-          <div className="flex items-start gap-3 border-l-[3px] border-danger bg-danger-soft px-7 py-2.5">
-            <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-danger" />
-            <span className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-muted">
-              {bulkError}
-            </span>
-          </div>
-        )}
-        {bulkSuccess && (
-          <div className="flex items-center gap-3 border-l-[3px] border-success bg-success-soft px-7 py-2.5">
-            <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 text-success" />
-            <span className="min-w-0 flex-1 text-[12.5px] text-ink-muted">{bulkSuccess}</span>
-          </div>
-        )}
-        {seededFromUrl && filterStatus !== "all" && (
-          <div className="flex items-center gap-3 border-l-[3px] border-accent bg-accent-soft px-7 py-2.5">
-            <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent">
-              Filtered
-            </span>
-            <span className="min-w-0 flex-1 text-[12.5px] text-ink-muted">
-              Showing {filterStatus} posts only, from the link you followed.
-            </span>
-            <button
-              onClick={() => setFilterStatus("all")}
-              className="flex-shrink-0 text-[12px] font-semibold text-accent hover:underline"
-            >
-              Show all
-            </button>
-          </div>
-        )}
-
-        {/* Header. Deliberately shorter than the Overview's: this page has no
-            greeting to carry, and a 180px decorated page title is exactly the
-            template smell being removed. Every value here is this account's. */}
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-7 px-7 py-6">
-          <div className="min-w-0">
-            <p className="tabular text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-              Library · {posts.length} posts · {weeks.length}{" "}
-              {weeks.length === 1 ? "week" : "weeks"}
-            </p>
-            <h1 className="mt-2 font-display text-[28px] font-bold leading-[1.1] tracking-[-0.03em] text-ink">
-              All posts
-            </h1>
-            <p className="mt-1.5 text-[13px] text-ink-muted">
-              {posts.length === 0
-                ? "Nothing written yet. Generate your first batch to start the archive."
-                : `${posts.length} posts across ${weeks.length} ${
-                    weeks.length === 1 ? "week" : "weeks"
-                  }, grouped by the week each batch was written for.`}
-            </p>
-
-            <div className="relative mt-4 max-w-[420px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-muted" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search titles and bodies…"
-                className="focus-ring h-10 w-full rounded-control border border-line bg-surface pl-9 pr-3 text-[13px] text-ink placeholder:text-ink-muted"
-              />
-            </div>
-            <p className="tabular mt-2 text-[11px] text-ink-muted">
-              Showing {sorted.length} of {posts.length}
-              {filtersActive && (
-                <button
-                  onClick={clearFilters}
-                  className="ml-2 font-semibold text-accent hover:underline"
-                >
-                  Clear filters
-                </button>
-              )}
-            </p>
-          </div>
-
-          <div className="flex w-[220px] flex-shrink-0 flex-col items-stretch self-start pt-5">
-            <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
-            <p className="tabular mt-2 text-right text-[11px] text-ink-muted">{quotaCaption}</p>
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+            <FileText className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+            All Posts
+          </h1>
+          <p className="text-slate-500 dark:text-slate-400 mt-1">{posts.length} posts generated</p>
         </div>
-
-        {/* Filters. Everything here is a visible, labelled control - the
-            previous version hid the status filter inside an instrument readout
-            and the type/sort controls inside a borderless toolbar, which read
-            as decoration rather than as things you can press. */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 px-7 py-4">
-          <div className="flex items-center gap-2">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Status
-            </span>
-            <div className="flex items-center rounded-control border border-line p-0.5">
-              {(["all", "draft", "ready", "published"] as const).map((k) => {
-                const active = filterStatus === k;
-                return (
-                  <button
-                    key={k}
-                    onClick={() => setFilterStatus(k)}
-                    aria-pressed={active}
-                    className={cn(
-                      "focus-ring flex items-center gap-1.5 rounded-[7px] px-3 py-1.5 text-[12px] font-semibold transition-colors",
-                      active
-                        ? "bg-accent text-accent-ink"
-                        : "text-ink-muted hover:bg-surface-sunken hover:text-ink"
-                    )}
-                  >
-                    {k !== "all" && (
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          active ? "bg-accent-ink" : STATE_DOT[k as OverviewStatus]
-                        )}
-                      />
-                    )}
-                    {k === "all" ? "All" : STATE_WORD[k as OverviewStatus]}
-                    <span className={cn("tabular", active ? "opacity-80" : "text-ink-muted")}>
-                      {counts[k]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <label className="flex items-center gap-2">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Type
-            </span>
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="focus-ring h-9 cursor-pointer rounded-control border border-line bg-surface pl-3 pr-8 text-[12.5px] font-medium text-ink"
-            >
-              <option value="all">All types</option>
-              {typeFacets.map(([t, n]) => (
-                <option key={t} value={t}>
-                  {typeLabel(t)} ({n})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex items-center gap-2">
-            <span className="text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Group
-            </span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-              className="focus-ring h-9 cursor-pointer rounded-control border border-line bg-surface pl-3 pr-8 text-[12.5px] font-medium text-ink"
-            >
-              <option value="default">By week written</option>
-              <option value="date-asc">By date, oldest first</option>
-              <option value="date-desc">By date, newest first</option>
-            </select>
-          </label>
-
-          <div className="flex-1" />
-
-          {atRisk > 0 && (
-            <Link
-              href={`/posts/${firstAtRisk}`}
-              className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-danger/30 bg-danger-soft px-3 text-[12.5px] font-semibold text-danger"
-            >
-              <AlertCircle className="h-3.5 w-3.5" />
-              {atRisk} need attention
-            </Link>
-          )}
-
-          <a
-            href="/api/content/export"
-            download
-            title="Export every post as CSV"
-            className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line px-3 text-[12.5px] font-semibold text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export CSV
-          </a>
-        </div>
-      </section>
-
-      {/* Selection bar. Sticky so it stays reachable 150 rows down, and every
-          bulk action is a real button - as buttons, which is what they were
-          and what they read as. */}
-      {(sorted.length > 0 || selectedCount > 0) && (
-        <div className="sticky top-16 z-20 flex min-h-[52px] flex-wrap items-center gap-3 rounded-control border border-line bg-surface px-4 py-2">
-          <button
-            onClick={toggleSelectAll}
-            className="focus-ring flex flex-shrink-0 items-center gap-2 rounded px-1 py-1 text-[12.5px] font-semibold text-ink-muted transition-colors hover:text-ink"
-          >
-            {allFilteredSelected ? (
-              <CheckSquare className="h-4 w-4 text-accent" />
-            ) : someFilteredSelected ? (
-              <MinusSquare className="h-4 w-4 text-accent" />
-            ) : (
-              <Square className="h-4 w-4" />
-            )}
-            {allFilteredSelected ? "Deselect all" : `Select all ${sorted.length}`}
-          </button>
-
-          {selectedCount > 0 ? (
-            <>
-              <span className="tabular flex-shrink-0 text-[12.5px] font-semibold text-accent">
-                {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
-              </span>
-              <div className="flex-1" />
-
-              <button
-                onClick={() => setShowScheduleModal(true)}
-                disabled={bulkLoading}
-                className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
-              >
-                <Calendar className="h-3.5 w-3.5 text-ink-muted" />
-                Set time
-              </button>
-
-              <button
-                onClick={handleBulkImageGen}
-                disabled={bulkLoading || imageGenerating}
-                className="focus-ring flex h-9 items-center gap-1.5 rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
-              >
-                {imageGenerating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-muted" />
-                ) : (
-                  <ImageIcon className="h-3.5 w-3.5 text-ink-muted" />
-                )}
-                {imageGenerating ? "Generating…" : "Generate images"}
-              </button>
-
-              <button
-                onClick={() => handleBulkStatus("draft")}
-                disabled={bulkLoading}
-                className="focus-ring flex h-9 items-center rounded-control border border-line bg-surface px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-surface-sunken disabled:opacity-50"
-              >
-                Mark draft
-              </button>
-
-              <button
-                onClick={() => handleBulkStatus("ready")}
-                disabled={bulkLoading}
-                className="focus-ring flex h-9 items-center gap-1.5 rounded-control bg-success px-3 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                {bulkLoading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <CheckCircle className="h-3.5 w-3.5" />
-                )}
-                Mark ready
-              </button>
-
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={bulkLoading}
-                className="focus-ring flex h-9 items-center gap-1.5 rounded-control bg-danger px-3 text-[12.5px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete
-              </button>
-
-              <button
-                onClick={clearSelection}
-                aria-label="Clear selection"
-                title="Clear selection"
-                className="focus-ring flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-control text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex-1" />
-              <span className="tabular text-[12px] text-ink-muted">
-                Select posts to schedule, generate images or publish them together
-              </span>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ═══ THE VOLUME ═════════════════════════════════════════════════════ */}
-      {sorted.length === 0 ? (
-        <div className="py-10">
-          <p className="text-[15px] text-ink">
-            {posts.length === 0 ? "Nothing filed yet." : "Nothing matches those filters."}
-          </p>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-ink-muted">
-            {posts.length === 0
-              ? "Your first run writes a batch against a brief built from your profile."
-              : "Widen the search, or clear the filters to see the whole archive again."}
-          </p>
-        </div>
-      ) : (
-        <div
-          className="animate-rise-in space-y-7 motion-reduce:animate-none"
-          style={{ animationDelay: "70ms" }}
-        >
-          {groups.map((g) => {
-            // The batch ledger: what the week was briefed for, versus what
-            // survived. Posts arrive five at a time against one plan, so this
-            // is the one tally that means something on this page.
-            const ready = g.rows.filter((r) => r.state === "ready").length;
-            const published = g.rows.filter((r) => r.state === "published").length;
-            const broken = g.rows.filter(
-              (r) => r.state === "failed" || r.state === "missed"
-            ).length;
-            return (
-              <section key={g.key} id={g.key} className="scroll-mt-[120px]">
-                <RuleHeader
-                  label={g.label}
-                  trailing={
-                    <span className="tabular flex items-center gap-2 text-[11px] text-ink-muted">
-                      <span>{g.rows.length} briefed</span>
-                      {published > 0 && <span className="text-success">{published} published</span>}
-                      {ready > 0 && <span className="text-accent">{ready} ready</span>}
-                      {broken > 0 && <span className="text-danger">{broken} at risk</span>}
-                    </span>
-                  }
-                />
-                {g.theme && (
-                  <p className="-mt-1 mb-3 text-[12px] leading-relaxed text-ink-muted">{g.theme}</p>
-                )}
-
-                <div>
-                  {g.rows.map((post, i) => {
-                    const isSelected = selected.has(post.id);
-                    const problem = post.state === "failed" || post.state === "missed";
-                    return (
-                      <div
-                        key={post.id}
-                        className={cn(
-                          "group relative",
-                          i > 0 && "border-t border-line-strong/70"
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            "-mx-3 grid grid-cols-[20px_72px_56px_minmax(0,1fr)_116px_32px] items-start gap-4 rounded-card px-3 py-3 transition-colors",
-                            isSelected
-                              ? "border-l-2 border-accent bg-accent/[0.06] pl-[10px]"
-                              : "hover:bg-surface",
-                            problem &&
-                              !isSelected &&
-                              cn(
-                                "border-l-2 pl-[10px]",
-                                post.state === "failed" ? "border-danger" : "border-warning"
-                              )
-                          )}
-                        >
-                          <button
-                            onClick={(e) => toggleSelect(post.id, e)}
-                            aria-label={isSelected ? "Deselect post" : "Select post"}
-                            className="focus-ring mt-0.5 flex-shrink-0 rounded text-ink-muted transition-colors hover:text-accent"
-                          >
-                            {isSelected ? (
-                              <CheckSquare className="h-4 w-4 text-accent" />
-                            ) : (
-                              <Square className="h-4 w-4" />
-                            )}
-                          </button>
-
-                          <InlineSchedule
-                            post={post}
-                            onUpdate={(id, scheduledAt) => {
-                              setPosts((prev) =>
-                                prev.map((p) => (p.id === id ? { ...p, scheduledAt } : p))
-                              );
-                            }}
-                          />
-
-                          <Link href={`/posts/${post.id}`} className="focus-ring rounded-card">
-                            <ArtMark post={post} />
-                          </Link>
-
-                          <Link href={`/posts/${post.id}`} className="focus-ring min-w-0 rounded">
-                            {/* Wraps in full - LAW 2. The row is variable
-                                height by design; 56px is a floor, not a size. */}
-                            <p className="text-[14px] font-semibold leading-snug text-ink">
-                              {post.title}
-                            </p>
-                            {post.postError ? (
-                              <p className="mt-1 text-[11px] leading-relaxed text-danger">
-                                {post.postError}
-                              </p>
-                            ) : (
-                              <p className="mt-1 text-[11px] text-ink-muted">
-                                {post.style || typeLabel(post.postType)}
-                                {!groupByWeek && (
-                                  <>
-                                    <span className="px-1.5 text-line-strong">·</span>
-                                    Week of {post.weekLabelShort}
-                                  </>
-                                )}
-                                {post.postedToLinkedIn && (
-                                  <>
-                                    <span className="px-1.5 text-line-strong">·</span>
-                                    <Linkedin className="mr-1 inline h-3 w-3 text-success" />
-                                    Posted
-                                  </>
-                                )}
-                              </p>
-                            )}
-                          </Link>
-
-                          <Stepper state={post.state} className="mt-0.5" />
-
-                          {!post.postedToLinkedIn && (
-                            <button
-                              onClick={(e) => handleDuplicate(post.id, e)}
-                              title="Duplicate post"
-                              aria-label="Duplicate post"
-                              className="focus-ring mt-0.5 rounded p-1 text-ink-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
-                            >
-                              <Copy className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="border-t border-line-strong pt-4 text-[11px] text-ink-muted">
-        <span className="tabular">
-          {posts.length} posts across {weeks.length} {weeks.length === 1 ? "week" : "weeks"}
-        </span>
-        <span className="px-2 text-line-strong">·</span>
-        <span>Export includes every post, not the current view</span>
-        <span className="px-2 text-line-strong">·</span>
-        <span>Ready posts publish themselves at their scheduled time</span>
+        {/* Generate without going back to the dashboard. */}
+        <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
       </div>
 
-      {/* ── Dialogs ───────────────────────────────────────────────────────── */}
+      {/* Filters */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search posts..."
+            className="w-full pl-9 pr-4 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+          />
+        </div>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+        >
+          <option value="all">All Types</option>
+          <option value="thought-leadership">Thought Leadership</option>
+          <option value="tips">Tips</option>
+          <option value="story">Story</option>
+          <option value="question">Question</option>
+          <option value="listicle">Listicle</option>
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+        >
+          <option value="all">All Status</option>
+          <option value="draft">Draft</option>
+          <option value="ready">Ready</option>
+          <option value="published">Published</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+          className="select-field pl-3 pr-10 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 bg-white dark:bg-white/[0.03] dark:text-gray-100"
+        >
+          <option value="default">Sort: Default</option>
+          <option value="date-asc">Date (Oldest first)</option>
+          <option value="date-desc">Date (Newest first)</option>
+        </select>
+        <a
+          href="/api/content/export"
+          download
+          className="flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-200 dark:border-white/10 rounded-lg hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors text-slate-600 dark:text-slate-300"
+          title="Export all posts as CSV"
+        >
+          <Download className="w-4 h-4" />
+          Export CSV
+        </a>
+      </div>
+
+      {/* Bulk action feedback */}
+      {(bulkError || bulkSuccess) && (
+        <div className={cn(
+          "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm",
+          bulkError
+            ? "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800"
+            : "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+        )}>
+          {bulkError ? <AlertCircle className="w-4 h-4 flex-shrink-0" /> : <CheckCircle className="w-4 h-4 flex-shrink-0" />}
+          {bulkError || bulkSuccess}
+        </div>
+      )}
+
+      {/* Image generation - shown independently of the selection, so it survives
+          clearing the selection and navigating away and back. */}
+      {imageGenerating && (
+        <div className="flex items-center gap-3 rounded-xl border border-purple-200 bg-purple-50 px-4 py-3 dark:border-purple-800 dark:bg-purple-900/20">
+          <Loader2 className="w-4 h-4 flex-shrink-0 animate-spin text-purple-600 dark:text-purple-400" />
+          <span className="flex-1 text-sm text-purple-700 dark:text-purple-300">
+            {imageStatus ?? "Generating images..."}
+          </span>
+          {imagePipeline && (
+            <button
+              onClick={() => showPipeline("images")}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-purple-300 px-3 py-1.5 text-sm text-purple-700 transition-colors hover:bg-purple-100/60 dark:border-purple-700 dark:text-purple-300 dark:hover:bg-purple-900/30"
+            >
+              View pipeline
+            </button>
+          )}
+          <button
+            onClick={cancelImageGeneration}
+            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+          >
+            <X className="w-3.5 h-3.5" />
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {selectedCount > 0 && (
+        <div className="flex items-center gap-3 bg-blue-600/5 dark:bg-blue-600/10 border border-blue-600/20 rounded-xl px-4 py-3 flex-wrap">
+          <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+            {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
+          </span>
+          <div className="flex-1" />
+
+          {/* Schedule */}
+          <button
+            onClick={() => setShowScheduleModal(true)}
+            disabled={bulkLoading}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 dark:border-white/10 rounded-lg hover:bg-white dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50 dark:text-slate-300"
+          >
+            <Calendar className="w-3.5 h-3.5 text-slate-600 dark:text-slate-400" />
+            Schedule
+          </button>
+
+          {/* Generate Images */}
+          <button
+            onClick={handleBulkImageGen}
+            disabled={bulkLoading || imageGenerating}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
+          >
+            {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+            {imageGenerating ? "Generating..." : "Generate Images"}
+          </button>
+
+          {/* Mark as Ready */}
+          <button
+            onClick={() => handleBulkStatus("ready")}
+            disabled={bulkLoading}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+          >
+            {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+            Mark Ready
+          </button>
+
+          {/* Mark as Draft */}
+          <button
+            onClick={() => handleBulkStatus("draft")}
+            disabled={bulkLoading}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-slate-300 dark:border-white/10 rounded-lg hover:bg-white dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50 dark:text-slate-300"
+          >
+            Mark Draft
+          </button>
+
+          {/* Delete */}
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={bulkLoading}
+            className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete
+          </button>
+
+          {/* Clear */}
+          <button
+            onClick={clearSelection}
+            className="flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Posts List */}
+      <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm overflow-hidden">
+        {/* Table header with select-all */}
+        {sorted.length > 0 && (
+          <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03]">
+            <button
+              onClick={toggleSelectAll}
+              className="flex-shrink-0 text-slate-400 hover:text-blue-600 transition-colors"
+              title={allFilteredSelected ? "Deselect all" : "Select all"}
+            >
+              {allFilteredSelected ? (
+                <CheckSquare className="w-4 h-4 text-blue-600" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+            </button>
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {allFilteredSelected ? "Deselect all" : `Select all ${sorted.length}`}
+            </span>
+          </div>
+        )}
+
+        {sorted.length === 0 ? (
+          <div className="py-16 text-center">
+            <FileText className="w-12 h-12 text-slate-200 dark:text-white/10 mx-auto mb-3" />
+            <p className="text-slate-500 dark:text-slate-400">No posts found.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50 dark:divide-white/10">
+            {sorted.map((post) => {
+              const isSelected = selected.has(post.id);
+              return (
+                <div key={post.id} className={cn("flex items-start gap-3 px-5 py-4 transition-colors", isSelected ? "bg-blue-50 dark:bg-blue-900/20" : "hover:bg-slate-50 dark:hover:bg-white/[0.06]")}>
+                  {/* Checkbox */}
+                  <button
+                    onClick={(e) => toggleSelect(post.id, e)}
+                    className="flex-shrink-0 mt-0.5 text-slate-300 dark:text-white/10 hover:text-blue-600 transition-colors"
+                  >
+                    {isSelected ? (
+                      <CheckSquare className="w-4 h-4 text-blue-600" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                  </button>
+
+                  {/* Post content - clicking navigates to editor */}
+                  <Link
+                    href={`/posts/${post.id}`}
+                    className="flex items-start gap-4 flex-1 min-w-0"
+                  >
+                    {post.imageUrl ? (
+                      <PostImage
+                        src={post.imageUrl}
+                        className="w-12 h-12 rounded-lg object-cover flex-shrink-0"
+                        iconClassName="w-5 h-5"
+                      />
+                    ) : (
+                      <div className={cn("w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0", getPostTypeColor(post.postType))}>
+                        <FileText className="w-5 h-5" />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-gray-100 truncate">{post.title}</p>
+                        {post.postedToLinkedIn && (
+                          <span className="flex-shrink-0 flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400">
+                            <Linkedin className="w-3 h-3" />
+                            Posted
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{post.body.slice(0, 100)}</p>
+                      <div className="flex items-center gap-2 mt-2 flex-wrap">
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
+                          {post.style || post.postType}
+                        </span>
+                        <span className={cn("text-xs px-2 py-0.5 rounded-full", getStatusColor(post.status))}>
+                          {post.status}
+                        </span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">{post.weekLabel}</span>
+                      </div>
+                      <InlineSchedule
+                        post={post}
+                        onUpdate={(id, scheduledAt) => {
+                          setPosts((prev) =>
+                            prev.map((p) => p.id === id ? { ...p, scheduledAt } : p)
+                          );
+                        }}
+                      />
+                    </div>
+                  </Link>
+                  {/* Duplicate button */}
+                  {!post.postedToLinkedIn && (
+                    <button
+                      onClick={(e) => handleDuplicate(post.id, e)}
+                      className="flex-shrink-0 mt-0.5 p-1.5 text-slate-300 dark:text-white/10 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      title="Duplicate post"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Schedule Modal - time only (each post keeps its own date) */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm space-y-5 rounded-panel border border-line bg-surface p-6 shadow-e3">
-            <div className="flex items-start justify-between">
-              <h3 className="font-display text-[17px] font-bold text-ink">
-                Set time for {selectedCount} post{selectedCount !== 1 ? "s" : ""}
-              </h3>
-              <button
-                onClick={() => setShowScheduleModal(false)}
-                aria-label="Close"
-                className="focus-ring rounded p-1 text-ink-muted hover:text-ink"
-              >
-                <X className="h-4 w-4" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100">Set Time for {selectedCount} Post{selectedCount !== 1 ? "s" : ""}</h3>
+              <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                <X className="w-5 h-5" />
               </button>
             </div>
-            <label className="block">
-              <span className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-[0.12em] text-ink-muted">
-                Posting time
-              </span>
-              <input
-                type="time"
-                value={scheduleTime}
-                onChange={(e) => setScheduleTime(e.target.value)}
-                className="focus-ring h-10 w-full rounded-control border border-line bg-surface px-3 text-[13px] text-ink"
-              />
-            </label>
-            <p className="text-[12px] leading-relaxed text-ink-muted">
-              Each post keeps its existing date &mdash; only the time changes. Posts with no date
-              are scheduled for tomorrow. All of them become Ready, which means the cron will
-              publish them.
-            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Posting Time</label>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 bg-white dark:bg-white/[0.06] dark:text-gray-100"
+                />
+              </div>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                Each post keeps its existing scheduled date. Only the posting time is updated.
+                Posts without a date will be scheduled for tomorrow at this time.
+                Status will be set to Ready.
+              </p>
+            </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowScheduleModal(false)}
-                className="focus-ring flex-1 rounded-control border border-line py-2.5 text-[13px] font-semibold text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+                className="flex-1 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkSchedule}
-                className="focus-ring flex-1 rounded-control bg-accent py-2.5 text-[13px] font-semibold text-accent-ink transition-colors hover:bg-accent-hover"
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium hover:opacity-90 transition-all"
               >
-                Apply time
+                Apply Time
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Delete Confirm Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm space-y-5 rounded-panel border border-line bg-surface p-6 shadow-e3">
-            <div className="flex items-start justify-between gap-3">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white dark:bg-white/[0.03] rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 bg-red-100 dark:bg-red-900/40 rounded-xl flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
               <div>
-                <h3 className="font-display text-[17px] font-bold text-ink">
-                  Delete {selectedCount} post{selectedCount !== 1 ? "s" : ""}?
-                </h3>
-                <p className="mt-1.5 text-[12.5px] leading-relaxed text-ink-muted">
-                  This cannot be undone. Posts already published to LinkedIn are not affected.
+                <h3 className="text-lg font-bold text-slate-900 dark:text-gray-100">Delete {selectedCount} post{selectedCount !== 1 ? "s" : ""}?</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  This cannot be undone. Already-published posts will not be affected.
                 </p>
               </div>
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                aria-label="Close"
-                className="focus-ring flex-shrink-0 rounded p-1 text-ink-muted hover:text-ink"
-              >
-                <X className="h-4 w-4" />
-              </button>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="focus-ring flex-1 rounded-control border border-line py-2.5 text-[13px] font-semibold text-ink-muted transition-colors hover:bg-surface-sunken hover:text-ink"
+                className="flex-1 py-2.5 border border-slate-200 dark:border-white/10 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleBulkDelete}
-                className="focus-ring flex-1 rounded-control bg-danger py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                className="flex-1 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors"
               >
                 Delete
               </button>

@@ -8,8 +8,6 @@ import { prisma } from "@/lib/prisma";
 import { replyCutoff } from "@/lib/support";
 import SubscriptionLock from "@/components/SubscriptionLock";
 import TrialEndingPopup from "@/components/TrialEndingPopup";
-import Topbar from "@/components/shell/Topbar";
-import CommandPalette from "@/components/shell/CommandPalette";
 import ProfileIncompletePopup from "@/components/ProfileIncompletePopup";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { ProfileGap } from "@/lib/profile-completeness";
@@ -104,25 +102,24 @@ export default async function DashboardLayout({ children }: { children: React.Re
       {/* id is how SubscriptionLock marks everything behind it inert */}
       <div
         id="app-shell"
-        className="flex h-screen bg-app text-ink antialiased"
+        className="flex h-screen bg-[#F6F8FB] text-slate-900 antialiased dark:bg-[#0A0E14] dark:text-slate-100"
       >
         <Sidebar
           user={session.user}
           supportUnread={supportUnread}
           profileCompletion={profileCompletion}
         />
-        <main className="flex flex-1 flex-col overflow-y-auto scroll-gutter-stable">
-          <Topbar supportUnread={supportUnread} />
+        <main className="flex-1 overflow-y-auto scroll-gutter-stable flex flex-col">
           {showTrialBanner && (
-            <div className="flex flex-shrink-0 items-center justify-between border-b border-warning/25 bg-warning-soft px-7 py-2.5">
-              <p className="text-sm text-warning">
+            <div className="bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/50 px-6 py-2.5 flex items-center justify-between flex-shrink-0">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
                 Your free trial ends in{" "}
                 <strong>{state.daysLeft} day{state.daysLeft !== 1 ? "s" : ""}</strong>.
                 Don&apos;t lose your content!
               </p>
               <Link
                 href="/subscribe"
-                className="ml-4 flex-shrink-0 text-sm font-semibold text-warning underline underline-offset-2 hover:opacity-80"
+                className="text-sm font-semibold text-amber-900 dark:text-amber-200 underline hover:text-amber-700 dark:hover:text-amber-100 ml-4 flex-shrink-0"
               >
                 Subscribe now
               </Link>
@@ -131,8 +128,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {/* max-w-7xl, matching the admin shell. The dashboard was capped a
               size narrower at 6xl, which left visible dead space either side on
               any normal laptop screen. */}
-          <div className="mx-auto w-full max-w-7xl flex-1 px-7 py-7">{children}</div>
-          <footer className="flex-shrink-0 border-t border-line px-7 py-3">
+          <div className="flex-1 max-w-7xl mx-auto w-full p-6">{children}</div>
+          <footer className="flex-shrink-0 border-t border-slate-200 dark:border-white/10 px-6 py-3">
             <nav className="flex justify-center gap-4">
               <Link href="/privacy" className="text-xs text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Privacy</Link>
               <Link href="/terms" className="text-xs text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Terms</Link>
@@ -142,9 +139,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </footer>
         </main>
       </div>
-
-      {/* Cmd/Ctrl+K from anywhere in the dashboard. */}
-      <CommandPalette />
 
       {/* Trial over, or subscription lapsed: nothing behind this is clickable. */}
       {state.locked && <SubscriptionLock reason={lockReason(state.status)} />}

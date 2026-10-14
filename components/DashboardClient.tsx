@@ -4,408 +4,423 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useGeneration } from "@/components/GenerationProvider";
 import StrategyConfirmDialog from "@/components/StrategyConfirmDialog";
-import { Sparkles, Loader2, Lock, XCircle, AlertTriangle, Target, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { ProfileGap } from "@/lib/profile-completeness";
-import type { Ask, ContinuityWeek, OverviewPost, Pillar, RunwayDay } from "@/lib/dashboard-overview";
-import RhythmStrip from "@/components/dashboard/RhythmStrip";
 import {
-  AttentionList,
-  OnDeck,
-  QueueList,
-  BriefBlock,
-  ContinuityBars,
-  Footnote,
-} from "@/components/dashboard/ledger";
+  Sparkles,
+  Calendar,
+  FileText,
+  Mail,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  ArrowRight,
+  Loader2,
+  Linkedin,
+  Info,
+  Lock,
+  RefreshCw,
+  XCircle,
+  ListChecks,
+} from "lucide-react";
+import { cn, formatDate, getPostTypeColor } from "@/lib/utils";
+import type { ProfileGap } from "@/lib/profile-completeness";
 
-/**
- * The Overview.
- *
- * TWO LAWS. Both are design properties, not preferences, and a change that
- * breaks either has started turning this back into the admin template it
- * replaced:
- *
- *   LAW 1 - ONE BORDER. Exactly one bordered container exists on this page: the
- *   chassis below. Nothing inside it gets a border, a background or a radius
- *   above 3px. Everything under it is typeset on bare `bg-app` and structured
- *   by hairlines and whitespace. Six bordered rectangles stacked vertically is
- *   precisely what read as generic last time.
- *
- *   LAW 2 - NOTHING IS SHOWN THEN HIDDEN. No `truncate`, no `line-clamp` and no
- *   "+N more" on the user's headline, a post title, a profile-gap hint or an
- *   error message. The single clamp on this page is the two-line ON DECK
- *   excerpt, which is labelled as an excerpt and carries a link to the rest.
- */
-
-interface Props {
-  user: {
-    name?: string | null;
-    headline?: string | null;
-    industry?: string | null;
-    positioning?: string | null;
-  };
-  dateline: string;
-  profileGaps: ProfileGap[];
-  asks: Ask[];
-  runway: { days: RunwayDay[]; ghostBeyond: string[] };
-  queue: OverviewPost[];
-  onDeck: { post: OverviewPost; excerpt: string; isUpcoming: boolean } | null;
-  brief:
-    | {
-        weekStartLabel: string;
-        weekStartIso: string;
-        weekTheme: string | null;
-        weekFocus: string | null;
-        pillars: Pillar[];
-      }
-    | null;
-  continuity: ContinuityWeek[];
-  stats: { totalPosts: number; readyPosts: number; draftPosts: number; publishedPosts: number };
-  quota: { remaining: number; limit: number; perBatch: number; resetIso: string | null };
-  armed: { count: number; entitled: boolean };
-  footnote: {
-    newsletter: { title: string; dateLabel: string } | null;
-    billing: string | null;
-    postingTime: string;
-  };
-  hasPlan: boolean;
-  isTrialExpired: boolean;
+interface Post {
+  id: string;
+  title: string;
+  postType: string;
+  style?: string | null;
+  scheduledAt: Date | null;
+  status: string;
+  weekNumber: number;
+  postedToLinkedIn: boolean;
 }
 
-const QUEUE_ROWS = 6;
+interface Props {
+  user: { name?: string | null; headline?: string | null; industry?: string | null; image?: string | null; positioning?: string | null; contentStyles?: string | null } | null;
+  recentPlan: { id: string; strategy: string; weekStart: Date } | null;
+  stats: { totalPosts: number; readyPosts: number; draftPosts: number; publishedPosts: number; newsletters: number };
+  upcomingPosts: Post[];
+  batchDates: string[]; // ISO dates the next batch will be scheduled on (server-computed)
+  postsRemaining: number; // posts remaining in billing cycle
+  postsLimit: number; // total posts allowed per cycle (30)
+  isTrialExpired: boolean; // whether user's trial has ended
+  postsPerBatch: number; // posts per generation (fixed POSTS_PER_BATCH, not schedule-derived)
+  cycleResetDate: string | null; // ISO date when post counter resets
+  /** Profile fields still missing; non-empty means generation is blocked. */
+  profileGaps: ProfileGap[];
+}
 
-export default function DashboardClient({
-  user,
-  dateline,
-  profileGaps,
-  asks,
-  runway,
-  queue,
-  onDeck,
-  brief,
-  continuity,
-  stats,
-  quota,
-  armed,
-  footnote,
-  hasPlan,
-  isTrialExpired,
-}: Props) {
-  const { generating, progress, error: generationError, startGeneration, cancelGeneration } =
-    useGeneration();
-
-  // Time-of-day greeting would mismatch between server and first client render.
+export default function DashboardClient({ user, recentPlan, stats, upcomingPosts, batchDates, postsRemaining, postsLimit, isTrialExpired, postsPerBatch, cycleResetDate, profileGaps }: Props) {
+  // The run itself lives in GenerationProvider, above every page, so navigating
+  // away doesn't kill it. This component only reads and controls it.
+  const {
+    generating,
+    progress,
+    error: generationError,
+    startGeneration,
+    cancelGeneration,
+    postPipeline,
+    showPipeline,
+  } = useGeneration();
+  // Avoid SSR/client hydration mismatch for time-of-day-dependent UI: render a
+  // stable value on the server + first client render, then the real one after mount.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const [showStrategyConfirm, setShowStrategyConfirm] = useState(false);
-  const [ghost, setGhost] = useState(false);
-  const [hoverId, setHoverId] = useState<string | null>(null);
 
-  const unlimited = !Number.isFinite(quota.remaining);
-  const used = unlimited ? 0 : Math.max(0, quota.limit - quota.remaining);
-  const limitReached = !unlimited && quota.remaining < quota.perBatch;
-  const blocked = profileGaps.length > 0;
+  const limitReached = postsRemaining < postsPerBatch;
 
+  // Current strategy's theme (for the confirm dialog). No Date here — keep render hydration-safe.
+  const strategyTheme = recentPlan
+    ? (() => {
+        try {
+          return (JSON.parse(recentPlan.strategy) as { weekTheme?: string }).weekTheme ?? null;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  // On "Generate": if there's already a strategy, ask the user whether to keep or change it.
   function onGenerateClick() {
-    if (limitReached || blocked || isTrialExpired) return;
-    if (hasPlan) setShowStrategyConfirm(true);
-    else startGeneration(false);
+    if (limitReached) return;
+    if (recentPlan) {
+      setShowStrategyConfirm(true);
+    } else {
+      startGeneration(false); // first time — nothing to confirm, build a strategy
+    }
   }
 
-  const greeting = !mounted
-    ? "Welcome back"
-    : (() => {
-        const h = new Date().getHours();
-        return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-      })();
-  const firstName = user?.name?.trim().split(/\s+/)[0] ?? "there";
+  function confirmStrategy(reuse: boolean) {
+    setShowStrategyConfirm(false);
+    startGeneration(reuse);
+  }
 
-  const atRisk = queue.filter((p) => p.state === "failed" || p.state === "missed").length;
-  const overdue = runway.days.length
-    ? queue.filter(
-        (p) => (p.state === "failed" || p.state === "missed") && p.dayKey < runway.days[0].key
-      ).length
-    : 0;
+  // The dates of the next batch, computed on the server with the same helper the
+  // generator uses - so this range is exactly what will be created, including days
+  // skipped because they already hold a post.
+  const batchStart = batchDates.length > 0 ? new Date(batchDates[0]) : null;
+  const batchEnd =
+    batchDates.length > 0 ? new Date(batchDates[batchDates.length - 1]) : null;
 
-  const onDeckId = onDeck?.post.id;
-  const queueRows = queue
-    .filter((p) => p.id !== onDeckId && p.state !== "published")
-    .sort((a, b) => {
-      // Anything broken is pinned above the merely scheduled.
-      const rank = (s: string) => (s === "failed" ? 0 : s === "missed" ? 1 : 2);
-      return rank(a.state) - rank(b.state) || a.iso.localeCompare(b.iso);
-    });
+  function formatShortDate(date: Date): string {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
 
-  const byline = [user?.positioning, user?.industry].filter(Boolean) as string[];
-
-  /* ── Generate button caption: one line that explains every state ───────── */
-  let caption: string;
-  if (blocked) caption = "Generation is paused";
-  else if (isTrialExpired) caption = "Your trial has ended";
-  else if (limitReached)
-    caption = quota.resetIso
-      ? `Resets ${new Date(quota.resetIso).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
-      : "Resets soon";
-  else if (generating) caption = progress.at(-1) ?? "Starting…";
-  else if (unlimited) caption = "Unlimited on this account";
-  else caption = `${quota.remaining} of ${quota.limit} left this cycle`;
+  const statCards = [
+    { label: "Total Posts", value: stats.totalPosts, icon: FileText, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
+    { label: "Ready to Post", value: stats.readyPosts, icon: CheckCircle, color: "text-green-600 dark:text-green-400", bg: "bg-green-50 dark:bg-green-900/30" },
+    { label: "Published", value: stats.publishedPosts, icon: Linkedin, color: "text-blue-600 dark:text-blue-400", bg: "bg-blue-50 dark:bg-blue-900/30" },
+    { label: "Drafts", value: stats.draftPosts, icon: AlertCircle, color: "text-orange-600 dark:text-orange-400", bg: "bg-orange-50 dark:bg-orange-900/30" },
+  ];
 
   return (
-    <div className="space-y-7">
-      {/* ═══ CHASSIS — the page's only bordered container ═══════════════════ */}
-      <section
-        data-ghost={ghost ? "on" : "off"}
-        className="group/chassis animate-rise-in divide-y divide-line overflow-hidden rounded-panel border border-line bg-surface shadow-e1 motion-reduce:animate-none dark:shadow-none"
-      >
-        {/* (a) State band — one line, never a card */}
-        {generationError && !generating && (
-          <div className="flex items-start gap-3 border-l-[3px] border-danger bg-danger-soft px-7 py-2.5">
-            <XCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-danger" />
-            <span className="mt-[1px] flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-danger">
-              Generation failed
-            </span>
-            <span className="min-w-0 flex-1 text-[12.5px] leading-relaxed text-ink-muted">
-              {generationError}
-            </span>
+    <div className="space-y-8">
+      {/* ── Profile completeness ───────────────────────────────────────────
+          This was a soft "tip" gated on `!headline || !industry`, which missed
+          the fields that actually matter - summary, skills and target audience
+          - and read as optional advice. It is now driven by the same
+          assessProfile() the generation preflight refuses on, so what it lists
+          is exactly what is blocking the Generate button, and it links to the
+          guided wizard rather than the Settings form. */}
+      {profileGaps.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl px-4 py-4">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+                Finish your profile to start generating
+              </p>
+              <p className="text-sm text-amber-800 dark:text-amber-300 mt-0.5">
+                Your posts are written from your profile. Without these, every post reads like it
+                could have been written for anybody - which is why we pause generation until they
+                are filled in.
+              </p>
+              <ul className="mt-2.5 space-y-1">
+                {profileGaps.map((g) => (
+                  <li key={g.key} className="text-xs text-amber-800/90 dark:text-amber-300/90">
+                    <span className="font-semibold">{g.label}:</span> {g.hint}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 flex items-center gap-4 flex-wrap">
+                <Link
+                  href="/onboarding"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-xl transition-colors"
+                >
+                  Finish setup
+                  <ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link
+                  href="/settings"
+                  className="text-xs font-medium text-amber-900 dark:text-amber-200 underline underline-offset-2 hover:text-amber-700 dark:hover:text-amber-100"
+                >
+                  Or edit in Settings
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h1 className="text-2xl font-bold font-display text-slate-900 dark:text-gray-100">
+            Good {mounted ? getTimeOfDay() : "day"}, {user?.name?.split(" ")[0] ?? "there"}!
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-1">
+            {user?.headline ?? "Ready to build your LinkedIn presence?"}
+          </p>
+        </div>
+
+        {/* Generate Button */}
+        <div className="flex flex-col items-end gap-2">
+          {isTrialExpired ? (
+            <Link
+              href="/subscribe"
+              className="flex items-center gap-2 bg-slate-300 dark:bg-white/[0.06] text-slate-600 dark:text-slate-400 px-5 py-2.5 rounded-xl font-medium hover:bg-slate-400 dark:hover:bg-white/[0.08] transition-colors"
+            >
+              <Lock className="w-4 h-4" />
+              Subscribe to Generate Posts
+            </Link>
+          ) : (
+          <button
+            onClick={onGenerateClick}
+            disabled={generating || limitReached}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-70 shadow-md shadow-blue-200 dark:shadow-blue-900/30"
+          >
+            {generating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            {limitReached ? "Post Limit Reached" : `Generate Next ${postsPerBatch} Posts`}
+          </button>
+          )}
+          {limitReached ? (
+            <div className="text-right">
+              <p className="text-xs text-red-500 dark:text-red-400">
+                {postsRemaining} of {postsLimit} posts remaining this cycle
+              </p>
+              {cycleResetDate && (
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  Resets {formatShortDate(new Date(cycleResetDate))}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="text-right">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {batchStart && batchEnd
+                  ? `${formatShortDate(batchStart)} - ${formatShortDate(batchEnd)}`
+                  : "No posting days selected"}
+              </p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">
+                {postsRemaining === Infinity ? "Unlimited posts remaining" : `${postsRemaining} of ${postsLimit} posts remaining`}
+                {cycleResetDate && postsRemaining !== Infinity && (
+                  <> · resets {formatShortDate(new Date(cycleResetDate))}</>
+                )}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Workflow Notice */}
+      <div className="flex items-start gap-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl px-4 py-3">
+        <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+        <div className="text-sm text-blue-800 dark:text-blue-300">
+          <p className="font-medium mb-1">How it works</p>
+          <p>
+            Your posts are created as drafts. For each post: review and edit the content, generate or upload an image, then mark as <span className="font-semibold">Ready to Publish</span>. Posts marked ready will auto-publish at their scheduled time.
+          </p>
+        </div>
+      </div>
+
+      {/* Generation Progress */}
+      {generating && progress.length > 0 && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <Loader2 className="w-5 h-5 text-blue-600 dark:text-blue-400 animate-spin" />
+            <h3 className="font-semibold text-blue-600 dark:text-blue-400 flex-1">
+              Generating your next {postsPerBatch} posts...
+            </h3>
+            {postPipeline && (
+              <button
+                onClick={() => showPipeline("posts")}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100/60 dark:hover:bg-blue-900/30 transition-colors"
+              >
+                <ListChecks className="w-4 h-4" />
+                View pipeline
+              </button>
+            )}
+            <button
+              onClick={cancelGeneration}
+              className="flex items-center gap-1.5 text-sm px-3 py-1.5 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+              Cancel
+            </button>
+          </div>
+          <div className="space-y-2">
+            {progress.map((msg, i) => (
+              <div key={i} className="flex items-center gap-2 text-sm text-blue-700 dark:text-blue-300">
+                <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                {msg}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Generation Error with Retry */}
+      {generationError && !generating && (
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-5">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-semibold text-red-800 dark:text-red-300 text-sm">Generation failed</h3>
+              <p className="text-sm text-red-600 dark:text-red-400 mt-1">{generationError}</p>
+            </div>
             <button
               onClick={onGenerateClick}
-              className="flex-shrink-0 text-[12px] font-semibold text-danger hover:underline"
+              className="flex items-center gap-1.5 text-sm px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium flex-shrink-0"
             >
+              <RefreshCw className="w-4 h-4" />
               Retry
             </button>
           </div>
-        )}
-        {blocked && !generationError && (
-          <div className="flex items-center gap-3 border-l-[3px] border-warning bg-warning-soft px-7 py-2.5">
-            <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-warning" />
-            <span className="flex-shrink-0 text-[10px] font-semibold uppercase tracking-[0.14em] text-warning">
-              Generation paused
-            </span>
-            <span className="min-w-0 flex-1 text-[12.5px] text-ink-muted">
-              {profileGaps.length} {profileGaps.length === 1 ? "input" : "inputs"} missing from your
-              profile
-            </span>
-            <a
-              href="#attention"
-              className="flex-shrink-0 text-[12px] font-semibold text-warning hover:underline"
-            >
-              What&apos;s needed ↓
-            </a>
-          </div>
-        )}
-
-        {/* (b) Header */}
-        <div className="relative grid grid-cols-[minmax(0,1fr)_auto] gap-7 px-7 py-6">
-          {/* A bezel behind the control column only — never a wash over the
-              text column, which is half of why the old hero read as a template. */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-2/5"
-            style={{
-              backgroundImage:
-                "repeating-linear-gradient(90deg, rgb(var(--line) / 0.5) 0 1px, transparent 1px 28px)",
-              maskImage: "linear-gradient(to left, #000, transparent)",
-              WebkitMaskImage: "linear-gradient(to left, #000, transparent)",
-            }}
-          />
-
-          <div className="relative min-w-0">
-            <p className="tabular text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-              {dateline}
-            </p>
-
-            {/* ONE line, ONE baseline, ONE size. The previous version stacked a
-                13px greeting over a 32px name: two cap heights, two optical
-                left edges and a dangling comma, which is what read as
-                misaligned. Collapsing it removes the problem rather than
-                nudging it. */}
-            <h1 className="mt-2.5 font-display text-[34px] font-bold leading-[1.08] tracking-[-0.03em] [text-wrap:balance]">
-              <span className="font-semibold text-ink-muted">{greeting}, </span>
-              <span className="text-ink">{firstName}.</span>
-            </h1>
-
-            {/* Never truncated. This is the field every post is written from, so
-                hiding half of it hides the thing the user most needs to check. */}
-            {user?.headline && (
-              <p className="mt-3 max-w-[62ch] text-[14.5px] leading-[1.55] text-ink-muted">
-                {user.headline}
-              </p>
-            )}
-
-            {byline.length > 0 && (
-              <p className="mt-3.5 text-[12px] text-ink-muted">
-                {byline.map((b, i) => (
-                  <span key={b}>
-                    {i > 0 && <span className="px-1.5 text-line-strong">·</span>}
-                    {b}
-                  </span>
-                ))}
-              </p>
-            )}
-          </div>
-
-          {/* The generate button and one caption. Nothing else. `self-start` with
-              a derived top padding, not `items-center`: centring would move the
-              button every time the headline wrapped to another line. */}
-          <div className="relative flex w-[220px] flex-shrink-0 flex-col items-stretch self-start pt-5">
-            {generating ? (
-              <div className="relative flex h-11 w-full items-center justify-center overflow-hidden rounded-control bg-accent-soft text-[14px] font-semibold text-accent">
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating…
-                <button
-                  onClick={cancelGeneration}
-                  aria-label="Cancel generation"
-                  className="absolute right-0 top-0 flex h-full w-9 items-center justify-center border-l border-accent/25 text-accent hover:bg-accent/10"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : blocked ? (
-              <Link
-                href="/onboarding"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-accent text-[14px] font-semibold text-accent-ink shadow-e1 hover:bg-accent-hover"
-              >
-                <Target className="h-4 w-4" />
-                Finish your profile
-              </Link>
-            ) : isTrialExpired ? (
-              <Link
-                href="/subscribe"
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-control bg-accent text-[14px] font-semibold text-accent-ink shadow-e1 hover:bg-accent-hover"
-              >
-                Subscribe to generate
-              </Link>
-            ) : (
-              <button
-                onClick={onGenerateClick}
-                onMouseEnter={() => setGhost(true)}
-                onMouseLeave={() => setGhost(false)}
-                onFocus={() => setGhost(true)}
-                onBlur={() => setGhost(false)}
-                disabled={limitReached}
-                className="focus-ring flex h-11 w-full items-center justify-center gap-2 rounded-control bg-accent text-[14px] font-semibold text-accent-ink shadow-e1 transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {limitReached ? <Lock className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
-                {limitReached ? "Cycle limit reached" : `Generate ${quota.perBatch} posts`}
-              </button>
-            )}
-            <p
-              className={cn(
-                "tabular mt-2 text-right text-[11px]",
-                blocked ? "text-warning" : "text-ink-muted"
-              )}
-            >
-              {caption}
-            </p>
-          </div>
         </div>
+      )}
 
-        {/* (c) Instruments */}
-        <div className="grid h-[150px] grid-cols-[164px_minmax(0,1fr)]">
-          <div className="flex flex-col justify-center gap-2 px-5 py-4">
-            <Gauge
-              label="Quota"
-              value={unlimited ? "∞" : String(used)}
-              suffix={unlimited ? "no cap" : `/ ${quota.limit}`}
-              pct={unlimited ? 100 : (used / quota.limit) * 100}
-              tone={unlimited ? "success" : limitReached ? "danger" : "accent"}
-              href="/posts"
-            />
-            <Gauge
-              label="Drafts"
-              value={String(stats.draftPosts)}
-              suffix="waiting"
-              pct={
-                (stats.draftPosts /
-                  Math.max(1, stats.draftPosts + stats.readyPosts + stats.publishedPosts)) *
-                100
-              }
-              tone="warning"
-              href="/posts?status=draft"
-            />
-            {/* Slot 3 is a REPLACEMENT, not an addition: an exception displaces a
-                nominal reading the way an instrument behaves, and the gauge
-                count never changes, so a failure cannot reflow the row. */}
-            {atRisk > 0 ? (
-              <Gauge
-                label="At risk"
-                value={String(atRisk)}
-                suffix="need you"
-                pct={100}
-                tone="danger"
-                href="#attention"
-              />
-            ) : (
-              <Gauge
-                label="Armed"
-                value={armed.entitled && armed.count > 0 ? String(armed.count) : "—"}
-                suffix={armed.entitled && armed.count > 0 ? "auto-publish" : "idle"}
-                pct={armed.entitled && armed.count > 0 ? 100 : 0}
-                tone="success"
-                href="/posts?status=ready"
-                title={
-                  armed.count === 0
-                    ? "Nothing is armed — mark a draft ready and the cron takes it from there."
-                    : undefined
-                }
-              />
-            )}
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((stat) => (
+          <div key={stat.label} className="bg-white dark:bg-white/[0.03] rounded-2xl p-5 border border-slate-100 dark:border-white/10 shadow-sm">
+            <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-3", stat.bg)}>
+              <stat.icon className={cn("w-5 h-5", stat.color)} />
+            </div>
+            <div className="text-2xl font-bold text-slate-900 dark:text-gray-100">{stat.value}</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{stat.label}</div>
           </div>
-
-          <div className="border-l border-line py-4 pl-6 pr-5">
-            <RhythmStrip
-              days={runway.days}
-              ghostBeyond={runway.ghostBeyond}
-              overdueCount={overdue}
-              onHoverPost={setHoverId}
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ═══ LEDGER — no borders, no fills, hairlines only ═══════════════════ */}
-      <div
-        className="grid animate-rise-in grid-cols-[minmax(0,1fr)_300px] motion-reduce:animate-none"
-        style={{ animationDelay: "70ms" }}
-      >
-        <div className="min-w-0 space-y-7 pr-7">
-          <AttentionList asks={asks} />
-          {onDeck ? (
-            <OnDeck post={onDeck.post} excerpt={onDeck.excerpt} isUpcoming={onDeck.isUpcoming} />
-          ) : (
-            stats.totalPosts === 0 && (
-              <section>
-                <p className="text-[15px] text-ink">Nothing filed yet.</p>
-                <p className="mt-1.5 max-w-prose text-[13px] leading-relaxed text-ink-muted">
-                  Your first run writes {quota.perBatch} posts against a brief built from your
-                  profile, and lands them on the slots marked above.
-                </p>
-              </section>
-            )
-          )}
-          <QueueList
-            posts={queueRows.slice(0, QUEUE_ROWS)}
-            total={queueRows.length}
-            hoverId={hoverId}
-          />
-        </div>
-
-        <aside className="space-y-7 border-l border-line-strong pl-7">
-          <BriefBlock brief={brief} />
-          <ContinuityBars weeks={continuity} />
-        </aside>
+        ))}
       </div>
 
-      <Footnote {...footnote} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Upcoming / Recent Posts */}
+        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
+            <h2 className="font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-slate-400" />
+              {mounted && upcomingPosts.length > 0 && upcomingPosts[0].scheduledAt && new Date(upcomingPosts[0].scheduledAt) > new Date()
+                ? "Upcoming Posts"
+                : "Recent Posts"}
+            </h2>
+            <Link href="/posts" className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1">
+              View all <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="p-2">
+            {upcomingPosts.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+                {recentPlan
+                  ? "No upcoming posts. Generate your next batch of content!"
+                  : "Generate your first batch of posts to get started."}
+              </div>
+            ) : (
+              upcomingPosts.map((post) => (
+                <Link
+                  key={post.id}
+                  href={`/posts/${post.id}`}
+                  className="flex items-start gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-white/[0.06] transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-900 dark:text-gray-100 truncate">{post.title}</p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className={cn("text-xs px-2 py-0.5 rounded-full border", getPostTypeColor(post.postType))}>
+                        {post.style || post.postType}
+                      </span>
+                      {post.scheduledAt && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{formatDate(post.scheduledAt)}</span>
+                      )}
+                      {post.postedToLinkedIn && (
+                        <span className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full">
+                          Posted
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-400 flex-shrink-0 mt-1" />
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
 
-      {showStrategyConfirm && (
+        {/* Content Strategy */}
+        <div className="bg-white dark:bg-white/[0.03] rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm">
+          <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-white/10">
+            <h2 className="font-semibold text-slate-900 dark:text-gray-100 flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-slate-400" />
+              Current Strategy
+            </h2>
+            {recentPlan && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                Starting{" "}
+                {new Date(recentPlan.weekStart).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+            )}
+          </div>
+          <div className="p-5 space-y-4">
+            {/* Your selected setup - always shown so the user can see their own positioning
+                and content styles are captured and driving the plan. */}
+            <UserContentSetup positioning={user?.positioning} contentStyles={user?.contentStyles} />
+            {recentPlan ? (
+              <StrategyPillars strategy={recentPlan.strategy} />
+            ) : (
+              <div className="py-8 text-center">
+                <Sparkles className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">
+                  Click &quot;Generate Next {postsPerBatch} Posts&quot; above to create your personalized strategy and content
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-3 gap-4">
+        {[
+          { href: "/calendar", icon: Calendar, label: "Content Calendar", color: "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" },
+          { href: "/newsletter", icon: Mail, label: "Newsletter Planner", color: "bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400" },
+          { href: "/settings", icon: FileText, label: "Update Profile", color: "bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400" },
+        ].map((a) => (
+          <Link
+            key={a.href}
+            href={a.href}
+            className="flex items-center gap-3 p-4 rounded-2xl border border-slate-100 dark:border-white/10 shadow-sm bg-white dark:bg-white/[0.03] hover:shadow-md transition-shadow"
+          >
+            <div className={cn("w-9 h-9 rounded-xl flex items-center justify-center", a.color)}>
+              <a.icon className="w-5 h-5" />
+            </div>
+            <span className="text-sm font-medium text-slate-900 dark:text-gray-100 hidden sm:block">{a.label}</span>
+            <ArrowRight className="w-4 h-4 text-slate-400 ml-auto" />
+          </Link>
+        ))}
+      </div>
+
+      {/* Strategy confirmation dialog — shown when a strategy already exists */}
+      {showStrategyConfirm && recentPlan && (
         <StrategyConfirmDialog
-          strategyTheme={brief?.weekTheme ?? null}
-          weekStart={brief?.weekStartIso ?? new Date().toISOString()}
-          onConfirm={(reuse) => {
-            setShowStrategyConfirm(false);
-            startGeneration(reuse);
-          }}
+          strategyTheme={strategyTheme}
+          weekStart={recentPlan.weekStart}
+          onConfirm={confirmStrategy}
           onClose={() => setShowStrategyConfirm(false)}
         />
       )}
@@ -413,49 +428,149 @@ export default function DashboardClient({
   );
 }
 
-/* ── Gauge ─────────────────────────────────────────────────────────────────── */
+// Turns an internal post-type key (e.g. "thought-leadership") into a readable label.
+function humanPostType(type: string): string {
+  return String(type)
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
-function Gauge({
-  label,
-  value,
-  suffix,
-  pct,
-  tone,
-  href,
-  title,
-}: {
-  label: string;
-  value: string;
-  suffix: string;
-  pct: number;
-  tone: "accent" | "warning" | "success" | "danger";
-  href: string;
-  title?: string;
-}) {
-  const fill = {
-    accent: "bg-accent",
-    warning: "bg-warning",
-    success: "bg-success",
-    danger: "bg-danger",
-  }[tone];
+// Shows the user their own selected positioning + content styles, so they can see
+// their onboarding choices are captured and actually driving the plan.
+function UserContentSetup({ positioning, contentStyles }: { positioning?: string | null; contentStyles?: string | null }) {
+  let styles: string[] = [];
+  try {
+    const parsed = contentStyles ? JSON.parse(contentStyles) : [];
+    if (Array.isArray(parsed)) styles = parsed.map(String);
+  } catch {
+    styles = [];
+  }
+  if (!positioning && styles.length === 0) return null;
 
   return (
-    <Link href={href} title={title} className="focus-ring block rounded-[3px]">
-      <p className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-ink-muted">
-        {label}
-      </p>
-      <p className="mt-0.5 flex items-baseline gap-1">
-        <span className="tabular font-display text-[17px] font-bold tracking-[-0.02em] text-ink">
-          {value}
-        </span>
-        <span className="text-[12px] text-ink-muted">{suffix}</span>
-      </p>
-      <span className="mt-1.5 block h-[2px] w-full overflow-hidden bg-line-strong/50">
-        <span
-          className={cn("block h-full transition-[width] duration-500", fill)}
-          style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
-        />
-      </span>
-    </Link>
+    <div className="rounded-xl border border-slate-100 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.04] px-3 py-2.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Your content setup</p>
+        <Link href="/settings" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">Edit</Link>
+      </div>
+      {positioning && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+          Positioning: <span className="font-medium text-slate-700 dark:text-slate-300">{positioning}</span>
+        </p>
+      )}
+      {styles.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-1.5">
+          {styles.map((s) => (
+            <span
+              key={s}
+              className="text-xs px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-500/10"
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
   );
+}
+
+function StrategyPillars({ strategy }: { strategy: string }) {
+  try {
+    const parsed = JSON.parse(strategy) as {
+      pillars?: Array<{ name: string; description: string; percentage: number }>;
+      weekTheme?: string;
+      weekFocus?: string;
+      weeklyGoal?: string;
+      tone?: { voice?: string; style?: string; avoid?: string[] };
+      postMix?: Record<string, number>;
+      callToAction?: string;
+      audience?: { primaryAudience?: string };
+    };
+    const pillars = parsed.pillars ?? [];
+    const postMixEntries = parsed.postMix
+      ? Object.entries(parsed.postMix).filter(([, v]) => typeof v === "number")
+      : [];
+    const toneLine = [parsed.tone?.voice, parsed.tone?.style].filter(Boolean).join(" — ");
+
+    return (
+      <div className="space-y-3">
+        {parsed.weekTheme && (
+          <div className="bg-blue-50 dark:bg-blue-900/30 px-3 py-2 rounded-lg">
+            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">{parsed.weekTheme}</p>
+            {parsed.weekFocus && (
+              <p className="text-xs text-blue-600 dark:text-blue-300 mt-0.5">{parsed.weekFocus}</p>
+            )}
+          </div>
+        )}
+
+        {/* Voice & tone actually steering the writing this cycle */}
+        {toneLine && (
+          <div>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-0.5">Voice &amp; tone</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{toneLine}</p>
+          </div>
+        )}
+
+        {/* Post mix - which content types this cycle leans on (from the user's styles) */}
+        {postMixEntries.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1.5">Post mix</p>
+            <div className="flex flex-wrap gap-1.5">
+              {postMixEntries.map(([type, pct]) => (
+                <span
+                  key={type}
+                  className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-white/[0.06] text-slate-600 dark:text-slate-300"
+                >
+                  {humanPostType(type)} {pct}%
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {pillars.length > 0 && (
+          <div className="space-y-3 pt-1">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Content pillars</p>
+            {pillars.map((p, i) => (
+              <div key={i}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{p.name}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{p.percentage}%</span>
+                </div>
+                <div className="h-2 bg-slate-100 dark:bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 hover:bg-blue-700 rounded-full"
+                    style={{ width: `${p.percentage}%` }}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{p.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {parsed.weeklyGoal && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-white/[0.06] px-3 py-2 rounded-lg mt-2">
+            Goal: {parsed.weeklyGoal}
+          </p>
+        )}
+        {parsed.callToAction && (
+          <p className="text-xs text-slate-500 dark:text-slate-400 px-3">
+            <span className="font-medium text-slate-600 dark:text-slate-300">CTA:</span> {parsed.callToAction}
+          </p>
+        )}
+      </div>
+    );
+  } catch {
+    return <p className="text-sm text-slate-500 dark:text-slate-400">Strategy data unavailable.</p>;
+  }
+}
+
+function getTimeOfDay(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
 }

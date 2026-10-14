@@ -3,14 +3,9 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import PostsClient from "@/components/PostsClient";
 import { format } from "date-fns";
-import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
-import { parseStrategy } from "@/lib/dashboard-overview";
+import { postsRemainingInCycle } from "@/lib/post-quota";
 
-export default async function PostsPage({
-  searchParams,
-}: {
-  searchParams?: { status?: string };
-}) {
+export default async function PostsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) return null;
 
@@ -32,22 +27,12 @@ export default async function PostsPage({
     }),
   ]);
 
-  // Each post carries its plan's identity, so the list can group by the week it
-  // was briefed for and show that week's theme - the archive's real grain is the
-  // batch, not the row. parseStrategy is server-side, so no JSON.parse reaches
-  // the client.
-  const allPosts = plans.flatMap((p) => {
-    const theme = parseStrategy(p.strategy).weekTheme;
-    const weekStartIso = new Date(p.weekStart).toISOString();
-    return p.posts.map((post) => ({
+  const allPosts = plans.flatMap((p) =>
+    p.posts.map((post) => ({
       ...post,
       weekLabel: `Posts from ${format(new Date(p.weekStart), "MMM d, yyyy")}`,
-      planId: p.id,
-      weekStartIso,
-      weekLabelShort: format(new Date(p.weekStart), "d MMM"),
-      weekTheme: theme,
-    }));
-  });
+    }))
+  );
 
   // plans is sorted weekStart desc, so the first is the current strategy.
   const recentPlan = plans[0]
@@ -59,8 +44,6 @@ export default async function PostsPage({
       posts={allPosts}
       recentPlan={recentPlan}
       postsRemaining={postsRemainingInCycle(user?.role, subscription)}
-      postsLimit={POST_LIMIT_PER_CYCLE}
-      initialStatus={searchParams?.status ?? null}
     />
   );
 }
