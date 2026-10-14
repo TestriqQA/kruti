@@ -67,10 +67,12 @@ export default function Sidebar({ user, supportUnread = 0, profileCompletion = 1
   return (
     <aside className="flex w-[288px] flex-shrink-0 flex-col border-r border-edge bg-card">
       {/* Logo */}
-      <div className="flex h-20 flex-shrink-0 items-center justify-center border-b border-edge-soft px-5">
+      <div className="flex h-28 flex-shrink-0 items-center justify-center border-b border-edge-soft px-4">
         <Link href="/dashboard" className="ring-focus flex items-center rounded-control">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Kruti.io" className="h-[52px] w-auto" />
+          {/* Width-driven so the mark scales with the sidebar rather than being
+              pinned to a height. */}
+          <img src="/logo.png" alt="Kruti.io" className="h-auto w-[200px]" />
         </Link>
       </div>
 
