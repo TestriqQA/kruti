@@ -11,6 +11,7 @@ import {
   Eye,
 } from "lucide-react";
 import { cn, getPostTypeColor } from "@/lib/utils";
+import { StatCard } from "@/components/dashboard/bits";
 
 interface EngagementPost {
   id: string;
@@ -63,11 +64,13 @@ const TYPE_LABELS: Record<string, string> = {
   listicle: "Listicle / Steps",
 };
 
+/** One hue, light to dark - the rule for magnitude. A second green scale here
+    competed with the status colours used for published/failed everywhere else. */
 function heatmapColor(count: number): string {
   if (count === 0) return "bg-card-muted";
-  if (count === 1) return "bg-green-200 dark:bg-green-900/60";
-  if (count === 2) return "bg-green-400 dark:bg-green-700";
-  return "bg-green-600 dark:bg-green-500";
+  if (count === 1) return "bg-brand/25";
+  if (count === 2) return "bg-brand/55";
+  return "bg-brand";
 }
 
 export default function AnalyticsClient({
@@ -85,46 +88,62 @@ export default function AnalyticsClient({
   const totalByType = Object.values(postsByType).reduce((a, b) => a + b, 0) || 1;
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold font-display text-text">
+      <div className="pt-1">
+        <h1 className="font-display text-[34px] font-bold leading-[1.1] tracking-[-0.03em] text-text">
           Content Analytics
         </h1>
-        <p className="text-sm text-text-2 mt-1">
-          Track your content production and publishing performance
+        <p className="mt-2 max-w-3xl text-[15px] leading-relaxed text-text-2">
+          How much you are writing, and how reliably it reaches LinkedIn. Everything here is
+          measured from your own posts.
         </p>
       </div>
 
-      {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: "Total Posts", value: stats.totalPosts, icon: FileText, color: "text-brand", bg: "bg-brand-tint" },
-          { label: "This Week", value: stats.postsThisWeek, icon: TrendingUp, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
-          { label: "LinkedIn Published", value: stats.linkedinPublished, icon: Linkedin, color: "text-brand", bg: "bg-sky-50 dark:bg-sky-900/30" },
-          { label: "Avg/Week", value: stats.avgPostsPerWeek, icon: BarChart3, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-900/30" },
-        ].map(({ label, value, icon: Icon, color, bg }) => (
-          <div
-            key={label}
-            className="card p-5"
-          >
-            <div className="flex items-center gap-3">
-              <div className={cn("w-10 h-10 rounded-control flex items-center justify-center", bg)}>
-                <Icon className={cn("w-5 h-5", color)} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-text">{value}</p>
-                <p className="text-xs text-text-2">{label}</p>
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Readings. Each card carries a line only it can say. */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <StatCard
+          label="Total posts"
+          value={stats.totalPosts}
+          note="written all time"
+          icon={FileText}
+          tone="brand"
+          href="/posts"
+        />
+        <StatCard
+          label="This week"
+          value={stats.postsThisWeek}
+          note="written since Monday"
+          icon={TrendingUp}
+          tone="ok"
+          href="/posts"
+        />
+        <StatCard
+          label="Published"
+          value={stats.linkedinPublished}
+          note={
+            stats.linkedinErrors > 0
+              ? `${stats.linkedinErrors} failed to send`
+              : "every attempt succeeded"
+          }
+          icon={Linkedin}
+          tone="violet"
+          href="/posts"
+        />
+        <StatCard
+          label="Weekly average"
+          value={stats.avgPostsPerWeek}
+          note="over the last 8 weeks"
+          icon={BarChart3}
+          tone="warn"
+          href="/calendar"
+        />
       </div>
 
       {/* LinkedIn Success Rate */}
       {(stats.linkedinPublished > 0 || stats.linkedinErrors > 0) && (
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-text mb-3">
+        <div className="card p-6">
+          <h3 className="mb-3 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
             LinkedIn Publishing Success Rate
           </h3>
           <div className="flex items-center gap-4">
@@ -147,8 +166,8 @@ export default function AnalyticsClient({
       {/* Funnel + Post Types - 2 column grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Publishing Funnel */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-text mb-4">
+        <div className="card p-6">
+          <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
             Publishing Funnel
           </h3>
           <div className="space-y-4">
@@ -178,8 +197,8 @@ export default function AnalyticsClient({
         </div>
 
         {/* Post Type Distribution */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-text mb-4">
+        <div className="card p-6">
+          <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
             Post Type Distribution
           </h3>
           <div className="space-y-4">
@@ -215,8 +234,8 @@ export default function AnalyticsClient({
       </div>
 
       {/* Weekly Activity Chart */}
-      <div className="card p-5">
-        <h3 className="text-sm font-semibold text-text mb-4">
+      <div className="card p-6">
+        <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
           Weekly Activity
         </h3>
         {hasAnyWeeklyData ? (
@@ -277,8 +296,8 @@ export default function AnalyticsClient({
       </div>
 
       {/* Calendar Heatmap */}
-      <div className="card p-5">
-        <h3 className="text-sm font-semibold text-text mb-4">
+      <div className="card p-6">
+        <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
           Posting Activity (Last 90 Days)
         </h3>
         <div className="overflow-x-auto pb-1">
@@ -320,7 +339,7 @@ export default function AnalyticsClient({
               { label: "Shares", value: engagement.totals.shares, icon: Share2, color: "text-ok", bg: "bg-ok-tint" },
               { label: "Impressions", value: engagement.totals.impressions, icon: Eye, color: "text-purple-600 dark:text-purple-400", bg: "bg-purple-50 dark:bg-purple-900/30" },
             ].map(({ label, value, icon: Icon, color, bg }) => (
-              <div key={label} className="card p-5">
+              <div key={label} className="card p-6">
                 <div className="flex items-center gap-3">
                   <div className={cn("w-10 h-10 rounded-control flex items-center justify-center", bg)}>
                     <Icon className={cn("w-5 h-5", color)} />
@@ -338,8 +357,8 @@ export default function AnalyticsClient({
 
           {/* Performance by Post Type */}
           {engagement.byType && engagement.byType.length > 0 && (
-            <div className="card p-5">
-              <h3 className="text-sm font-semibold text-text mb-4">
+            <div className="card p-6">
+              <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
                 Performance by Post Type
               </h3>
               <div className="space-y-3">
@@ -381,8 +400,8 @@ export default function AnalyticsClient({
 
           {/* Top Posts by Engagement */}
           {engagement.byPost.length > 0 && (
-            <div className="card p-5">
-              <h3 className="text-sm font-semibold text-text mb-4">
+            <div className="card p-6">
+              <h3 className="mb-4 font-display text-[16px] font-bold tracking-[-0.02em] text-text">
                 Top Posts by Engagement
               </h3>
               <div className="space-y-3">
