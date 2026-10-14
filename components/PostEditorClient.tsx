@@ -43,7 +43,11 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
-import { IMAGE_CATEGORY_GROUPS, DEFAULT_IMAGE_CATEGORY, getImageCategory } from "@/lib/image-categories";
+// The image-style picker was removed from this page. The category still
+// lives on Post.imageStyle, is chosen by the model from the post content,
+// and is read server-side by /api/generate/image - which is why nothing
+// here needs it any more. Restoring the control means restoring the select
+// below "Post image", the handleImageStyleChange PATCH, and these imports.
 
 interface Post {
   id: string;
@@ -211,7 +215,6 @@ export default function PostEditorClient({
   const [generatingCarousel, setGeneratingCarousel] = useState(false);
   const [carouselProgress, setCarouselProgress] = useState<CarouselProgress | null>(null);
   const [cropping, setCropping] = useState(false);
-  const [imageStyle, setImageStyle] = useState<string>(post.imageStyle ?? DEFAULT_IMAGE_CATEGORY);
   const [documentUrl, setDocumentUrl] = useState<string | null>(post.documentUrl);
   const [documentName, setDocumentName] = useState<string | null>(post.documentName);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -406,19 +409,6 @@ export default function PostEditorClient({
       router.refresh();
     } catch {
       toast("Couldn't save that selection", "error");
-    }
-  }
-
-  async function handleImageStyleChange(next: string) {
-    setImageStyle(next);
-    try {
-      await fetch(`/api/content/${post.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageStyle: next }),
-      });
-    } catch {
-      toast("Couldn't save the image style", "error");
     }
   }
 
@@ -1558,33 +1548,6 @@ export default function PostEditorClient({
                 </div>
               )}
             </div>
-            {!isPublished && (
-              <div className="px-4 pt-4 pb-3 border-b border-edge-soft">
-                <label className="block text-xs font-medium text-text-2 mb-1.5">
-                  Image style
-                </label>
-                <select
-                  value={imageStyle}
-                  onChange={(e) => handleImageStyleChange(e.target.value)}
-                  className="select-field w-full text-sm rounded-control border border-edge bg-card text-text pl-2.5 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-brand/25"
-                >
-                  {IMAGE_CATEGORY_GROUPS.map((g) => (
-                    <optgroup key={g.group} label={g.group}>
-                      {g.items.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {getImageCategory(imageStyle).hint && (
-                  <p className="text-[10px] text-warn mt-1">
-                    Best made as a carousel - use the Carousel button below.
-                  </p>
-                )}
-              </div>
-            )}
             <div className="p-4">
               {documentUrl ? (
                 <div className="rounded-control border border-edge p-4 flex items-center gap-3 bg-card-muted dark:bg-white/[0.04]">
