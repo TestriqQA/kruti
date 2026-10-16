@@ -122,8 +122,8 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // JSON turns every newline in the prompt into a literal 
-, and a prompt
+  // JSON turns every newline in the prompt into a literal backslash-n, and
+  // a prompt
   // pasted with those in it is not the prompt this app sends. ?format=text
   // hands back something that can actually be copied.
   if (req.nextUrl.searchParams.get("format") === "text") {
@@ -138,14 +138,9 @@ export async function GET(req: NextRequest) {
             `# compare against: ${p.currentImageUrl ?? "(no image yet)"}`,
             "",
             p.prompt,
-          ].join("
-")
+          ].join("\n")
       )
-      .join("
-
-" + "=".repeat(70) + "
-
-");
+      .join("\n\n" + "=".repeat(70) + "\n\n");
     return new NextResponse(body, {
       status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
