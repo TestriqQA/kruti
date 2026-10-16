@@ -5,6 +5,11 @@ import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
 import { resolveTheme } from "@/lib/image-themes";
 import {
+  brandLogosEnabled,
+  fetchBrandLogos,
+  compositeLogoStrip,
+} from "@/lib/brand-logos";
+import {
   generateRecraftImageBuffer,
   getLastRecraftError,
   RECRAFT_MODELS,
@@ -503,6 +508,8 @@ export function buildArtImagePrompt(opts: {
   subject?: string;
   /** Real products, tools or platforms the post itself names. */
   brands?: string[];
+  /** Real marks are being composited, so draw none. */
+  suppressBrandMarks?: boolean;
   styleDirection: string;
   styleName: string;
   textLoad: "low" | "medium" | "high";
@@ -583,7 +590,11 @@ ${textBlock}
 
 OBJECTS: build the scene from real, tangible, dimensional things - actual devices, actual tools, actual surfaces, with weight, material and contact shadows - not a sprinkle of flat generic symbols. Where an idea needs an emblem, prefer a believable physical object over a pictogram: a real stopwatch rather than a clock glyph, a real stack of servers rather than a database icon. Objects should look like they could be photographed or held.
 ${
-    brands.length > 0
+    opts.suppressBrandMarks
+      ? `REAL PRODUCTS: this post names ${brands.join(
+          ", "
+        )}, and their real marks are being added to the finished image separately. Draw NO logo, wordmark, brand glyph or company name anywhere - not on a screen, a box, a badge or a sign. Show the products as plain unbranded objects. A drawn mark here would sit next to the real one and only look broken by comparison. RESERVED FOOT: keep the bottom 15% of the frame as clean, uncluttered background - no text, no chips, no objects, no focal detail. The real marks are laid into that band, and anything drawn there will be covered.`
+      : brands.length > 0
       ? `REAL PRODUCTS: this post names ${brands.join(
           ", "
         )}. Show them as their genuine, instantly recognisable real-world marks and products, in their true official colours and correct proportions - not invented substitutes, not recoloured to match the palette, not distorted. If a mark cannot be drawn cleanly and accurately, show the product itself or leave it out entirely rather than shipping a mangled logo. Add no brand beyond these.`
@@ -632,6 +643,10 @@ export async function generateAndStoreArtImage(
   const theme = resolveTheme(brief.themeId, postId);
   const layout = resolvePageLayout(brief.layout, postId);
 
+  // Real marks are composited below, so the model must not attempt its own.
+  // Both halves read this one value - they cannot disagree.
+  const useRealLogos = brandLogosEnabled() && (brief.brands?.length ?? 0) > 0;
+
   const prompt = buildArtImagePrompt({
     scene: brief.scene || `A clear, concrete scene representing: ${brief.headline ?? category.label}`,
     headline: brief.headline ?? "",
@@ -640,7 +655,11 @@ export async function generateAndStoreArtImage(
     labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
     statLine: brief.statLine,
     subhead: brief.subhead,
-    chips: brief.chips,
+    // Asking the model to keep the foot clear does not hold - tested, it put
+    // its chip row there anyway and the bar sliced it in half. The chips are
+    // the only thing it reliably places down there, so when the bar is coming
+    // they are simply not offered.
+    chips: useRealLogos ? [] : brief.chips,
     layoutDirection: layout.direction,
     subject: brief.subject,
     brands: brief.brands,
@@ -649,6 +668,7 @@ export async function generateAndStoreArtImage(
     textLoad: style.textLoad,
     palette: { phrase: theme.palettePhrase, mode: theme.mode },
     formatLabel: category.label,
+    suppressBrandMarks: useRealLogos,
   });
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
@@ -663,10 +683,27 @@ export async function generateAndStoreArtImage(
   const result = await generateImageBuffer(prompt, size, { style: "digital_illustration" });
   if (!result) return null;
 
-  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
-  const blob = await put(`generated/${filename}`, result.buffer, {
+  // Real marks go on after the model is done. The prompt above has already
+  // told it to draw none, so there is nothing here to collide with.
+  let buffer = result.buffer;
+  let ext = result.ext;
+  let contentType = result.contentType;
+  if (useRealLogos) {
+    const logos = await fetchBrandLogos(brief.brands ?? []);
+    if (logos.length > 0) {
+      const composited = await compositeLogoStrip(buffer, logos);
+      if (composited !== buffer) {
+        buffer = composited;
+        ext = "jpg";
+        contentType = "image/jpeg";
+      }
+    }
+  }
+
+  const filename = `post-${postId}-${Date.now()}.${ext}`;
+  const blob = await put(`generated/${filename}`, buffer, {
     access: "public",
-    contentType: result.contentType,
+    contentType,
   });
   console.log(`[ArtImage] stored:`, blob.url);
   return blob.url;
