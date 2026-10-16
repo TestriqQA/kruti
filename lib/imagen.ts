@@ -26,7 +26,29 @@ function getAI(): GoogleGenAI {
  * preview/GA split); if it is unavailable, generation returns no image rather
  * than silently degrading to a different model.
  */
-const IMAGE_MODELS = ["gemini-3.1-flash-image"];
+/**
+ * The Gemini image models this app can call, by the short name IMAGE_PROVIDER
+ * uses. All three are on the same API key and the same generateContent method.
+ *
+ * Read the display names before judging the version numbers: the models API
+ * reports gemini-3.1-flash-image as "Nano Banana 2" and gemini-nano-banana-2.1
+ * as "Nano Banana 2.1", and both carry version 3.0. So 2.1 is the NEWER of the
+ * two - the 2.x is the Nano Banana line, not the Gemini line. Google's docs
+ * call 3.1-flash-image "the previous-generation high-efficiency workhorse
+ * model" and recommend 2.1 for new projects.
+ */
+const GEMINI_IMAGE_MODELS = {
+  // Nano Banana 2 - what this app has always used. Still the default.
+  gemini: "gemini-3.1-flash-image",
+  // Nano Banana 2.1 - newer, and documented at roughly half the price.
+  "gemini-2.1": "gemini-nano-banana-2.1",
+  // Nano Banana 2 Lite - documented as the fastest and cheapest, 1K only.
+  "gemini-lite": "gemini-3.1-flash-lite-image",
+} as const;
+
+export type GeminiImageKey = keyof typeof GEMINI_IMAGE_MODELS;
+
+const DEFAULT_GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODELS.gemini;
 
 // Track last generation error (user-facing message). The raw technical error is
 // always logged separately via console.error for debugging.
@@ -361,11 +383,17 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
  * Read per call rather than cached at module load, so flipping the variable
  * takes effect on the next request instead of the next deploy.
  */
-export type ImageProvider = "gemini" | RecraftModelKey;
+export type ImageProvider = GeminiImageKey | RecraftModelKey;
 
 export function resolveImageProvider(): ImageProvider {
   const raw = (process.env.IMAGE_PROVIDER ?? "").trim();
-  return raw in RECRAFT_MODELS ? (raw as RecraftModelKey) : "gemini";
+  if (raw in RECRAFT_MODELS) return raw as RecraftModelKey;
+  if (raw in GEMINI_IMAGE_MODELS) return raw as GeminiImageKey;
+  return "gemini";
+}
+
+function isRecraft(p: ImageProvider): p is RecraftModelKey {
+  return p in RECRAFT_MODELS;
 }
 
 /**
@@ -387,22 +415,31 @@ export async function generateImageBuffer(
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
   const provider = resolveImageProvider();
 
-  if (provider !== "gemini") {
+  if (isRecraft(provider)) {
     const out = await generateRecraftImageBuffer(prompt, provider, { style: opts?.style });
     if (out) return out;
     lastImageGenError = getLastRecraftError();
     console.warn(`[Imagen] ${provider} failed, falling back to Gemini`);
+    return generateGeminiImageBuffer(prompt, imageSize, DEFAULT_GEMINI_IMAGE_MODEL);
   }
 
-  return generateGeminiImageBuffer(prompt, imageSize);
+  return generateGeminiImageBuffer(prompt, imageSize, GEMINI_IMAGE_MODELS[provider]);
 }
 
 /** The Gemini path, unchanged - still the default, and the fallback. */
 async function generateGeminiImageBuffer(
   prompt: string,
-  imageSize: "1K" | "2K" = "2K"
+  imageSize: "1K" | "2K" = "2K",
+  preferred: string = DEFAULT_GEMINI_IMAGE_MODEL
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
-  for (const model of IMAGE_MODELS) {
+  // The chosen model first, then the long-standing default behind it. A model
+  // that is new to this app should not be able to take image generation down.
+  const chain =
+    preferred === DEFAULT_GEMINI_IMAGE_MODEL
+      ? [DEFAULT_GEMINI_IMAGE_MODEL]
+      : [preferred, DEFAULT_GEMINI_IMAGE_MODEL];
+
+  for (const model of chain) {
     try {
       console.log(`[Imagen] Trying ${model}...`);
       const response = await getAI().models.generateContent({
