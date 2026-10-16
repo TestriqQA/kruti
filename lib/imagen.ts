@@ -4,6 +4,13 @@ import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
 import { resolveTheme } from "@/lib/image-themes";
+import {
+  generateRecraftImageBuffer,
+  getLastRecraftError,
+  RECRAFT_MODELS,
+  type RecraftModelKey,
+  type RecraftStyle,
+} from "@/lib/recraft";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -344,7 +351,54 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
  * as a buffer, composite the text layer onto it, and upload once - rather than
  * uploading a background nobody will ever see and then fetching it back.
  */
+/**
+ * Which provider draws the pictures.
+ *
+ * Set IMAGE_PROVIDER to "recraft-v3" or "recraft-v4.1-flash" to switch; absent
+ * or anything unrecognised means Gemini, so an empty environment behaves
+ * exactly as it did before this existed.
+ *
+ * Read per call rather than cached at module load, so flipping the variable
+ * takes effect on the next request instead of the next deploy.
+ */
+export type ImageProvider = "gemini" | RecraftModelKey;
+
+export function resolveImageProvider(): ImageProvider {
+  const raw = (process.env.IMAGE_PROVIDER ?? "").trim();
+  return raw in RECRAFT_MODELS ? (raw as RecraftModelKey) : "gemini";
+}
+
+/**
+ * Call the image model and return the raw bytes, without storing anything.
+ *
+ * The single seam every image in this app passes through - single images,
+ * carousel slide backgrounds and art-directed graphics alike - which is why
+ * the provider is chosen here and nowhere else.
+ *
+ * A Recraft failure falls back to Gemini rather than returning nothing: a
+ * picture from the wrong provider beats no picture, and during a comparison a
+ * silent hole would read as "Recraft is worse" when it only means the token
+ * expired.
+ */
 export async function generateImageBuffer(
+  prompt: string,
+  imageSize: "1K" | "2K" = "2K",
+  opts?: { style?: RecraftStyle }
+): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
+  const provider = resolveImageProvider();
+
+  if (provider !== "gemini") {
+    const out = await generateRecraftImageBuffer(prompt, provider, { style: opts?.style });
+    if (out) return out;
+    lastImageGenError = getLastRecraftError();
+    console.warn(`[Imagen] ${provider} failed, falling back to Gemini`);
+  }
+
+  return generateGeminiImageBuffer(prompt, imageSize);
+}
+
+/** The Gemini path, unchanged - still the default, and the fallback. */
+async function generateGeminiImageBuffer(
   prompt: string,
   imageSize: "1K" | "2K" = "2K"
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
@@ -561,7 +615,9 @@ export async function generateAndStoreArtImage(
   });
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
-  const result = await generateImageBuffer(prompt, "2K");
+  // A designed graphic with type on it, so Recraft is told to illustrate
+  // rather than photograph. Ignored by the Gemini path.
+  const result = await generateImageBuffer(prompt, "2K", { style: "digital_illustration" });
   if (!result) return null;
 
   const filename = `post-${postId}-${Date.now()}.${result.ext}`;
