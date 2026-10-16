@@ -122,6 +122,23 @@ const DEFAULT_PALETTE =
   "warm directional light on rich neutral tones, deep charcoal shadows, one confident accent colour drawn from the subject.";
 
 /** Collapse whitespace, strip wrapping quotes, hard-cap length. */
+/**
+ * A supporting line, or nothing at all.
+ *
+ * clampHeadline trims to a word boundary, which is right for a headline and
+ * wrong for a sentence: "Headless commerce isn't a silver bullet. Build with"
+ * shipped on a real image, reading as though the text had been cut off. A
+ * dangling half-sentence looks like a bug to the reader, so an over-long line
+ * falls back to its last complete sentence, and to nothing if it has none.
+ */
+export function clampSentence(raw: string, max: number): string {
+  const s = (raw || "").replace(/\s+/g, " ").trim();
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max);
+  const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return lastStop > 0 ? cut.slice(0, lastStop + 1).trim() : "";
+}
+
 export function clampHeadline(raw: string, max = 40): string {
   const s = (raw || "")
     .replace(/\s+/g, " ")
@@ -503,7 +520,7 @@ async function getArtBrief(
           brands: clampLabels(parsed.brands, 4, 30),
           layout: String(parsed.layout ?? "").trim().toLowerCase() || undefined,
           statLine: clampHeadline(String(parsed.statLine ?? ""), 10),
-          subhead: clampHeadline(String(parsed.subhead ?? ""), 60),
+          subhead: clampSentence(String(parsed.subhead ?? ""), 60),
           chips: clampLabels(parsed.chips, 3, 22),
           visualStyle: String(parsed.visualStyle ?? "").trim().toLowerCase() || undefined,
           themeId: clampThemeId(parsed.themeId),
