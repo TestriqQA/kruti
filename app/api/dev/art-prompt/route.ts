@@ -122,6 +122,36 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  // JSON turns every newline in the prompt into a literal 
+, and a prompt
+  // pasted with those in it is not the prompt this app sends. ?format=text
+  // hands back something that can actually be copied.
+  if (req.nextUrl.searchParams.get("format") === "text") {
+    const body = out
+      .map(
+        (p) =>
+          [
+            `# ${p.hook}`,
+            `# post ${p.postId}  created ${p.createdAt.slice(0, 16)}`,
+            `# style ${p.imageStyle} (${p.categoryLabel})`,
+            `# ${p.promptChars} chars - fits V3: ${p.fitsRecraftV3}, fits Flash: ${p.fitsRecraftFlash}`,
+            `# compare against: ${p.currentImageUrl ?? "(no image yet)"}`,
+            "",
+            p.prompt,
+          ].join("
+")
+      )
+      .join("
+
+" + "=".repeat(70) + "
+
+");
+    return new NextResponse(body, {
+      status: 200,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   return NextResponse.json(
     {
       note:
