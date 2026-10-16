@@ -5,11 +5,6 @@ import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
 import { resolveTheme } from "@/lib/image-themes";
 import {
-  brandLogosEnabled,
-  fetchBrandLogos,
-  compositeLogoStrip,
-} from "@/lib/brand-logos";
-import {
   generateRecraftImageBuffer,
   getLastRecraftError,
   RECRAFT_MODELS,
@@ -267,57 +262,80 @@ export type CarouselRenderEvent = {
  * every one on the plan's single shared theme, each carrying a position
  * indicator so the set visibly belongs together.
  *
- * Sequential rather than parallel. The old diffusion path had to fire all four
- * slides at once to fit inside the 60s function limit - which is also why
- * carousels were pinned to 1K while single images got 2K. A slide now takes
- * about 200ms, so the whole set finishes well inside a second; doing them in
- * order keeps memory flat and lets the progress events arrive in slide order.
+ * Every slide is drawn whole by the image model - type, colour and artwork
+ * together - rather than laid out in code over a generated backdrop. One
+ * style and one palette are resolved once and handed to every slide, which is
+ * what keeps four separately generated pictures reading as one deck.
+ *
+ * In PARALLEL. Each call runs tens of seconds and the route has 60; four in
+ * sequence would not finish. A slide that fails is reported and skipped - a
+ * short carousel beats none.
  */
 export async function renderCarouselFromPlan(
   plan: { themeId?: string; slides: DesignBrief[] },
   postId: string,
   onSlideEvent?: (e: CarouselRenderEvent) => void
 ): Promise<string[]> {
-  // Every slide is information design, so they all use the infographic layout.
-  // A slide with no labels renders as a clean statement slide, which is exactly
-  // what the plan asks for on the hook and the takeaway.
-  const category = getImageCategory("infographic");
   const total = plan.slides.length;
-  const urls: string[] = [];
 
-  // Backgrounds first, and in PARALLEL. Each image call takes 10-20s, so four in
-  // sequence would run past the 60s function limit on its own; the renders that
-  // follow are about 200ms each, so they stay sequential for ordered progress
-  // events and flat memory. A slide whose picture fails simply renders on the
-  // solid field.
+  // Resolved once, from the plan and the post - never per slide. A per-slide
+  // resolve would hand each one a different palette and the set would stop
+  // looking like a set.
+  const theme = resolveTheme(plan.themeId, postId);
+  const style = resolveVisualStyle(undefined, postId);
+  const layout = resolvePageLayout(undefined, postId);
+  const category = getImageCategory("infographic");
+  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+
   plan.slides.forEach((_, i) => onSlideEvent?.({ index: i, status: "start" }));
-  const backgrounds = await Promise.all(
-    plan.slides.map(async (s) => {
-      if (!s.backgroundScene) return null;
+
+  const results = await Promise.all(
+    plan.slides.map(async (slide, i) => {
       try {
-        const bg = await generateImageBuffer(buildBackgroundPrompt(s.backgroundScene), "2K");
-        return bg?.buffer ?? null;
-      } catch {
-        return null;
+        const prompt = buildArtImagePrompt({
+          scene:
+            slide.backgroundScene ||
+            `A clear, concrete scene representing: ${slide.headline || slide.bodyText || ""}`,
+          headline: slide.headline ?? "",
+          subhead: slide.subheadline,
+          labels: style.textLoad === "low" ? [] : slide.nodes ?? [],
+          layoutDirection: layout.direction,
+          styleDirection: style.direction,
+          styleName: style.name,
+          textLoad: style.textLoad,
+          palette: { phrase: theme.palettePhrase, mode: theme.mode },
+          formatLabel: category.label,
+          slide: { index: i, total },
+        });
+
+        const res = await generateImageBuffer(prompt, size, {
+          style: "digital_illustration",
+        });
+        if (!res) return { i, url: null as string | null };
+
+        const blob = await put(
+          `generated/post-${postId}-c${i}-${Date.now()}.${res.ext}`,
+          res.buffer,
+          { access: "public", contentType: res.contentType }
+        );
+        return { i, url: blob.url };
+      } catch (err) {
+        console.error(`[Carousel] slide ${i} failed:`, (err as Error).message);
+        return { i, url: null as string | null };
       }
     })
   );
 
-  for (let i = 0; i < total; i++) {
-    const url = await renderAndStoreDesignedImage(
-      category,
-      // The plan's theme wins over anything a slide carries: one palette across
-      // the set is the whole point.
-      { ...plan.slides[i], themeId: plan.themeId },
-      `${postId}-c${i}`,
-      { slide: { index: i, total }, background: backgrounds[i] }
-    );
-    if (url) {
-      urls.push(url);
-      onSlideEvent?.({ index: i, status: "done", url });
+  // Emitted in slide order rather than completion order, so the progress list
+  // fills top to bottom however the parallel calls happen to land.
+  const urls: string[] = [];
+  for (const r of results.sort((a, b) => a.i - b.i)) {
+    if (r.url) {
+      urls.push(r.url);
+      onSlideEvent?.({ index: r.i, status: "done", url: r.url });
     } else {
       onSlideEvent?.({
-        index: i,
+        index: r.i,
         status: "error",
         message: lastImageGenError || "Slide could not be built",
       });
@@ -508,13 +526,13 @@ export function buildArtImagePrompt(opts: {
   subject?: string;
   /** Real products, tools or platforms the post itself names. */
   brands?: string[];
-  /** Real marks are being composited, so draw none. */
-  suppressBrandMarks?: boolean;
   styleDirection: string;
   styleName: string;
   textLoad: "low" | "medium" | "high";
   palette: { phrase: string; mode: "light" | "dark" };
   formatLabel: string;
+  /** Set when this image is one slide of a carousel, so the deck coheres. */
+  slide?: { index: number; total: number };
 }): string {
   const { palette: p } = opts;
   const labels = opts.labels.filter(Boolean);
@@ -590,11 +608,7 @@ ${textBlock}
 
 OBJECTS: build the scene from real, tangible, dimensional things - actual devices, actual tools, actual surfaces, with weight, material and contact shadows - not a sprinkle of flat generic symbols. Where an idea needs an emblem, prefer a believable physical object over a pictogram: a real stopwatch rather than a clock glyph, a real stack of servers rather than a database icon. Objects should look like they could be photographed or held.
 ${
-    opts.suppressBrandMarks
-      ? `REAL PRODUCTS: this post names ${brands.join(
-          ", "
-        )}, and their real marks are being added to the finished image separately. Draw NO logo, wordmark, brand glyph or company name anywhere - not on a screen, a box, a badge or a sign. Show the products as plain unbranded objects. A drawn mark here would sit next to the real one and only look broken by comparison. RESERVED FOOT: keep the bottom 15% of the frame as clean, uncluttered background - no text, no chips, no objects, no focal detail. The real marks are laid into that band, and anything drawn there will be covered.`
-      : brands.length > 0
+    brands.length > 0
       ? `REAL PRODUCTS: this post names ${brands.join(
           ", "
         )}. Show them as their genuine, instantly recognisable real-world marks and products, in their true official colours and correct proportions - not invented substitutes, not recoloured to match the palette, not distorted. If a mark cannot be drawn cleanly and accurately, show the product itself or leave it out entirely rather than shipping a mangled logo. Add no brand beyond these.`
@@ -607,6 +621,14 @@ COLOUR: ${p.phrase}. ${
     p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
   } Keep to that family - one accent, used sparingly, is what makes a graphic look designed rather than generated. Describe colour only through the artwork; never letter a colour name, hex code or swatch row onto the image.
 
+SAFE AREA: every piece of type must sit fully inside the frame with clear air around it - at least 6% of the frame's width as margin on all four sides. No letter may touch or run off an edge, and no line may be cut short by the bottom of the image. If the words do not fit at the size you want, set them smaller or break them onto another line; never crop them.
+${
+    opts.slide
+      ? `
+SLIDE ${opts.slide.index + 1} OF ${opts.slide.total}: this is one slide of a ${opts.slide.total}-slide carousel that will be read in order. Every slide shares one palette, one type treatment and one compositional language - this one must look like it came from the same deck as the others, not a separate picture. Place a small, quiet "${opts.slide.index + 1}/${opts.slide.total}" marker in a corner. Do not repeat the other slides' artwork; illustrate THIS slide's own point.
+`
+      : ""
+}
 QUALITY BAR: this must look like it came from a senior designer at a top studio - deliberate composition, real depth, believable materials and light, generous margins, nothing crowded against the edges. Full-bleed square, artwork running to every edge, with NO drawn border, frame or outer keyline.
 
 SCREENS, CHARTS AND DIALS: draw them as clean abstract shapes - lines, bars, curves, segments, blocks - carrying NO numbers, axis values, percentages or interface wording of any kind. A model asked for a dashboard fills it with invented half-legible figures, and tiny garbled numbers inside a screen undo an otherwise good graphic. Only the headline and the labels listed above may be readable; a chart shows its shape, never its data.
@@ -643,10 +665,6 @@ export async function generateAndStoreArtImage(
   const theme = resolveTheme(brief.themeId, postId);
   const layout = resolvePageLayout(brief.layout, postId);
 
-  // Real marks are composited below, so the model must not attempt its own.
-  // Both halves read this one value - they cannot disagree.
-  const useRealLogos = brandLogosEnabled() && (brief.brands?.length ?? 0) > 0;
-
   const prompt = buildArtImagePrompt({
     scene: brief.scene || `A clear, concrete scene representing: ${brief.headline ?? category.label}`,
     headline: brief.headline ?? "",
@@ -655,11 +673,7 @@ export async function generateAndStoreArtImage(
     labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
     statLine: brief.statLine,
     subhead: brief.subhead,
-    // Asking the model to keep the foot clear does not hold - tested, it put
-    // its chip row there anyway and the bar sliced it in half. The chips are
-    // the only thing it reliably places down there, so when the bar is coming
-    // they are simply not offered.
-    chips: useRealLogos ? [] : brief.chips,
+    chips: brief.chips,
     layoutDirection: layout.direction,
     subject: brief.subject,
     brands: brief.brands,
@@ -668,7 +682,6 @@ export async function generateAndStoreArtImage(
     textLoad: style.textLoad,
     palette: { phrase: theme.palettePhrase, mode: theme.mode },
     formatLabel: category.label,
-    suppressBrandMarks: useRealLogos,
   });
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
@@ -683,27 +696,10 @@ export async function generateAndStoreArtImage(
   const result = await generateImageBuffer(prompt, size, { style: "digital_illustration" });
   if (!result) return null;
 
-  // Real marks go on after the model is done. The prompt above has already
-  // told it to draw none, so there is nothing here to collide with.
-  let buffer = result.buffer;
-  let ext = result.ext;
-  let contentType = result.contentType;
-  if (useRealLogos) {
-    const logos = await fetchBrandLogos(brief.brands ?? []);
-    if (logos.length > 0) {
-      const composited = await compositeLogoStrip(buffer, logos);
-      if (composited !== buffer) {
-        buffer = composited;
-        ext = "jpg";
-        contentType = "image/jpeg";
-      }
-    }
-  }
-
-  const filename = `post-${postId}-${Date.now()}.${ext}`;
-  const blob = await put(`generated/${filename}`, buffer, {
+  const filename = `post-${postId}-${Date.now()}.${result.ext}`;
+  const blob = await put(`generated/${filename}`, result.buffer, {
     access: "public",
-    contentType,
+    contentType: result.contentType,
   });
   console.log(`[ArtImage] stored:`, blob.url);
   return blob.url;

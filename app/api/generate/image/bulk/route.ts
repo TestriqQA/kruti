@@ -2,13 +2,9 @@ import { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  generatePostImage,
-  buildCategoryImagePrompt,
-  renderAndStoreDesignedImage,
-} from "@/lib/imagen";
-import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
-import { resolveImageCategory, usesCodeRender } from "@/lib/image-categories";
+import { generateAndStoreArtImage } from "@/lib/imagen";
+import { getImageBrief } from "@/lib/image-brief";
+import { resolveImageCategory } from "@/lib/image-categories";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { ndjsonResponse } from "@/lib/ndjson";
 import { checkProfileReady } from "@/lib/profile-guard";
@@ -146,31 +142,29 @@ export async function POST(req: NextRequest) {
           category,
           userVisualProfile
         );
-        const codeRendered = usesCodeRender(category);
         send({
           ...base,
           status: "rendering",
           category: category.label,
           headline: brief.headline || brief.bodyText || "",
-          // Only the photographic path still has an art direction to report.
-          visual: codeRendered ? undefined : brief.visual,
-          renderer: codeRendered ? "layout" : "image-model",
+          visual: brief.visual,
+          renderer: "image-model",
         });
 
-        const imageUrl = codeRendered
-          ? await renderAndStoreDesignedImage(category, brief, post.id, {
-              author: { name: post.plan.user.name, headline: post.plan.user.headline },
-            })
-          : await generatePostImage(buildCategoryImagePrompt(category, brief), post.id, industry, true);
+        // Every category is drawn whole by the model, the same way the single
+        // image and carousel paths do it. This branched to a satori layout for
+        // 12 of the 17 categories, so a bulk-generated post looked like it came
+        // from a different product than one generated from the editor.
+        const imageUrl = await generateAndStoreArtImage(brief, post.id, category);
 
         if (imageUrl) {
           await prisma.post.update({
             where: { id: post.id },
             data: {
               imageUrl,
-              imagePrompt: codeRendered
-                ? describeDesignBrief(category, brief)
-                : `${brief.headline || brief.bodyText || category.label} - ${brief.visual ?? ""}`,
+              imagePrompt: `[${category.label}] ${brief.headline || brief.bodyText || ""} - ${
+                brief.visual ?? ""
+              }`,
               imageGenCount: post.imageGenCount + 1,
             },
           });
