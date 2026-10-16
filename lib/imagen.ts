@@ -617,7 +617,13 @@ export async function generateAndStoreArtImage(
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
   // A designed graphic with type on it, so Recraft is told to illustrate
   // rather than photograph. Ignored by the Gemini path.
-  const result = await generateImageBuffer(prompt, "2K", { style: "digital_illustration" });
+  //
+  // IMAGE_SIZE exists so Gemini can be tried at 1K without a code change:
+  // Recraft tops out at 1024 on a square, so comparing its output against
+  // Gemini at 2K judges resolution rather than the model. 1K also costs
+  // $0.067 against 2K's $0.101, which may be the whole answer on its own.
+  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+  const result = await generateImageBuffer(prompt, size, { style: "digital_illustration" });
   if (!result) return null;
 
   const filename = `post-${postId}-${Date.now()}.${result.ext}`;
