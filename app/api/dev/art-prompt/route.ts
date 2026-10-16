@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getImageBrief } from "@/lib/image-brief";
 import { resolveImageCategory } from "@/lib/image-categories";
@@ -41,21 +43,34 @@ export async function GET(req: NextRequest) {
     return new NextResponse("Not found", { status: 404 });
   }
 
+  // Scoped to the caller. Without this the newest post in the whole database
+  // wins, which on a shared dev database is somebody else's - it hands back
+  // their post body and prompt, and the id it returns 404s when the caller
+  // opens it, because /posts/[id] is scoped even though this was not.
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+  }
+  const mine = { plan: { userId: session.user.id } };
+
   const postId = req.nextUrl.searchParams.get("postId");
   const count = Math.min(Number(req.nextUrl.searchParams.get("count") ?? 1) || 1, 5);
   const any = req.nextUrl.searchParams.get("any") === "1";
 
   const posts = postId
-    ? await prisma.post.findMany({ where: { id: postId }, take: 1, ...SELECT })
+    ? await prisma.post.findMany({ where: { id: postId, ...mine }, take: 1, ...SELECT })
     : await prisma.post.findMany({
-        where: any ? {} : { imageUrl: { not: null } },
+        where: any ? mine : { ...mine, imageUrl: { not: null } },
         orderBy: { createdAt: "desc" },
         take: count,
         ...SELECT,
       });
 
   if (posts.length === 0) {
-    return NextResponse.json({ error: "No matching post found." }, { status: 404 });
+    return NextResponse.json(
+      { error: "No post of yours matched. Try ?any=1 if none of them has an image yet." },
+      { status: 404 }
+    );
   }
 
   const out = [];
