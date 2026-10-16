@@ -25,9 +25,16 @@ export const maxDuration = 60;
  * the prompt - nodes, statLine, subhead, chips - are not stored either. That
  * costs one cheap text call per post. No image model is called here.
  *
- *   /api/dev/art-prompt              - most recent post that has an image
+ *   /api/dev/art-prompt              - newest post that already has an image
+ *   /api/dev/art-prompt?any=1        - newest post, image or not
  *   /api/dev/art-prompt?postId=xxx   - a specific post
- *   /api/dev/art-prompt?count=3      - the three most recent
+ *   /api/dev/art-prompt?count=3      - the three newest
+ *
+ * The default skips posts with no image because the point is to compare a new
+ * provider against the picture this one actually produced. That does mean the
+ * newest post can be skipped if nobody has generated its image yet, which is
+ * why every result carries its createdAt - an old post should be obvious
+ * rather than quietly served as "the latest".
  */
 export async function GET(req: NextRequest) {
   if (process.env.NODE_ENV === "production") {
@@ -36,11 +43,12 @@ export async function GET(req: NextRequest) {
 
   const postId = req.nextUrl.searchParams.get("postId");
   const count = Math.min(Number(req.nextUrl.searchParams.get("count") ?? 1) || 1, 5);
+  const any = req.nextUrl.searchParams.get("any") === "1";
 
   const posts = postId
     ? await prisma.post.findMany({ where: { id: postId }, take: 1, ...SELECT })
     : await prisma.post.findMany({
-        where: { imageUrl: { not: null } },
+        where: any ? {} : { imageUrl: { not: null } },
         orderBy: { createdAt: "desc" },
         take: count,
         ...SELECT,
@@ -82,6 +90,7 @@ export async function GET(req: NextRequest) {
 
     out.push({
       postId: post.id,
+      createdAt: post.createdAt.toISOString(),
       hook: post.title,
       imageStyle: post.imageStyle ?? "(none set - fell back to the default)",
       categoryLabel: category.label,
@@ -102,7 +111,8 @@ export async function GET(req: NextRequest) {
     {
       note:
         "Paste `prompt` into the other provider. Compare its output against `currentImageUrl`. " +
-        "Recraft tops out at 1024x1024 on 1:1, so set Gemini to 1K for a fair test.",
+        "Recraft tops out at 1024x1024 on 1:1, so set Gemini to 1K for a fair test. " +
+        "Check createdAt - the default skips posts that have no image yet, so add ?any=1 for the newest post regardless.",
       posts: out,
     },
     { status: 200 }
@@ -115,6 +125,7 @@ const SELECT = {
     title: true,
     body: true,
     postType: true,
+    createdAt: true,
     imageStyle: true,
     imageUrl: true,
     imagePrompt: true,
