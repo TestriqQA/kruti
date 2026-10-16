@@ -7,10 +7,11 @@ import {
   UserVisualProfile,
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
-import { IMAGE_THEME_IDS, themeMenuBlock } from "@/lib/image-themes";
+import { IMAGE_THEME_IDS, themeMenuBlock, themeIdsFor } from "@/lib/image-themes";
 import {
   VISUAL_STYLE_IDS,
   visualStyleMenuBlock,
+  visualStyleIdsFor,
   PAGE_LAYOUT_IDS,
   pageLayoutMenuBlock,
 } from "@/lib/image-styles";
@@ -460,17 +461,25 @@ async function getArtBrief(
   category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<ImageBrief> {
+  // Seeded on the post's own hook so each post is offered a different slice of
+  // the style and palette menus. Every brief is a separate call that sees one
+  // post, so the prompt's "vary this across posts" line had nothing to work
+  // with - measured, isometric-scene was taking 4 of 11 posts and every image
+  // looked like the last. The hook is stable, so regenerating a post keeps its
+  // look rather than reshuffling it.
+  const seed = post.title;
+
   const prompt = buildArtBriefPrompt(
     post.title,
     post.body,
     post.postType,
     category,
-    visualStyleMenuBlock(),
-    VISUAL_STYLE_IDS.join("|"),
+    visualStyleMenuBlock(seed),
+    visualStyleIdsFor(seed).join("|"),
     pageLayoutMenuBlock(),
     PAGE_LAYOUT_IDS.join("|"),
-    themeMenuBlock(),
-    IMAGE_THEME_IDS.join("|"),
+    themeMenuBlock(seed),
+    themeIdsFor(seed).join("|"),
     userProfile
   );
 
