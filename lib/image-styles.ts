@@ -161,10 +161,50 @@ export function resolveVisualStyle(id: string | null | undefined, seed = ""): Vi
 }
 
 /** The menu, formatted for the brief prompt. */
-export function visualStyleMenuBlock(): string {
-  return VISUAL_STYLES.map(
-    (s) => `- "${s.id}" (${s.name}, carries ${s.textLoad} text): ${s.when}`
-  ).join("\n");
+
+/**
+ * A stable number from a string, so the same post always gets the same slice
+ * and a regenerate does not reshuffle the look.
+ */
+function seedHash(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/**
+ * Rotate the list by the seed and drop a slice of it.
+ *
+ * Rotating alone is not enough - the model reads the whole menu, so order
+ * barely moves its choice. Removing options does. `keep` stays generous so
+ * there is always a sensible fit for any subject; it only stops one option
+ * winning on every post.
+ */
+function seededSlice<T>(items: readonly T[], seed: string | undefined, keepRatio: number): readonly T[] {
+  if (!seed || items.length < 4) return items;
+  const h = seedHash(seed);
+  const rotated = [...items.slice(h % items.length), ...items.slice(0, h % items.length)];
+  const keep = Math.max(3, Math.round(items.length * keepRatio));
+  return rotated.slice(0, keep);
+}
+
+/**
+ * The menu, formatted for the brief prompt.
+ *
+ * With a seed, each post sees a different two thirds of the list. Measured
+ * before this: isometric-scene took 4 of 11 posts and the images all looked
+ * alike. The prompt's own "vary this across posts" line cannot do the job on
+ * its own, because each brief is a separate call with no sight of the others.
+ */
+export function visualStyleMenuBlock(seed?: string): string {
+  return seededSlice(VISUAL_STYLES, seed, 0.66)
+    .map((s) => `- "${s.id}" (${s.name}, carries ${s.textLoad} text): ${s.when}`)
+    .join("\n");
+}
+
+/** The ids on offer for this seed - must match what the menu shows. */
+export function visualStyleIdsFor(seed?: string): string[] {
+  return seededSlice(VISUAL_STYLES, seed, 0.66).map((s) => s.id);
 }
 
 /**

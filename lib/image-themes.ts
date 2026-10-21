@@ -257,6 +257,47 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /** The menu, formatted for the brief prompt. */
-export function themeMenuBlock(): string {
-  return IMAGE_THEMES.map((t) => `- "${t.id}" (${t.name}, ${t.mode}): ${t.when}`).join("\n");
+
+/**
+ * A stable number from a string, so the same post always gets the same slice
+ * and a regenerate does not reshuffle the look.
+ */
+function seedHash(seed: string): number {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+/**
+ * Rotate the list by the seed and drop a slice of it.
+ *
+ * Rotating alone is not enough - the model reads the whole menu, so order
+ * barely moves its choice. Removing options does. `keep` stays generous so
+ * there is always a sensible fit for any subject; it only stops one option
+ * winning on every post.
+ */
+function seededSlice<T>(items: readonly T[], seed: string | undefined, keepRatio: number): readonly T[] {
+  if (!seed || items.length < 4) return items;
+  const h = seedHash(seed);
+  const rotated = [...items.slice(h % items.length), ...items.slice(0, h % items.length)];
+  const keep = Math.max(3, Math.round(items.length * keepRatio));
+  return rotated.slice(0, keep);
+}
+
+/**
+ * The palette menu for the brief prompt.
+ *
+ * Seeded the same way the style menu is, and for the same reason: every image
+ * was arriving in the same dark blue because the model, seeing one post at a
+ * time, had no way to know it had already used that palette.
+ */
+export function themeMenuBlock(seed?: string): string {
+  return seededSlice(IMAGE_THEMES, seed, 0.6)
+    .map((t) => `- "${t.id}" (${t.name}, ${t.mode}): ${t.when}`)
+    .join("\n");
+}
+
+/** The ids on offer for this seed - must match what the menu shows. */
+export function themeIdsFor(seed?: string): string[] {
+  return seededSlice(IMAGE_THEMES, seed, 0.6).map((t) => t.id);
 }

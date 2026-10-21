@@ -49,8 +49,53 @@ export function flashTextCostUsd(inputTokens: number, outputTokens: number): num
   return (inputTokens / 1e6) * FLASH_INPUT_USD_PER_M + (outputTokens / 1e6) * FLASH_OUTPUT_USD_PER_M;
 }
 
-/** Cost (USD) of generating one image at the given resolution. */
-export function imageCostUsd(resolution: "1K" | "2K" | "4K" = "2K"): number {
+// ── Images: Recraft, when IMAGE_PROVIDER points at it ──
+//
+// Flat per image - Recraft bills per generation, not per resolution, so unlike
+// the Gemini tier there is nothing to vary by size. Figures are Recraft's
+// published API pricing and are duplicated in lib/recraft.ts next to the model
+// ids they belong to; change both together.
+// ── Images: the other two Gemini image models ──
+//
+// Nano Banana 2.1 (gemini-nano-banana-2.1) and Nano Banana 2 Lite
+// (gemini-3.1-flash-lite-image), both reachable on the same API key as the
+// current model. 2.1 is the NEWER of the two 2.x names despite the number -
+// gemini-3.1-flash-image is "Nano Banana 2". Lite is documented at 1K only.
+//
+// Taken from Google's published per-image equivalents. Not yet confirmed
+// against a real invoice, unlike the figures above.
+export const NB21_USD_1K = 0.0336;
+export const NB21_USD_2K = 0.0504;
+export const NB21_USD_4K = 0.113;
+export const NB21_LITE_USD_1K = 0.0336;
+
+export const RECRAFT_V3_USD = 0.04;
+export const RECRAFT_V41_FLASH_USD = 0.007;
+
+/**
+ * Cost (USD) of generating one image at the given resolution.
+ *
+ * Resolution only moves the price on the Gemini tier. Pass the provider when
+ * the caller knows it - otherwise this reports the Gemini rate, which is what
+ * every image generated before the provider switch existed actually cost.
+ */
+export function imageCostUsd(
+  resolution: "1K" | "2K" | "4K" = "2K",
+  provider:
+    | "gemini"
+    | "gemini-2.1"
+    | "gemini-lite"
+    | "recraft-v3"
+    | "recraft-v4.1-flash" = "gemini"
+): number {
+  if (provider === "recraft-v3") return RECRAFT_V3_USD;
+  if (provider === "recraft-v4.1-flash") return RECRAFT_V41_FLASH_USD;
+  if (provider === "gemini-lite") return NB21_LITE_USD_1K; // 1K only
+  if (provider === "gemini-2.1") {
+    if (resolution === "1K") return NB21_USD_1K;
+    if (resolution === "4K") return NB21_USD_4K;
+    return NB21_USD_2K;
+  }
   if (resolution === "1K") return IMAGE_USD_1K;
   if (resolution === "4K") return IMAGE_USD_4K;
   return IMAGE_USD_2K;

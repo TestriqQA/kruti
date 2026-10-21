@@ -4,6 +4,13 @@ import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
 import { resolveTheme } from "@/lib/image-themes";
+import {
+  generateRecraftImageBuffer,
+  getLastRecraftError,
+  RECRAFT_MODELS,
+  type RecraftModelKey,
+  type RecraftStyle,
+} from "@/lib/recraft";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -19,7 +26,29 @@ function getAI(): GoogleGenAI {
  * preview/GA split); if it is unavailable, generation returns no image rather
  * than silently degrading to a different model.
  */
-const IMAGE_MODELS = ["gemini-3.1-flash-image"];
+/**
+ * The Gemini image models this app can call, by the short name IMAGE_PROVIDER
+ * uses. All three are on the same API key and the same generateContent method.
+ *
+ * Read the display names before judging the version numbers: the models API
+ * reports gemini-3.1-flash-image as "Nano Banana 2" and gemini-nano-banana-2.1
+ * as "Nano Banana 2.1", and both carry version 3.0. So 2.1 is the NEWER of the
+ * two - the 2.x is the Nano Banana line, not the Gemini line. Google's docs
+ * call 3.1-flash-image "the previous-generation high-efficiency workhorse
+ * model" and recommend 2.1 for new projects.
+ */
+const GEMINI_IMAGE_MODELS = {
+  // Nano Banana 2 - what this app has always used. Still the default.
+  gemini: "gemini-3.1-flash-image",
+  // Nano Banana 2.1 - newer, and documented at roughly half the price.
+  "gemini-2.1": "gemini-nano-banana-2.1",
+  // Nano Banana 2 Lite - documented as the fastest and cheapest, 1K only.
+  "gemini-lite": "gemini-3.1-flash-lite-image",
+} as const;
+
+export type GeminiImageKey = keyof typeof GEMINI_IMAGE_MODELS;
+
+const DEFAULT_GEMINI_IMAGE_MODEL = GEMINI_IMAGE_MODELS.gemini;
 
 // Track last generation error (user-facing message). The raw technical error is
 // always logged separately via console.error for debugging.
@@ -233,57 +262,80 @@ export type CarouselRenderEvent = {
  * every one on the plan's single shared theme, each carrying a position
  * indicator so the set visibly belongs together.
  *
- * Sequential rather than parallel. The old diffusion path had to fire all four
- * slides at once to fit inside the 60s function limit - which is also why
- * carousels were pinned to 1K while single images got 2K. A slide now takes
- * about 200ms, so the whole set finishes well inside a second; doing them in
- * order keeps memory flat and lets the progress events arrive in slide order.
+ * Every slide is drawn whole by the image model - type, colour and artwork
+ * together - rather than laid out in code over a generated backdrop. One
+ * style and one palette are resolved once and handed to every slide, which is
+ * what keeps four separately generated pictures reading as one deck.
+ *
+ * In PARALLEL. Each call runs tens of seconds and the route has 60; four in
+ * sequence would not finish. A slide that fails is reported and skipped - a
+ * short carousel beats none.
  */
 export async function renderCarouselFromPlan(
   plan: { themeId?: string; slides: DesignBrief[] },
   postId: string,
   onSlideEvent?: (e: CarouselRenderEvent) => void
 ): Promise<string[]> {
-  // Every slide is information design, so they all use the infographic layout.
-  // A slide with no labels renders as a clean statement slide, which is exactly
-  // what the plan asks for on the hook and the takeaway.
-  const category = getImageCategory("infographic");
   const total = plan.slides.length;
-  const urls: string[] = [];
 
-  // Backgrounds first, and in PARALLEL. Each image call takes 10-20s, so four in
-  // sequence would run past the 60s function limit on its own; the renders that
-  // follow are about 200ms each, so they stay sequential for ordered progress
-  // events and flat memory. A slide whose picture fails simply renders on the
-  // solid field.
+  // Resolved once, from the plan and the post - never per slide. A per-slide
+  // resolve would hand each one a different palette and the set would stop
+  // looking like a set.
+  const theme = resolveTheme(plan.themeId, postId);
+  const style = resolveVisualStyle(undefined, postId);
+  const layout = resolvePageLayout(undefined, postId);
+  const category = getImageCategory("infographic");
+  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+
   plan.slides.forEach((_, i) => onSlideEvent?.({ index: i, status: "start" }));
-  const backgrounds = await Promise.all(
-    plan.slides.map(async (s) => {
-      if (!s.backgroundScene) return null;
+
+  const results = await Promise.all(
+    plan.slides.map(async (slide, i) => {
       try {
-        const bg = await generateImageBuffer(buildBackgroundPrompt(s.backgroundScene), "2K");
-        return bg?.buffer ?? null;
-      } catch {
-        return null;
+        const prompt = buildArtImagePrompt({
+          scene:
+            slide.backgroundScene ||
+            `A clear, concrete scene representing: ${slide.headline || slide.bodyText || ""}`,
+          headline: slide.headline ?? "",
+          subhead: slide.subheadline,
+          labels: style.textLoad === "low" ? [] : slide.nodes ?? [],
+          layoutDirection: layout.direction,
+          styleDirection: style.direction,
+          styleName: style.name,
+          textLoad: style.textLoad,
+          palette: { phrase: theme.palettePhrase, mode: theme.mode },
+          formatLabel: category.label,
+          slide: { index: i, total },
+        });
+
+        const res = await generateImageBuffer(prompt, size, {
+          style: "digital_illustration",
+        });
+        if (!res) return { i, url: null as string | null };
+
+        const blob = await put(
+          `generated/post-${postId}-c${i}-${Date.now()}.${res.ext}`,
+          res.buffer,
+          { access: "public", contentType: res.contentType }
+        );
+        return { i, url: blob.url };
+      } catch (err) {
+        console.error(`[Carousel] slide ${i} failed:`, (err as Error).message);
+        return { i, url: null as string | null };
       }
     })
   );
 
-  for (let i = 0; i < total; i++) {
-    const url = await renderAndStoreDesignedImage(
-      category,
-      // The plan's theme wins over anything a slide carries: one palette across
-      // the set is the whole point.
-      { ...plan.slides[i], themeId: plan.themeId },
-      `${postId}-c${i}`,
-      { slide: { index: i, total }, background: backgrounds[i] }
-    );
-    if (url) {
-      urls.push(url);
-      onSlideEvent?.({ index: i, status: "done", url });
+  // Emitted in slide order rather than completion order, so the progress list
+  // fills top to bottom however the parallel calls happen to land.
+  const urls: string[] = [];
+  for (const r of results.sort((a, b) => a.i - b.i)) {
+    if (r.url) {
+      urls.push(r.url);
+      onSlideEvent?.({ index: r.i, status: "done", url: r.url });
     } else {
       onSlideEvent?.({
-        index: i,
+        index: r.i,
         status: "error",
         message: lastImageGenError || "Slide could not be built",
       });
@@ -344,11 +396,73 @@ Square format (1:1), filling the entire frame edge to edge with no blank border,
  * as a buffer, composite the text layer onto it, and upload once - rather than
  * uploading a background nobody will ever see and then fetching it back.
  */
+/**
+ * Which provider draws the pictures.
+ *
+ * Set IMAGE_PROVIDER to "recraft-v3" or "recraft-v4.1-flash" to switch; absent
+ * or anything unrecognised means Gemini, so an empty environment behaves
+ * exactly as it did before this existed.
+ *
+ * Read per call rather than cached at module load, so flipping the variable
+ * takes effect on the next request instead of the next deploy.
+ */
+export type ImageProvider = GeminiImageKey | RecraftModelKey;
+
+export function resolveImageProvider(): ImageProvider {
+  const raw = (process.env.IMAGE_PROVIDER ?? "").trim();
+  if (raw in RECRAFT_MODELS) return raw as RecraftModelKey;
+  if (raw in GEMINI_IMAGE_MODELS) return raw as GeminiImageKey;
+  return "gemini";
+}
+
+function isRecraft(p: ImageProvider): p is RecraftModelKey {
+  return p in RECRAFT_MODELS;
+}
+
+/**
+ * Call the image model and return the raw bytes, without storing anything.
+ *
+ * The single seam every image in this app passes through - single images,
+ * carousel slide backgrounds and art-directed graphics alike - which is why
+ * the provider is chosen here and nowhere else.
+ *
+ * A Recraft failure falls back to Gemini rather than returning nothing: a
+ * picture from the wrong provider beats no picture, and during a comparison a
+ * silent hole would read as "Recraft is worse" when it only means the token
+ * expired.
+ */
 export async function generateImageBuffer(
   prompt: string,
-  imageSize: "1K" | "2K" = "2K"
+  imageSize: "1K" | "2K" = "2K",
+  opts?: { style?: RecraftStyle }
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
-  for (const model of IMAGE_MODELS) {
+  const provider = resolveImageProvider();
+
+  if (isRecraft(provider)) {
+    const out = await generateRecraftImageBuffer(prompt, provider, { style: opts?.style });
+    if (out) return out;
+    lastImageGenError = getLastRecraftError();
+    console.warn(`[Imagen] ${provider} failed, falling back to Gemini`);
+    return generateGeminiImageBuffer(prompt, imageSize, DEFAULT_GEMINI_IMAGE_MODEL);
+  }
+
+  return generateGeminiImageBuffer(prompt, imageSize, GEMINI_IMAGE_MODELS[provider]);
+}
+
+/** The Gemini path, unchanged - still the default, and the fallback. */
+async function generateGeminiImageBuffer(
+  prompt: string,
+  imageSize: "1K" | "2K" = "2K",
+  preferred: string = DEFAULT_GEMINI_IMAGE_MODEL
+): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
+  // The chosen model first, then the long-standing default behind it. A model
+  // that is new to this app should not be able to take image generation down.
+  const chain =
+    preferred === DEFAULT_GEMINI_IMAGE_MODEL
+      ? [DEFAULT_GEMINI_IMAGE_MODEL]
+      : [preferred, DEFAULT_GEMINI_IMAGE_MODEL];
+
+  for (const model of chain) {
     try {
       console.log(`[Imagen] Trying ${model}...`);
       const response = await getAI().models.generateContent({
@@ -417,6 +531,8 @@ export function buildArtImagePrompt(opts: {
   textLoad: "low" | "medium" | "high";
   palette: { phrase: string; mode: "light" | "dark" };
   formatLabel: string;
+  /** Set when this image is one slide of a carousel, so the deck coheres. */
+  slide?: { index: number; total: number };
 }): string {
   const { palette: p } = opts;
   const labels = opts.labels.filter(Boolean);
@@ -505,6 +621,14 @@ COLOUR: ${p.phrase}. ${
     p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
   } Keep to that family - one accent, used sparingly, is what makes a graphic look designed rather than generated. Describe colour only through the artwork; never letter a colour name, hex code or swatch row onto the image.
 
+SAFE AREA: every piece of type must sit fully inside the frame with clear air around it - at least 6% of the frame's width as margin on all four sides. No letter may touch or run off an edge, and no line may be cut short by the bottom of the image. If the words do not fit at the size you want, set them smaller or break them onto another line; never crop them.
+${
+    opts.slide
+      ? `
+SLIDE ${opts.slide.index + 1} OF ${opts.slide.total}: this is one slide of a ${opts.slide.total}-slide carousel that will be read in order. Every slide shares one palette, one type treatment and one compositional language - this one must look like it came from the same deck as the others, not a separate picture. Place a small, quiet "${opts.slide.index + 1}/${opts.slide.total}" marker in a corner. Do not repeat the other slides' artwork; illustrate THIS slide's own point.
+`
+      : ""
+}
 QUALITY BAR: this must look like it came from a senior designer at a top studio - deliberate composition, real depth, believable materials and light, generous margins, nothing crowded against the edges. Full-bleed square, artwork running to every edge, with NO drawn border, frame or outer keyline.
 
 SCREENS, CHARTS AND DIALS: draw them as clean abstract shapes - lines, bars, curves, segments, blocks - carrying NO numbers, axis values, percentages or interface wording of any kind. A model asked for a dashboard fills it with invented half-legible figures, and tiny garbled numbers inside a screen undo an otherwise good graphic. Only the headline and the labels listed above may be readable; a chart shows its shape, never its data.
@@ -561,7 +685,15 @@ export async function generateAndStoreArtImage(
   });
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
-  const result = await generateImageBuffer(prompt, "2K");
+  // A designed graphic with type on it, so Recraft is told to illustrate
+  // rather than photograph. Ignored by the Gemini path.
+  //
+  // IMAGE_SIZE exists so Gemini can be tried at 1K without a code change:
+  // Recraft tops out at 1024 on a square, so comparing its output against
+  // Gemini at 2K judges resolution rather than the model. 1K also costs
+  // $0.067 against 2K's $0.101, which may be the whole answer on its own.
+  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+  const result = await generateImageBuffer(prompt, size, { style: "digital_illustration" });
   if (!result) return null;
 
   const filename = `post-${postId}-${Date.now()}.${result.ext}`;
