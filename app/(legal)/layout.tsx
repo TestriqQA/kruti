@@ -21,8 +21,17 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
         </div>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-10 flex gap-10">
+      {/* Content.
+          flex-col until md, then a row. LegalSidebar renders TWO navs - a
+          vertical one for desktop (hidden md:block) and a horizontal pill strip
+          for phones (md:hidden) - and both are flex items here. As a row at all
+          widths, the phone strip sat BESIDE the article instead of above it and
+          forced the page 121px wider than the viewport, so every legal page
+          scrolled sideways on a phone. Stacking below md puts the strip where it
+          was designed to go and lets the article take the full width.
+          min-w-0 on the row stops a long unbroken token in the prose doing the
+          same thing at desktop width. */}
+      <div className="flex-1 max-w-6xl mx-auto w-full min-w-0 px-6 py-10 flex flex-col md:flex-row md:gap-10">
         <LegalSidebar />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
