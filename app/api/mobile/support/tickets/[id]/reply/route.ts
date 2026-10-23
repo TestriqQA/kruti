@@ -84,6 +84,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     });
 
     return NextResponse.json({
+      success: true,
       reply: {
         ...reply,
         createdAt: reply.createdAt.toISOString(),

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       data: { readAt: new Date() },
     });
 
-    return NextResponse.json({ marked: count });
+    return NextResponse.json({ success: true, marked: count });
   } catch (err) {
     console.error("[mobile/support/read] failed:", err);
     return NextResponse.json({ error: "Could not mark replies read" }, { status: 500 });

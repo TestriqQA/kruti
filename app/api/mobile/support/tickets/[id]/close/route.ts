@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       select: { id: true, status: true },
     });
 
-    return NextResponse.json({ ticket: updated });
+    return NextResponse.json({ success: true, ticket: updated });
   } catch (err) {
     console.error("[mobile/support/close] failed:", err);
     return NextResponse.json({ error: "Could not close ticket" }, { status: 500 });

@@ -78,7 +78,14 @@ export async function POST(req: NextRequest) {
       { access: "public", contentType: file.type },
     );
 
-    return NextResponse.json({ url: blob.url, name: safeName, size: file.size });
+    // "type" is in the response because the app shows a per-file icon before
+    // the ticket is submitted and should not have to infer it from the name.
+    return NextResponse.json({
+      url: blob.url,
+      name: safeName,
+      size: file.size,
+      type: file.type,
+    });
   } catch (err) {
     console.error("[mobile/support/attachment] upload failed:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
