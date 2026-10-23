@@ -1,0 +1,197 @@
+import { prisma } from "@/lib/prisma";
+import { generateAndStoreArtImage } from "@/lib/imagen";
+import { getImageBrief } from "@/lib/image-brief";
+import { resolveImageCategory } from "@/lib/image-categories";
+import { checkActiveSubscription } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
+import type { SendFn } from "@/lib/ndjson";
+
+/**
+ * The bulk image pipeline, shared by the website and the mobile API.
+ *
+ * Extracted from app/api/generate/image/bulk/route.ts so both callers run the
+ * same code rather than two copies that drift.
+ *
+ * Note there is no rate limit here, unlike the other AI pipelines. The hard cap
+ * of 10 posts per call plus sequential rendering is what bounds it, so a caller
+ * never sees a 429 from this one.
+ *
+ * Authentication happens BEFORE this is called, so an auth failure is an HTTP
+ * 401 rather than an event inside a 200 stream.
+ */
+
+const IMAGE_GEN_LIMIT_PER_POST = 2;
+
+export async function runBulkImageGeneration(
+  userId: string,
+  postIds: string[] | undefined,
+  send: SendFn,
+): Promise<void> {
+  // The caller has already authenticated. Emitted so the website client still
+  // sees its "auth" pipeline step complete.
+  send({ type: "preflight", key: "auth", status: "done" });
+
+
+  if (!Array.isArray(postIds) || postIds.length === 0 || postIds.length > 10) {
+    const message = "Provide 1-10 post IDs";
+    send({ type: "preflight", key: "input", status: "error", message });
+    send({ type: "error", message });
+    return;
+  }
+  send({ type: "preflight", key: "input", status: "done", requested: postIds.length });
+
+  const { allowed, reason } = await checkActiveSubscription(userId);
+  if (!allowed) {
+    send({ type: "preflight", key: "subscription", status: "error", message: reason });
+    send({ type: "error", message: reason, subscriptionRequired: true });
+    return;
+  }
+  send({ type: "preflight", key: "subscription", status: "done" });
+
+  // Content-quality gate, same contract as the single-image route. This one
+  // can spend up to ten model calls in a run, so it is the most expensive
+  // thing an incomplete profile could otherwise reach.
+  const profile = await checkProfileReady(userId);
+  if (!profile.ready) {
+    send({ type: "preflight", key: "profile", status: "error", message: profile.message });
+    send({
+      type: "error",
+      message: profile.message,
+      profileIncomplete: true,
+      gaps: profile.gaps,
+    });
+    return;
+  }
+  send({ type: "preflight", key: "profile", status: "done" });
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: true },
+  });
+  const isAdmin = user?.role === "admin";
+
+  // Only posts the user owns, without an image, still inside the per-post cap.
+  const posts = await prisma.post.findMany({
+    where: {
+      id: { in: postIds },
+      plan: { userId },
+      imageUrl: null,
+      ...(isAdmin ? {} : { imageGenCount: { lt: IMAGE_GEN_LIMIT_PER_POST } }),
+    },
+    include: {
+      plan: {
+        include: {
+          user: {
+            select: {
+              industry: true,
+              positioning: true,
+              contentStyles: true, summary: true, targetAudience: true,
+              name: true,
+              headline: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (posts.length === 0) {
+    const message = "No eligible posts found (already have images or limit reached)";
+    send({ type: "preflight", key: "eligible", status: "error", message });
+    send({ type: "error", message, generated: 0 });
+    return;
+  }
+  send({
+    type: "preflight",
+    key: "eligible",
+    status: "done",
+    eligible: posts.length,
+    skipped: postIds.length - posts.length,
+  });
+
+  // One row per post so the client can list them before any work starts.
+  send({
+    type: "queue",
+    total: posts.length,
+    posts: posts.map((p, i) => ({ index: i, id: p.id, title: p.title })),
+  });
+
+  let generated = 0;
+  const errors: string[] = [];
+  const images: { id: string; imageUrl: string }[] = [];
+
+  // Sequential on purpose - the image API rate-limits hard under parallel load.
+  for (let i = 0; i < posts.length; i++) {
+    const post = posts[i];
+    const base = { type: "post", index: i, id: post.id, title: post.title };
+
+    try {
+      const industry = post.plan.user.industry || "business";
+      const userVisualProfile = {
+        positioning: post.plan.user.positioning,
+        contentStyles: post.plan.user.contentStyles,
+        industry,
+        name: post.plan.user.name,
+        headline: post.plan.user.headline,
+    summary: post.plan.user.summary,
+    targetAudience: post.plan.user.targetAudience,
+      };
+      const category = resolveImageCategory(post.imageStyle);
+      send({ ...base, status: "brief", category: category.label });
+
+      const brief = await getImageBrief(
+        { title: post.title, body: post.body, postType: post.postType },
+        category,
+        userVisualProfile
+      );
+      send({
+        ...base,
+        status: "rendering",
+        category: category.label,
+        headline: brief.headline || brief.bodyText || "",
+        visual: brief.visual,
+        renderer: "image-model",
+      });
+
+      // Every category is drawn whole by the model, the same way the single
+      // image and carousel paths do it. This branched to a satori layout for
+      // 12 of the 17 categories, so a bulk-generated post looked like it came
+      // from a different product than one generated from the editor.
+      const imageUrl = await generateAndStoreArtImage(brief, post.id, category);
+
+      if (imageUrl) {
+        await prisma.post.update({
+          where: { id: post.id },
+          data: {
+            imageUrl,
+            imagePrompt: `[${category.label}] ${brief.headline || brief.bodyText || ""} - ${
+              brief.visual ?? ""
+            }`,
+            imageGenCount: post.imageGenCount + 1,
+          },
+        });
+        images.push({ id: post.id, imageUrl });
+        generated++;
+        send({ ...base, status: "done", url: imageUrl });
+      } else {
+        errors.push(post.id);
+        send({ ...base, status: "error", message: "No image was produced" });
+      }
+    } catch (err) {
+      errors.push(post.id);
+      send({
+        ...base,
+        status: "error",
+        message: (err as Error)?.message || "Image generation failed",
+      });
+    }
+  }
+
+  send({
+    type: "done",
+    generated,
+    total: posts.length,
+    images,
+    errors: errors.length > 0 ? `Failed for ${errors.length} post(s)` : undefined,
+  });
+}

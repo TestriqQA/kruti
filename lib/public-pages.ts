@@ -29,6 +29,7 @@ export interface PublicPage {
 export const PUBLIC_PAGES: PublicPage[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-10-06" },
   { path: "/blog", priority: 0.8, changeFrequency: "weekly", lastModified: "2026-10-06" },
+  { path: "/delete-account", priority: 0.3, changeFrequency: "yearly", lastModified: "2026-10-23" },
 
   // (legal) - required pages, rarely touched. Dated from the Privacy Policy
   // revision referenced in the SEO handoff pack.
