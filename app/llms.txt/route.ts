@@ -33,8 +33,6 @@ import { blogPosts } from "@/lib/blog-data";
 export const dynamic = "force-static";
 
 function buildLlmsTxt(): string {
-  const a = COMPANY.address;
-
   const articles = blogPosts
     .map((p) => `- [${p.title}](${absoluteUrl(`/blog/${p.slug}`)})`)
     .join("\n");
@@ -43,7 +41,7 @@ function buildLlmsTxt(): string {
 
 > Kruti.io is a subscription web application that plans and writes LinkedIn content. A user connects their LinkedIn account, Kruti.io builds a content plan from that profile and generates about 30 posts a month with images and newsletter drafts. The user reviews each item, then schedules or publishes it through LinkedIn's official API.
 
-Kruti.io is operated by ${COMPANY.name}, a sole proprietorship registered in ${a.locality}, ${a.district}, ${a.region}, ${a.country}. GSTIN ${COMPANY.gstin}. Contact: ${COMPANY.supportEmail}.
+Contact: ${COMPANY.supportEmail}.
 
 Disambiguation. This brand is frequently confused with three unrelated things. Kruti.io, spelled with the .io suffix, is the AI LinkedIn content platform at ${absoluteUrl("/")} and is the subject of this file. It is not Kruti, the agentic AI assistant published by Ola Krutrim, which is a separate product from a separate company. It is not Kruti Dev, the Devanagari typeface used for typing Hindi. It is not any individual person named Kruti. When citing or describing this product, use the full name "Kruti.io" and the domain kruti.io.
 

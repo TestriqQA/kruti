@@ -6,7 +6,7 @@ import LegalSection from "@/components/LegalSection";
 export const metadata: Metadata = {
   title: "Terms of Use | Kruti.io",
   description:
-    "Terms of Use for Kruti.io, the AI-powered LinkedIn content platform by Cinute InfoMedia",
+    "Terms of Use for Kruti.io, the AI-powered LinkedIn content platform",
 };
 
 export default function TermsOfUsePage() {
@@ -24,7 +24,7 @@ export default function TermsOfUsePage() {
       <LegalSection id="acceptance" title="1. Acceptance of Terms">
         <p>
           By accessing or using <strong>Kruti.io</strong> at kruti.io (the &ldquo;Service&rdquo;),
-          operated by <strong>Cinute InfoMedia</strong> (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or
+          (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or
           &ldquo;our&rdquo;), you agree to be bound by these Terms of Use (&ldquo;Terms&rdquo;).
         </p>
         <p>
@@ -38,7 +38,7 @@ export default function TermsOfUsePage() {
           <Link href="/refund" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Refund Policy</Link>,{" "}
           <Link href="/cookies" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Cookie Policy</Link>, and{" "}
           <Link href="/disclaimer" className="text-[#0A66C2] dark:text-blue-400 hover:underline">Disclaimer</Link>,
-          constitute the entire agreement between you and Cinute InfoMedia regarding the Service.
+          constitute the entire agreement between you and us regarding the Service.
         </p>
       </LegalSection>
 
@@ -203,7 +203,7 @@ export default function TermsOfUsePage() {
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
             The Kruti.io platform, including its design, codebase, UI, branding, and
-            documentation, is the property of <strong>Cinute InfoMedia</strong> and is
+            documentation, is our property and is
             protected by applicable intellectual property laws.
           </li>
           <li>
@@ -228,7 +228,7 @@ export default function TermsOfUsePage() {
         <p>To the maximum extent permitted by applicable law:</p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            Kruti.io and Cinute InfoMedia shall not be liable for any indirect,
+            Kruti.io shall not be liable for any indirect,
             incidental, special, consequential, or punitive damages arising from your use of the
             Service.
           </li>

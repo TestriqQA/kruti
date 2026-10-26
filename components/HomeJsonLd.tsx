@@ -1,5 +1,5 @@
 import { absoluteUrl } from "@/lib/site-url";
-import { COMPANY, companyPostalAddress } from "@/lib/company";
+import { COMPANY } from "@/lib/company";
 
 /**
  * Organization, WebSite and SoftwareApplication JSON-LD for the homepage
@@ -25,21 +25,15 @@ import { COMPANY, companyPostalAddress } from "@/lib/company";
  */
 
 const BRAND_LINE =
-  "Kruti.io is an AI LinkedIn content platform by Cinute InfoMedia, Thane, India. It generates 30 posts, images and newsletter drafts a month, which you review and publish through LinkedIn's official API.";
+  "Kruti.io is an AI LinkedIn content platform. It generates 30 posts, images and newsletter drafts a month, which you review and publish through LinkedIn's official API.";
 
 const organization = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Kruti.io",
-  // S-03 specifies "Cinute Digital Pvt. Ltd." - that is a different company.
-  // The entity that operates Kruti.io is Cinute InfoMedia; see lib/company.ts.
-  legalName: COMPANY.name,
   url: absoluteUrl("/"),
   logo: absoluteUrl("/logo.png"),
   description: BRAND_LINE,
-  // F-02 is now answered, so the full street address is included rather than
-  // the locality-only placeholder this shipped with.
-  address: companyPostalAddress(),
   contactPoint: {
     "@type": "ContactPoint",
     contactType: "customer support",
@@ -68,7 +62,7 @@ const softwareApplication = {
   url: absoluteUrl("/"),
   description:
     "AI tool that plans, writes, schedules and publishes LinkedIn posts, images and newsletter drafts.",
-  publisher: { "@type": "Organization", name: COMPANY.name },
+  publisher: { "@type": "Organization", name: "Kruti.io" },
   offers: [
     {
       "@type": "Offer",

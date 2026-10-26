@@ -1,50 +1,27 @@
 import { COMPANY } from "@/lib/company";
 
 /**
- * The operating entity's identity block, shared by all five legal pages.
+ * The contact block shared by all five legal pages.
  *
- * One component rather than five copies because these pages name the
- * CONTRACTING PARTY. When that drifts between Terms and Privacy, it is not a
- * cosmetic inconsistency - it is ambiguity about who the user actually agreed
- * with. Everything here reads from lib/company.ts, so there is one place to
- * change and no way for the pages to disagree.
+ * One component rather than five copies, so the pages cannot disagree about
+ * where to write.
  *
- * India's DPDP Act 2023 requires a Data Fiduciary to be identifiable and
- * contactable, which is why the registered address and GSTIN appear here and
- * not only in the footer.
+ * This used to carry the contracting party's identity - name, constitution,
+ * proprietor, registered address and GSTIN - because these pages name who the
+ * user is agreeing WITH. That has been removed at the owner's request, leaving
+ * an email address. If an entity is named again, add it to lib/company.ts and
+ * render it here; do not write it into the individual pages.
  */
 export default function LegalContact() {
-  const a = COMPANY.address;
-
   return (
-    <>
-      <p>
-        <strong>{COMPANY.name}</strong>
-        <br />
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {COMPANY.constitution} &middot; Proprietor: {COMPANY.proprietor}
-        </span>
-      </p>
-
-      <address className="not-italic leading-relaxed">
-        {a.line1},<br />
-        {a.line2},<br />
-        {a.locality}, {a.district}, {a.region} {a.postalCode}, {a.country}
-      </address>
-
-      <p>
-        GSTIN: <span className="font-mono tracking-tight">{COMPANY.gstin}</span>
-      </p>
-
-      <p>
-        Email:{" "}
-        <a
-          href={`mailto:${COMPANY.supportEmail}`}
-          className="text-[#0A66C2] dark:text-blue-400 hover:underline"
-        >
-          {COMPANY.supportEmail}
-        </a>
-      </p>
-    </>
+    <p>
+      Email:{" "}
+      <a
+        href={`mailto:${COMPANY.supportEmail}`}
+        className="text-[#0A66C2] dark:text-blue-400 hover:underline"
+      >
+        {COMPANY.supportEmail}
+      </a>
+    </p>
   );
 }
