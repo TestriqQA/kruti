@@ -2,6 +2,17 @@ import { buildRedirects, buildCanonicalHostRedirect } from "./lib/redirects.mjs"
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * Standalone output: a self-contained server.js plus only the node_modules
+   * it actually traced, which is what the Docker image copies instead of the
+   * whole dependency tree.
+   *
+   * Gated on an env var rather than switched on permanently, because Vercel
+   * builds this same config and uses its own Build Output API. Leaving it off
+   * there keeps the live deploy on exactly the path it ships on today; the
+   * Dockerfile sets DOCKER_BUILD=1 for itself.
+   */
+  output: process.env.DOCKER_BUILD === "1" ? "standalone" : undefined,
   experimental: {
     instrumentationHook: true,
     /**
