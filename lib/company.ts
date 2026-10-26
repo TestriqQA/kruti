@@ -1,68 +1,26 @@
 /**
- * The operating company's registered details (F-02, used by D-18 and D-05).
+ * Contact details the public pages use.
  *
- * Single source of truth so the footer, the Organization JSON-LD and any future
- * About or Contact page cannot drift apart. Taken from the GST registration
- * certificate (Form GST REG-06), issued 01/10/2026.
+ * This module used to carry the operating company's registered identity -
+ * trading name, proprietor, GSTIN and registered address - and every public
+ * surface read from it so they could not drift apart. That identity has been
+ * removed at the owner's request: the site now presents itself as Kruti.io and
+ * names no operating entity.
  *
- * ── A correction to the SEO handoff pack ──────────────────────────────────
- * S-02, S-03 and S-08 all name "Cinute Digital Pvt. Ltd., Mumbai". That is a
- * DIFFERENT legal entity: Cinute Digital Private Limited, CIN
- * U74999MH2018PTC304936, registered at Goregaon East, Mumbai 400065.
+ * The module stays as the single source for what is left, so a contact address
+ * still cannot disagree between the footer, the legal pages and llms.txt.
  *
- * The entity that actually operates Kruti.io is Cinute InfoMedia, a sole
- * proprietorship of Sandeep M Maske registered in Thane. Confirmed by the
- * client on 2026-10-07. The values below are the accurate ones.
+ * ── If an entity has to be named again ───────────────────────────────────────
+ * Put it back HERE, not in the pages. The registered details are in git
+ * history (see the commit that removed them) and the legal pages, the footer,
+ * the Organization JSON-LD and llms.txt all import from this file already.
  *
- * Consequences still outstanding:
- *   - The five legal pages still name Cinute Digital Pvt. Ltd. as the
- *     contracting party. That is a lawyer's change, not a find-and-replace.
- *   - S-02/S-08's brand line and S-09's FAQ answers 1 and 3 name the wrong
- *     company and need re-approval from whoever wrote the pack.
- *   - A proprietorship has no CIN, so the "CIN" half of F-02 does not exist.
+ * Worth knowing before deciding: India's DPDP Act 2023 requires a Data
+ * Fiduciary to be identifiable and contactable, and Razorpay's merchant terms
+ * expect the operating entity to be shown. Neither is satisfied by an email
+ * address alone.
  */
 
 export const COMPANY = {
-  /** Trading name, as it should appear to users. */
-  name: "Cinute InfoMedia",
-  /** Legal constitution - a proprietorship, not a private limited company. */
-  constitution: "Proprietorship",
-  /** Legal name on the GST certificate. */
-  proprietor: "Sandeep M Maske",
-
-  gstin: "27AMZPM6333R1ZU",
-  /** Proprietorships are not registered with the MCA, so there is no CIN. */
-  cin: null as string | null,
-
-  address: {
-    line1: "2nd Floor, Shop No. 3, Ashley Tower",
-    line2: "St Jalaram Bapa Marg, Mira Road East",
-    locality: "Mira Bhayandar",
-    district: "Thane",
-    region: "Maharashtra",
-    postalCode: "401107",
-    country: "India",
-    countryCode: "IN",
-  },
-
   supportEmail: "support@kruti.io",
 } as const;
-
-/** One-line address for the footer. */
-export function companyAddressLine(): string {
-  const a = COMPANY.address;
-  return `${a.line1}, ${a.line2}, ${a.locality}, ${a.district}, ${a.region} ${a.postalCode}, ${a.country}`;
-}
-
-/** schema.org PostalAddress, for the Organization block in D-05. */
-export function companyPostalAddress() {
-  const a = COMPANY.address;
-  return {
-    "@type": "PostalAddress",
-    streetAddress: `${a.line1}, ${a.line2}`,
-    addressLocality: a.locality,
-    addressRegion: a.region,
-    postalCode: a.postalCode,
-    addressCountry: a.countryCode,
-  };
-}
