@@ -1,0 +1,41 @@
+# CI image: installs the project the way a clean machine would, then runs the
+# checks. Nothing from the host is reused.
+#
+# Why this is worth having even though the app builds fine on Windows: the
+# build that failed on Vercel passed locally, because the host had a .next from
+# before a merge and node_modules already in place. A container starts from the
+# lockfile every time, so the only thing it can be testing is the committed
+# code.
+#
+# bookworm-slim rather than alpine: sharp 0.34 does ship musl binaries, but
+# glibc is what the app will actually run on after the AWS move, and a CI that
+# builds against a different libc than production is testing the wrong thing.
+
+FROM node:22-bookworm-slim
+
+# openssl: Prisma's engines link against it and the slim image omits it.
+# ca-certificates: next/font fetches Inter from fonts.gstatic.com during the
+#   build, and curl is used by the smoke step.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends openssl ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Dependencies first, in their own layer. Docker reuses this layer on every run
+# where package-lock.json has not changed, which is what keeps a repeat CI run
+# to the length of the build rather than the install.
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Then the source. Anything in .dockerignore is not here - notably .env*,
+# node_modules and .next.
+COPY . .
+
+# A real Chromium is never launched; this only silences the download attempt if
+# a transitive dependency ever pulls puppeteer in.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV CI=1
+
+CMD ["bash", "docker/ci.sh"]

@@ -1,0 +1,68 @@
+# Local CI. Run it with:
+#
+#   docker compose -f docker-compose.ci.yml up --build --abort-on-container-exit --exit-code-from ci
+#
+# --exit-code-from ci is the part that makes this CI rather than a demo: the
+# command's exit status becomes the pipeline's, so a failed check fails the
+# command and anything wrapping it.
+#
+# No real credentials are involved. Every value below is a placeholder that
+# exists only to satisfy code reading process.env at build time; the checks are
+# a typecheck, a build, a schema push and a page fetch, none of which talk to
+# LinkedIn, Razorpay, Resend or Google.
+
+services:
+  postgres:
+    # 17 to match the Supabase instance the app actually runs against, so a
+    # schema that pushes here is known to push there.
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: kruti
+      POSTGRES_PASSWORD: kruti_ci
+      POSTGRES_DB: kruti_ci
+    # tmpfs: the database lives in RAM and dies with the run. A CI database
+    # that survives between runs stops being a clean-slate test.
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kruti -d kruti_ci"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  ci:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.ci
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Real, and the only one that is: it points at the throwaway Postgres
+      # above so `prisma db push` has something to push to.
+      DATABASE_URL: postgresql://kruti:kruti_ci@postgres:5432/kruti_ci
+      DIRECT_URL: postgresql://kruti:kruti_ci@postgres:5432/kruti_ci
+
+      # Placeholders. Present so module-scope reads do not blow up during the
+      # build; none of them is used to reach a real service.
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ci-placeholder-not-a-real-secret
+      LINKEDIN_CLIENT_ID: ci-placeholder
+      LINKEDIN_CLIENT_SECRET: ci-placeholder
+      GOOGLE_AI_API_KEY: ci-placeholder
+      BLOB_READ_WRITE_TOKEN: ci-placeholder
+      RESEND_API_KEY: ci-placeholder
+      FROM_EMAIL: ci@example.invalid
+      RAZORPAY_KEY_SECRET: ci-placeholder
+      RAZORPAY_WEBHOOK_SECRET: ci-placeholder
+      RAZORPAY_PLAN_ID_INR: ci-placeholder
+      RAZORPAY_PLAN_ID_USD: ci-placeholder
+      NEXT_PUBLIC_RAZORPAY_KEY_ID: ci-placeholder
+
+      # Defaults the app would otherwise pick itself; pinned so a CI run is
+      # reproducible rather than dependent on whatever is in .env.local.
+      IMAGE_PROVIDER: gemini
+      IMAGE_SIZE: 1K
+      USD_TO_INR: "85"
+
+      NODE_ENV: production
