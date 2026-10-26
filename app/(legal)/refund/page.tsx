@@ -23,9 +23,8 @@ export default function RefundPolicyPage() {
 
       <LegalSection id="overview" title="1. Overview">
         <p>
-          This Refund Policy applies to all subscription payments for <strong>Kruti.io</strong>,
-          operated by <strong>Cinute InfoMedia</strong> All payments are processed securely
-          through <strong>Razorpay</strong>.
+          This Refund Policy applies to all subscription payments for <strong>Kruti.io</strong>.
+          All payments are processed securely through <strong>Razorpay</strong>.
         </p>
         <p>
           Our subscription plans are:

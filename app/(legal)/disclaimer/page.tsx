@@ -23,12 +23,12 @@ export default function DisclaimerPage() {
 
       <LegalSection id="general" title="1. General Disclaimer">
         <p>
-          <strong>Kruti.io</strong>, operated by <strong>Cinute InfoMedia</strong>, is
+          <strong>Kruti.io</strong> is
           provided on an &ldquo;as is&rdquo; and &ldquo;as available&rdquo; basis without any warranties
           of any kind, whether express, implied, or statutory.
         </p>
         <p>
-          To the fullest extent permitted by applicable law, Cinute InfoMedia disclaims
+          To the fullest extent permitted by applicable law, we disclaim
           all warranties, including but not limited to implied warranties of merchantability,
           fitness for a particular purpose, non-infringement, and accuracy of informational
           content.
@@ -195,7 +195,7 @@ export default function DisclaimerPage() {
         </p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            Cinute InfoMedia&rsquo;s total aggregate liability for any and all claims
+            Our total aggregate liability for any and all claims
             arising from or related to the Service shall not exceed the subscription fees you
             paid in the <strong>three (3) months</strong> immediately preceding the event giving
             rise to the claim.
@@ -218,7 +218,7 @@ export default function DisclaimerPage() {
 
       <LegalSection id="indemnification" title="9. Indemnification">
         <p>
-          You agree to indemnify, defend, and hold harmless <strong>Cinute InfoMedia Pvt.
+          You agree to indemnify, defend, and hold harmless <strong>Kruti.io
           Ltd.</strong>, its officers, directors, employees, and agents from and against any and
           all claims, damages, losses, liabilities, costs, and expenses (including reasonable
           legal fees) arising from:

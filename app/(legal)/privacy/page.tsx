@@ -7,7 +7,7 @@ import LegalSection from "@/components/LegalSection";
 export const metadata: Metadata = {
   title: "Privacy Policy | Kruti.io",
   description:
-    "Learn how Kruti.io by Cinute InfoMedia collects, uses, and protects your personal information.",
+    "Learn how Kruti.io collects, uses, and protects your personal information.",
 };
 
 export default function PrivacyPolicyPage() {
@@ -26,10 +26,8 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="introduction" title="1. Introduction">
         <p>
           Welcome to <strong>Kruti.io</strong> (&ldquo;we,&rdquo; &ldquo;us,&rdquo; or &ldquo;our&rdquo;), an AI-powered
-          LinkedIn content generation platform operated by <strong>Cinute InfoMedia</strong>,
-          a sole proprietorship registered in Maharashtra, India (GSTIN 27AMZPM6333R1ZU).
-          Cinute InfoMedia is the Data Fiduciary for the purposes of India&rsquo;s Digital
-          Personal Data Protection Act, 2023.
+          LinkedIn content generation platform. We are the Data Fiduciary for the purposes
+          of India&rsquo;s Digital Personal Data Protection Act, 2023.
         </p>
         <p>
           This Privacy Policy explains how we collect, use, store, share, and protect your personal
@@ -464,15 +462,6 @@ export default function PrivacyPolicyPage() {
             Personal Data Protection Act, 2023:
           </p>
           <p className="mt-2">
-            <strong>{COMPANY.proprietor}</strong>
-            <br />
-            Proprietor and Data Fiduciary, {COMPANY.name}
-            <br />
-            {COMPANY.address.line1}, {COMPANY.address.line2},
-            <br />
-            {COMPANY.address.locality}, {COMPANY.address.district}, {COMPANY.address.region}{" "}
-            {COMPANY.address.postalCode}, {COMPANY.address.country}
-            <br />
             Email:{" "}
             <a
               href={`mailto:${COMPANY.supportEmail}`}
@@ -483,9 +472,7 @@ export default function PrivacyPolicyPage() {
           </p>
           <p className="mt-2 text-sm">
             Mark your message &ldquo;Grievance&rdquo; so we can route it. We aim to acknowledge
-            within 3 working days and to resolve within 30 days. Because Cinute InfoMedia is a
-            sole proprietorship, the proprietor is personally the Data Fiduciary and handles
-            these directly.
+            within 3 working days and to resolve within 30 days.
           </p>
         </div>
 

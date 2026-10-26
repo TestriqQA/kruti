@@ -27,9 +27,8 @@ export default function CookiePolicyPage() {
           efficiently, provide information to site owners, and enhance user experience.
         </p>
         <p>
-          This Cookie Policy explains how <strong>Kruti.io</strong>, operated by{" "}
-          <strong>Cinute InfoMedia</strong>, uses cookies and similar technologies on
-          kruti.io.
+          This Cookie Policy explains how <strong>Kruti.io</strong> uses cookies and similar
+          technologies on kruti.io.
         </p>
       </LegalSection>
 
