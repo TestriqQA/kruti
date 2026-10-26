@@ -1,0 +1,34 @@
+# What NOT to copy into the build context.
+#
+# The first two entries are the ones that matter most:
+#   - .env* keeps real credentials out of the image. A COPY . . without this
+#     bakes DATABASE_URL, the LinkedIn secret and the Razorpay keys into a
+#     layer that anyone who can pull the image can read back.
+#   - node_modules and .next are host artefacts built for Windows. Copying
+#     them in would shadow the Linux ones npm ci installs, and sharp would
+#     load a binary compiled for the wrong platform.
+
+.env
+.env.*
+!.env.example
+
+node_modules
+.next
+.gen-out
+out
+build
+
+.git
+.github
+.vscode
+.idea
+
+# Local scratch - root test-*.js are manual scripts, not part of the app
+test-*.js
+test-*.mjs
+*.log
+npm-debug.log*
+
+# Docs that do not affect the build
+*.md
+!README.md
