@@ -56,6 +56,18 @@ export async function runPostsGeneration(
   }
   send({ type: "preflight", key: "ratelimit", status: "done" });
 
+  // Validate planId explicitly. Prisma DROPS an `undefined` id filter, so
+  // without this the where clause collapses to { userId } and quietly matches
+  // an arbitrary plan of the caller's - posts then attach to the wrong week.
+  // The carousel pipeline has guarded its postId this way all along; this one
+  // never did. status 400 is carried through to a buffered caller by
+  // respondByAccept, which reads it off the terminal error event.
+  if (!planId || typeof planId !== "string") {
+    send({ type: "preflight", key: "plan", status: "error", message: "Missing or invalid plan reference." });
+    send({ type: "error", message: "Missing or invalid plan reference.", status: 400 });
+    return;
+  }
+
   const plan = await prisma.contentPlan.findFirst({ where: { id: planId, userId } });
   if (!plan) {
     send({ type: "preflight", key: "plan", status: "error", message: "Plan not found" });
