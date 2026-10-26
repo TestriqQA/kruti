@@ -57,6 +57,13 @@ const PUBLIC_API_PREFIXES = [
   "/api/cron",
   "/api/site-gate",
   "/api/onboarding",
+  // The mobile app authenticates with a Bearer JWT, not a session cookie,
+  // so the cookie check below can never pass for it. Without this the whole
+  // /api/mobile/* surface 307s to the HTML sign-in page and every call comes
+  // back as unparseable HTML instead of JSON. Each route still verifies the
+  // token itself and returns 401 - this only stops the middleware answering
+  // first.
+  "/api/mobile",
   // D-19: a visitor hitting a dead link is usually signed out, and that is
   // precisely the 404 worth recording. Rate limited in the route itself.
   "/api/log-404",
