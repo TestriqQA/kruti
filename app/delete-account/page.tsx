@@ -159,9 +159,7 @@ export default function DeleteAccountPage() {
         </dl>
 
         <p className="mt-10 border-t border-slate-200 pt-6 text-sm leading-relaxed text-slate-500 dark:border-white/10 dark:text-slate-500">
-          Kruti.io is operated by {COMPANY.name}, {COMPANY.address.locality},{" "}
-          {COMPANY.address.district}, {COMPANY.address.region} {COMPANY.address.postalCode},{" "}
-          {COMPANY.address.country}. For how we handle your data generally, see our{" "}
+          For how we handle your data generally, see our{" "}
           <Link href="/privacy" className="text-blue-600 hover:underline dark:text-blue-400">
             Privacy Policy
           </Link>
