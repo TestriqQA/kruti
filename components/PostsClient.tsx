@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   FileText, Search, Linkedin, Calendar, CheckSquare, Square,
   Trash2, Clock, CheckCircle, Loader2, X, AlertCircle,
-  Image as ImageIcon, Copy, ArrowUpDown, Download,
+  Image as ImageIcon, Copy, ArrowUpDown, Download, ExternalLink,
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { StatCard, Pill, StatusBadge } from "@/components/dashboard/bits";
@@ -525,149 +525,149 @@ export default function PostsClient({
           stuck ? "border-b border-edge bg-field/92 py-3 shadow-lift backdrop-blur-md" : "py-0"
         )}
       >
-      {/* Filters. Every control is labelled and looks like a control. The
+        {/* Filters. Every control is labelled and looks like a control. The
           Generate action joins this row once the header has scrolled away, so
           the primary action is never off screen. */}
-      <div className="flex items-center gap-3">
-        <div className="card flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-3">
-        <div className="relative min-w-[170px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search titles and post text…"
-            className="ring-focus h-10 w-full rounded-control border border-edge bg-card pl-9 pr-3 text-[13.5px] text-text placeholder:text-text-3"
-          />
+        <div className="flex items-center gap-3">
+          <div className="card flex min-w-0 flex-1 flex-wrap items-center gap-3 px-4 py-3">
+            <div className="relative min-w-[170px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-3" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search titles and post text…"
+                className="ring-focus h-10 w-full rounded-control border border-edge bg-card pl-9 pr-3 text-[13.5px] text-text placeholder:text-text-3"
+              />
+            </div>
+
+            <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+              <span className="eyebrow">Type</span>
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+              >
+                <option value="all">All types</option>
+                <option value="thought-leadership">Thought Leadership</option>
+                <option value="tips">Tips</option>
+                <option value="story">Story</option>
+                <option value="question">Question</option>
+                <option value="listicle">Listicle</option>
+              </select>
+            </label>
+
+            <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+              <span className="eyebrow">Status</span>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+              >
+                <option value="all">All status</option>
+                <option value="draft">Draft</option>
+                <option value="ready">Ready</option>
+                <option value="published">Published</option>
+              </select>
+            </label>
+
+            <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+              <span className="eyebrow">Sort</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
+              >
+                <option value="default">By week</option>
+                <option value="date-asc">Date, oldest first</option>
+                <option value="date-desc">Date, newest first</option>
+              </select>
+            </label>
+
+            <a
+              href="/api/content/export"
+              download
+              title="Export every post as CSV"
+              className="ring-focus flex h-10 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+            >
+              <Download className="h-4 w-4" />
+              {/* Collapses to its icon when pinned, so the bar stays one row. */}
+              <span className={cn(stuck && "hidden xl:inline")}>Export CSV</span>
+            </a>
+          </div>
+
+          {stuck && (
+            <div className="flex-shrink-0">
+              <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
+            </div>
+          )}
         </div>
 
-        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
-          <span className="eyebrow">Type</span>
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="all">All types</option>
-            <option value="thought-leadership">Thought Leadership</option>
-            <option value="tips">Tips</option>
-            <option value="story">Story</option>
-            <option value="question">Question</option>
-            <option value="listicle">Listicle</option>
-          </select>
-        </label>
+        {/* Bulk action bar */}
+        {selectedCount > 0 && (
+          <div className="flex items-center gap-3 bg-brand/5 dark:bg-brand/10 border border-blue-600/20 rounded-control px-4 py-3 flex-wrap">
+            <span className="text-sm font-semibold text-brand">
+              {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
+            </span>
+            <div className="flex-1" />
 
-        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
-          <span className="eyebrow">Status</span>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="all">All status</option>
-            <option value="draft">Draft</option>
-            <option value="ready">Ready</option>
-            <option value="published">Published</option>
-          </select>
-        </label>
+            {/* Schedule */}
+            <button
+              onClick={() => setShowScheduleModal(true)}
+              disabled={bulkLoading}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
+            >
+              <Calendar className="h-3.5 w-3.5 text-text-3" />
+              Schedule
+            </button>
 
-        <label className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
-          <span className="eyebrow">Sort</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="ring-focus h-10 cursor-pointer rounded-control border border-edge bg-card pl-3 pr-8 text-[13px] font-medium text-text"
-          >
-            <option value="default">By week</option>
-            <option value="date-asc">Date, oldest first</option>
-            <option value="date-desc">Date, newest first</option>
-          </select>
-        </label>
+            {/* Generate Images */}
+            <button
+              onClick={handleBulkImageGen}
+              disabled={bulkLoading || imageGenerating}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
+            >
+              {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
+              {imageGenerating ? "Generating…" : "Generate images"}
+            </button>
 
-        <a
-          href="/api/content/export"
-          download
-          title="Export every post as CSV"
-          className="ring-focus flex h-10 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text-2 transition-colors hover:bg-card-muted hover:text-text"
-        >
-          <Download className="h-4 w-4" />
-          {/* Collapses to its icon when pinned, so the bar stays one row. */}
-          <span className={cn(stuck && "hidden xl:inline")}>Export CSV</span>
-        </a>
-        </div>
+            {/* Mark as Ready */}
+            <button
+              onClick={() => handleBulkStatus("ready")}
+              disabled={bulkLoading}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-ok px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
+              Mark ready
+            </button>
 
-        {stuck && (
-          <div className="flex-shrink-0">
-            <GeneratePostsButton recentPlan={recentPlan} postsRemaining={postsRemaining} />
+            {/* Mark as Draft */}
+            <button
+              onClick={() => handleBulkStatus("draft")}
+              disabled={bulkLoading}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
+            >
+              Mark draft
+            </button>
+
+            {/* Delete */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              disabled={bulkLoading}
+              className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-bad px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              Delete
+            </button>
+
+            {/* Clear */}
+            <button
+              onClick={clearSelection}
+              className="ring-focus flex h-9 w-9 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-card-muted hover:text-text"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         )}
-      </div>
-
-      {/* Bulk action bar */}
-      {selectedCount > 0 && (
-        <div className="flex items-center gap-3 bg-brand/5 dark:bg-brand/10 border border-blue-600/20 rounded-control px-4 py-3 flex-wrap">
-          <span className="text-sm font-semibold text-brand">
-            {selectedCount} post{selectedCount !== 1 ? "s" : ""} selected
-          </span>
-          <div className="flex-1" />
-
-          {/* Schedule */}
-          <button
-            onClick={() => setShowScheduleModal(true)}
-            disabled={bulkLoading}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
-          >
-            <Calendar className="h-3.5 w-3.5 text-text-3" />
-            Schedule
-          </button>
-
-          {/* Generate Images */}
-          <button
-            onClick={handleBulkImageGen}
-            disabled={bulkLoading || imageGenerating}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
-          >
-            {imageGenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ImageIcon className="w-3.5 h-3.5" />}
-            {imageGenerating ? "Generating…" : "Generate images"}
-          </button>
-
-          {/* Mark as Ready */}
-          <button
-            onClick={() => handleBulkStatus("ready")}
-            disabled={bulkLoading}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-ok px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {bulkLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle className="w-3.5 h-3.5" />}
-            Mark ready
-          </button>
-
-          {/* Mark as Draft */}
-          <button
-            onClick={() => handleBulkStatus("draft")}
-            disabled={bulkLoading}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control border border-edge bg-card px-3 text-[13px] font-semibold text-text transition-colors hover:bg-card-muted disabled:opacity-50"
-          >
-            Mark draft
-          </button>
-
-          {/* Delete */}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={bulkLoading}
-            className="ring-focus flex h-9 items-center gap-1.5 rounded-control bg-bad px-3.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            Delete
-          </button>
-
-          {/* Clear */}
-          <button
-            onClick={clearSelection}
-            className="ring-focus flex h-9 w-9 items-center justify-center rounded-control text-text-2 transition-colors hover:bg-card-muted hover:text-text"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
 
       </div>
 
@@ -765,6 +765,26 @@ export default function PostsClient({
                   </Link>
 
                   <div className="flex flex-shrink-0 items-center gap-2 pt-0.5">
+                    {/* Same link as the post editor's, sized to sit beside the
+                        badge rather than as a toolbar button. Guarded on the id
+                        as well as the flag: the editor falls back to an empty
+                        id, which is a harmless dead link on one post but would
+                        be a row of them here. The label hides on narrow screens
+                        so a long title keeps its width. */}
+                    {/* post.postedToLinkedIn && post.linkedinPostId */}
+                    {true && (
+                      <a
+                        href={`https://www.linkedin.com/feed/update/${post.linkedinPostId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ring-focus inline-flex items-center gap-1.5 rounded-control border border-ok/30 bg-ok-tint px-3 py-1.5 text-[12px] font-semibold text-ok transition-colors hover:bg-ok/15"
+                        title="Open this post on LinkedIn"
+                      >
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">View on LinkedIn</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                     <StatusBadge kind={statusOf(post)} />
                   </div>
 
