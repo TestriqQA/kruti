@@ -30,11 +30,37 @@ export const GROUNDING_USD_PER_CALL = 35 / 1000; // $35 / 1,000 prompts = 0.035
 // reporting a spend the account was never charged.
 //
 // Priced per image rather than per output token because the Flash tier's rate
-// genuinely differs by resolution: unlike Pro, 1K and 2K are NOT the same price,
-// which matters here because carousels render at 1K and single images at 2K.
+// genuinely differs by resolution: unlike Pro, 1K, 2K and 4K are three
+// different prices, and IMAGE_SIZE picks one for every image this app draws.
 export const IMAGE_USD_1K = 0.067;
 export const IMAGE_USD_2K = 0.101;
 export const IMAGE_USD_4K = 0.15;
+
+/**
+ * The resolutions the Gemini image tier accepts, and the one this deployment is
+ * set to. IMAGE_SIZE picks it; anything unrecognised means 2K, so an empty
+ * environment behaves exactly as it always has.
+ *
+ * This lives here rather than beside resolveImageProvider() in lib/imagen.ts
+ * because the analytics path needs it too, and this module is a leaf - pulling
+ * imagen.ts in would drag @google/genai, @vercel/blob and sharp behind a cost
+ * calculation. lib/imagen.ts imports it from here, so the parse exists once:
+ * it used to be written out twice, and the carousel and single-image paths
+ * could have drifted apart without anything failing.
+ *
+ * 4K is not a drop-in for 2K. It costs IMAGE_USD_4K against 2K's
+ * IMAGE_USD_2K, and it is slower - which matters most on the carousel path,
+ * where slides generate in parallel under a 60s maxDuration.
+ */
+export type ImageSize = "1K" | "2K" | "4K";
+
+export function resolveImageSize(): ImageSize {
+  // Upper-cased so IMAGE_SIZE=4k works too; the old inline parse compared
+  // against "1K" exactly and silently fell through to 2K on any other casing.
+  const raw = (process.env.IMAGE_SIZE ?? "").trim().toUpperCase();
+  if (raw === "1K" || raw === "4K") return raw;
+  return "2K";
+}
 
 /**
  * Nano Banana Pro, for reference only - nothing calls it today. If lib/imagen.ts
@@ -131,17 +157,23 @@ export function strategyCostUsd(): number {
 // ── Per-unit INR rates the analytics dashboard multiplies by activity counts ──
 
 /**
- * Per generated image (Nano Banana 2 @ 2K), incl. its small text brief.
+ * Per generated image at the configured IMAGE_SIZE, incl. its small text brief.
  *
  * A single blended rate on purpose: analytics recovers images from Blob
- * filenames and cannot tell a single image from a carousel slide, so every image
- * is costed at the 2K rate. Carousel slides actually render at 1K
- * (IMAGE_USD_1K), so an account that leans on carousels is costed slightly HIGH
- * here - the opposite direction to the old Pro-rate bug, and a much smaller gap.
+ * filenames and cannot tell a single image from a carousel slide. That used to
+ * cost carousels slightly HIGH, because slides rendered at 1K while this line
+ * was pinned to 2K. Both paths now take the same resolveImageSize(), so the
+ * blend is exact again - and 4K is priced as 4K instead of silently as 2K,
+ * which would have understated every image by toInr(0.15 - 0.101).
+ *
+ * Frozen at module load, unlike resolveImageProvider()'s deliberate per-call
+ * read. That is fine here: Vercel injects env at deploy, so IMAGE_SIZE cannot
+ * change inside a running process, and this figure only feeds the dashboard.
  */
 export const IMAGE_COST_INR = toInr(
-  imageCostUsd("2K") + flashTextCostUsd(EST.imageBrief.input, EST.imageBrief.output)
-); // ~INR 8.68
+  imageCostUsd(resolveImageSize()) +
+    flashTextCostUsd(EST.imageBrief.input, EST.imageBrief.output)
+); // 1K ~INR 5.79 · 2K ~INR 8.68 · 4K ~INR 12.84
 
 /**
  * Per post created. A posts batch (~5 posts) costs one grounded research call plus
