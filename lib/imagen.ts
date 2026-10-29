@@ -11,6 +11,7 @@ import {
   type RecraftModelKey,
   type RecraftStyle,
 } from "@/lib/recraft";
+import { resolveImageSize, type ImageSize } from "@/lib/pricing";
 
 let _ai: GoogleGenAI | null = null;
 function getAI(): GoogleGenAI {
@@ -285,7 +286,9 @@ export async function renderCarouselFromPlan(
   const style = resolveVisualStyle(undefined, postId);
   const layout = resolvePageLayout(undefined, postId);
   const category = getImageCategory("infographic");
-  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+  // Every slide at one resolution, from IMAGE_SIZE. At 4K this is the path to
+  // watch: the slides below go out in parallel under maxDuration = 60.
+  const size = resolveImageSize();
 
   plan.slides.forEach((_, i) => onSlideEvent?.({ index: i, status: "start" }));
 
@@ -352,7 +355,7 @@ export async function generatePostImage(
   postId: string,
   industry?: string,
   allowText = false,
-  imageSize: "1K" | "2K" = "2K"
+  imageSize: ImageSize = "2K"
 ): Promise<string | null> {
   lastImageGenError = null;
 
@@ -433,7 +436,7 @@ function isRecraft(p: ImageProvider): p is RecraftModelKey {
  */
 export async function generateImageBuffer(
   prompt: string,
-  imageSize: "1K" | "2K" = "2K",
+  imageSize: ImageSize = "2K",
   opts?: { style?: RecraftStyle }
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
   const provider = resolveImageProvider();
@@ -452,7 +455,7 @@ export async function generateImageBuffer(
 /** The Gemini path, unchanged - still the default, and the fallback. */
 async function generateGeminiImageBuffer(
   prompt: string,
-  imageSize: "1K" | "2K" = "2K",
+  imageSize: ImageSize = "2K",
   preferred: string = DEFAULT_GEMINI_IMAGE_MODEL
 ): Promise<{ buffer: Buffer; ext: string; contentType: string } | null> {
   // The chosen model first, then the long-standing default behind it. A model
@@ -688,11 +691,11 @@ export async function generateAndStoreArtImage(
   // A designed graphic with type on it, so Recraft is told to illustrate
   // rather than photograph. Ignored by the Gemini path.
   //
-  // IMAGE_SIZE exists so Gemini can be tried at 1K without a code change:
-  // Recraft tops out at 1024 on a square, so comparing its output against
-  // Gemini at 2K judges resolution rather than the model. 1K also costs
-  // $0.067 against 2K's $0.101, which may be the whole answer on its own.
-  const size = process.env.IMAGE_SIZE === "1K" ? "1K" : "2K";
+  // Resolution comes from IMAGE_SIZE - resolveImageSize() in lib/pricing.ts
+  // says why the parse lives there. Recraft tops out at 1024 on a square, so a
+  // Recraft-against-Gemini comparison wants 1K or it judges resolution rather
+  // than the model. Rates per image: 1K $0.067 · 2K $0.101 · 4K $0.15.
+  const size = resolveImageSize();
   const result = await generateImageBuffer(prompt, size, { style: "digital_illustration" });
   if (!result) return null;
 
