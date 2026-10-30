@@ -51,8 +51,24 @@ export interface ProfileSuggestion {
   tone: string;
   contentGoals: string[];
   contentStyles: string[];
+  /**
+   * The audience step asks three separate questions and composes the final
+   * description from them with composeTargetAudience(). Answering only the
+   * composed box left all three visibly blank, so the three are what we ask
+   * the model for.
+   *
+   * `targetAudience` stays as a fallback: a profile can describe who it is
+   * written for without splitting cleanly into who / stuck-on / wants, and a
+   * filled final box beats three empty questions AND an empty box.
+   */
+  audienceWho: string;
+  audiencePain: string;
+  audienceOutcome: string;
   targetAudience: string;
 }
+
+/** Each of the three audience answers is a fragment, not the whole thing. */
+export const MAX_AUDIENCE_PART_CHARS = 200;
 
 export const EMPTY_SUGGESTION: ProfileSuggestion = {
   headline: "",
@@ -63,6 +79,9 @@ export const EMPTY_SUGGESTION: ProfileSuggestion = {
   tone: "",
   contentGoals: [],
   contentStyles: [],
+  audienceWho: "",
+  audiencePain: "",
+  audienceOutcome: "",
   targetAudience: "",
 };
 
@@ -131,7 +150,10 @@ Return ONLY a JSON object with these keys:
   "tone": "string - EXACTLY one of: ${ONBOARDING_TONE_VALUES.join(" | ")}",
   "contentGoals": ["EXACTLY from: ${CONTENT_GOALS.join(" | ")}"],
   "contentStyles": ["EXACTLY from: ${CONTENT_STYLES.join(" | ")}"],
-  "targetAudience": "string - who they should write FOR, max ${MAX_AUDIENCE_CHARS} chars. Describe the readers: their roles, seniority and what they care about."
+  "audienceWho": "string, max ${MAX_AUDIENCE_PART_CHARS} chars - WHO they should write for. Roles and seniority, specific. Example shape: 'Seed-stage B2B SaaS founders with 5-20 employees'. A noun phrase, no leading 'They are'.",
+  "audiencePain": "string, max ${MAX_AUDIENCE_PART_CHARS} chars - what that audience is STUCK ON right now. Example shape: 'they keep shipping features nobody asked for and churn is climbing'. Lower case, no full stop.",
+  "audienceOutcome": "string, max ${MAX_AUDIENCE_PART_CHARS} chars - what that audience actually WANTS. Example shape: 'a repeatable way to decide what to build next without guessing'. Lower case, no full stop.",
+  "targetAudience": "string, max ${MAX_AUDIENCE_CHARS} chars - ONLY fill this if you cannot split the audience into the three fields above. Leave it \\"\\" whenever audienceWho is filled, because the form builds this sentence from the three."
 }
 
 RULES - these matter more than filling the form:
@@ -140,7 +162,8 @@ RULES - these matter more than filling the form:
 - Every value in "industry", "positioning", "tone", "contentGoals" and "contentStyles" MUST be copied EXACTLY from the lists above, character for character. Anything else is discarded.
 - "skills": up to ${MAX_SKILLS}, each under ${MAX_SKILL_CHARS} characters. Only skills the text actually evidences. [] if it names none.
 - "contentStyles": suggest at least ${MIN_CONTENT_STYLES} when the text supports them, chosen to suit how this person writes and what they know. [] if you genuinely cannot tell.
-- "summary" and "targetAudience" are the two most valuable fields. Write them properly or leave them empty - a generic "experienced professional passionate about innovation" is worse than blank.
+- The audience is almost always INFERABLE even when the profile never names it. Someone who builds payment infrastructure writes for engineers and CTOs handling payments; a recruiter writes for hiring managers and candidates in their niche. Reason from what this person DOES and who would benefit from hearing it, and fill the three audience fields. Leave them empty only when the text is too thin to tell what they do at all.
+- "summary" and the audience fields are the most valuable things here. Write them properly or leave them empty - a generic "experienced professional passionate about innovation" is worse than blank.
 - Never mention this tool, the pasted text, or the fact that you are an AI.
 - Plain text only, no markdown, no emojis.
 
@@ -193,6 +216,9 @@ export async function suggestProfile(opts: {
     tone: matchOne(parsed.tone, ONBOARDING_TONE_VALUES),
     contentGoals: matchMany(parsed.contentGoals, CONTENT_GOALS),
     contentStyles: matchMany(parsed.contentStyles, CONTENT_STYLES),
+    audienceWho: sanitizeProfileText(parsed.audienceWho, MAX_AUDIENCE_PART_CHARS),
+    audiencePain: sanitizeProfileText(parsed.audiencePain, MAX_AUDIENCE_PART_CHARS),
+    audienceOutcome: sanitizeProfileText(parsed.audienceOutcome, MAX_AUDIENCE_PART_CHARS),
     targetAudience: sanitizeProfileText(parsed.targetAudience, MAX_AUDIENCE_CHARS),
   };
 }
