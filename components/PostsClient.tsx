@@ -771,8 +771,7 @@ export default function PostsClient({
                         id, which is a harmless dead link on one post but would
                         be a row of them here. The label hides on narrow screens
                         so a long title keeps its width. */}
-                    {/* post.postedToLinkedIn && post.linkedinPostId */}
-                    {true && (
+                    {post.postedToLinkedIn && post.linkedinPostId && (
                       <a
                         href={`https://www.linkedin.com/feed/update/${post.linkedinPostId}`}
                         target="_blank"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MAX_LIST_ITEMS, MAX_LIST_ITEM_CHARS } from "@/lib/profile-completeness";
 
@@ -40,6 +40,7 @@ export default function ChipMultiSelect({
   accent,
   addPlaceholder,
   inputId,
+  recommended,
 }: {
   options: readonly string[];
   value: string[];
@@ -48,6 +49,12 @@ export default function ChipMultiSelect({
   addPlaceholder: string;
   /** Needed because two of these can share a page. */
   inputId: string;
+  /**
+   * Options to mark as suggested. Marks the OPTION, not the selection, so the
+   * mark stays put whether or not the user has chosen it - it means "we think
+   * this one suits you", which is still true after they decline it.
+   */
+  recommended?: readonly string[];
 }) {
   const [draft, setDraft] = useState("");
 
@@ -95,11 +102,22 @@ export default function ChipMultiSelect({
             key={option}
             type="button"
             onClick={() => toggle(option)}
+            title={
+              recommended?.some((r) => same(r, option))
+                ? "Suggested from your LinkedIn profile"
+                : undefined
+            }
             className={cn(
               "px-4 py-2 rounded-full text-sm font-medium border-2 transition-all",
               value.some((v) => same(v, option)) ? ACCENT[accent] : IDLE
             )}
           >
+            {recommended?.some((r) => same(r, option)) && (
+              <Sparkles
+                className="mr-1.5 inline h-3 w-3 align-[-1px]"
+                aria-label="Recommended"
+              />
+            )}
             {option}
           </button>
         ))}
