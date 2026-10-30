@@ -14,6 +14,8 @@ import {
   Plus,
   X,
   AlertCircle,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import Avatar from "@/components/Avatar";
@@ -26,18 +28,31 @@ import {
   MIN_AUDIENCE_CHARS,
   MAX_AUDIENCE_CHARS,
   MAX_SKILLS,
+  INDUSTRIES,
+  POSITIONING_VALUES,
+  CONTENT_GOALS,
+  CONTENT_STYLES,
+  ONBOARDING_TONE_VALUES,
   type ProfileGap,
 } from "@/lib/profile-completeness";
+import { MAX_PASTE_CHARS, type ProfileSuggestion } from "@/lib/profile-suggest";
 
 import ChipMultiSelect from "@/components/ChipMultiSelect";
 
-const INDUSTRIES = [
-  "Technology", "Finance", "Healthcare", "Marketing", "Sales",
-  "Education", "Consulting", "Legal", "Real Estate", "Media",
-  "Manufacturing", "Retail", "Non-profit", "Other",
-];
-
-const POSITIONING_OPTIONS = [
+/**
+ * The option VALUES now live in lib/profile-completeness.ts, because the
+ * profile suggester has to emit them too and a third copy is a third thing to
+ * drift. Display metadata - icons, labels, descriptions - stays here.
+ *
+ * The annotations below are load-bearing: typing `value` as the union from the
+ * canonical list turns any future drift into a compile error rather than a
+ * suggestion that silently highlights nothing in the form.
+ */
+const POSITIONING_OPTIONS: {
+  value: (typeof POSITIONING_VALUES)[number];
+  icon: string;
+  description: string;
+}[] = [
   {
     value: "Thought Leader",
     icon: "💡",
@@ -91,38 +106,38 @@ const POSITIONING_OPTIONS = [
  * real question now, because tone.direction is injected into every single prompt
  * as a hard constraint.
  */
-const TONES = [
+const TONES: {
+  value: (typeof ONBOARDING_TONE_VALUES)[number];
+  label: string;
+  desc: string;
+}[] = [
   { value: "professional", label: "Professional", desc: "Precise, expert, substantive. Confident without hype." },
   { value: "conversational", label: "Conversational", desc: "Friendly and relatable, like talking to a peer." },
   { value: "inspirational", label: "Inspirational", desc: "Story-driven and motivating, but earned." },
   { value: "educational", label: "Educational", desc: "Teaching-first. Explain the why, step by step." },
 ];
 
-const CONTENT_GOALS = [
-  "Lead Generation",
-  "Network Building",
-  "Brand Awareness",
-  "Job Seeking",
-  "Sales / Business Development",
-  "Recruiting Top Talent",
-];
-
-const CONTENT_STYLES = [
-  "Problem Agitation Solution",
-  "Narrative / Story",
-  "List / Tips",
-  "Data-driven Insights",
-  "Personal Story",
-  "Case Study",
-  "How-to / Tutorial",
-  "Motivational",
-  "Contrarian Take",
-  "Q&A Format",
-  "Behind the Scenes",
-  "Predictions & Trends",
-  "Lessons Learned",
-  "Social Proof / Results",
-];
+/**
+ * Marks the OPTION the paste box suggested, so the user can see which one we
+ * think fits rather than just being told that a field was touched.
+ *
+ * Deliberately stays put when they pick something else: our suggestion has not
+ * changed, and seeing it beside their own choice is the whole point.
+ *
+ * Free-text fields carry no mark - there is no option to point at, and the
+ * panel at the top of step 1 already reports how many fields were filled.
+ */
+function Recommended() {
+  return (
+    <span
+      className="ml-2 inline-flex items-center gap-1 rounded-control bg-brand-tint px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand align-middle"
+      title="Suggested from your LinkedIn profile"
+    >
+      <Sparkles className="h-2.5 w-2.5" />
+      Recommended
+    </span>
+  );
+}
 
 interface OnboardingWizardProps {
   user: {
@@ -228,6 +243,113 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
     if (!audienceTouched) return;
     setAudienceText(composeTargetAudience(audienceWho, audiencePain, audienceOutcome));
   }, [audienceTouched, audienceWho, audiencePain, audienceOutcome]);
+
+  /* ── Fill from a pasted LinkedIn profile ──────────────────────────────────
+   *
+   * LinkedIn's API gives this app name, photo and email and nothing else (see
+   * lib/linkedin.ts), so the nine fields below cannot be fetched. They CAN be
+   * read out of text the user pastes from their own profile, which is one
+   * copy-paste instead of nine inputs.
+   *
+   * `recommended` holds the VALUES we suggested for the fields that have
+   * options, so the mark can sit on the option itself - "we think Educator
+   * suits you" - rather than on the field label, which only ever said "we
+   * touched this" and left the user hunting for what changed.
+   *
+   * It marks the option, not the selection, so it stays put when they choose
+   * something else: our suggestion is still what it was, and seeing it next to
+   * their own choice is the point.
+   *
+   * Free-text fields - headline, summary, audience, skills - carry no mark.
+   * There is nothing to point at, and the panel above already reports how many
+   * fields were filled.
+   */
+  const [pasteText, setPasteText] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestNote, setSuggestNote] = useState<string | null>(null);
+  const [filledCount, setFilledCount] = useState(0);
+  const [pasteOpen, setPasteOpen] = useState(true);
+  const [recommended, setRecommended] = useState<{
+    industry: string;
+    positioning: string;
+    tone: string;
+    contentGoals: string[];
+    contentStyles: string[];
+  }>({ industry: "", positioning: "", tone: "", contentGoals: [], contentStyles: [] });
+
+  async function applySuggestions() {
+    if (suggesting || pasteText.trim().length < 40) return;
+    setSuggesting(true);
+    setSuggestNote(null);
+    try {
+      const res = await fetch("/api/onboarding/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paste: pasteText }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        setSuggestNote(data?.error ?? "Could not read that. You can fill the form in yourself.");
+        return;
+      }
+
+      const s: ProfileSuggestion | undefined = data?.suggestion;
+      if (!s) {
+        setSuggestNote("Could not read that. You can fill the form in yourself.");
+        return;
+      }
+
+      // Only non-empty values are applied, so a field the model had no opinion
+      // on keeps whatever the user already typed instead of being blanked.
+      let filled = 0;
+      const take = (value: string, set: (v: string) => void) => {
+        if (!value) return;
+        set(value);
+        filled++;
+      };
+
+      take(s.headline, setHeadline);
+      take(s.industry, setIndustry);
+      take(s.summary, setSummary);
+      take(s.positioning, setPositioning);
+      take(s.tone, setTone);
+      take(s.targetAudience, (v) => {
+        setAudienceText(v);
+        // The audience box is normally composed from three sub-questions by the
+        // effect above. Clearing `touched` stops that effect overwriting what we
+        // just wrote the next time any of those three changes.
+        setAudienceTouched(false);
+      });
+      if (s.skills.length) { setSkills(s.skills); filled++; }
+      if (s.contentGoals.length) { setContentGoals([...s.contentGoals]); filled++; }
+      if (s.contentStyles.length) { setContentStyles([...s.contentStyles]); filled++; }
+
+      // Kept separately from the form state: these stay put as "what we
+      // suggested" even after the user picks something different.
+      setRecommended({
+        industry: s.industry,
+        positioning: s.positioning,
+        tone: s.tone,
+        contentGoals: [...s.contentGoals],
+        contentStyles: [...s.contentStyles],
+      });
+      setFilledCount(filled);
+
+      if (filled === 0) {
+        setSuggestNote(
+          "We could not pull anything usable out of that. Try including your headline and your About section."
+        );
+      } else {
+        setPasteOpen(false);
+        toast(`Filled in ${filled} field${filled === 1 ? "" : "s"} - check them over`, "success");
+      }
+    } catch {
+      setSuggestNote("Could not reach the server. You can fill the form in yourself.");
+    } finally {
+      setSuggesting(false);
+    }
+  }
 
   // Auto-detect browser timezone
   const [timezone] = useState(() => {
@@ -514,6 +636,74 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                 </div>
               )}
 
+              {/* Fill-from-paste. Sits directly under the line explaining that
+                  LinkedIn gives us almost nothing, because this is the answer
+                  to that problem rather than a separate feature. Collapses once
+                  it has run so it stops competing with the fields it filled. */}
+              <div className="rounded-control border border-brand/25 bg-brand-tint p-4">
+                <button
+                  type="button"
+                  onClick={() => setPasteOpen((v) => !v)}
+                  className="ring-focus flex w-full items-center gap-2 text-left"
+                >
+                  <Sparkles className="h-4 w-4 flex-shrink-0 text-brand" />
+                  <span className="flex-1 text-sm font-semibold text-text">
+                    {filledCount > 0
+                      ? `Filled in ${filledCount} field${filledCount === 1 ? "" : "s"} from your profile`
+                      : "Fill this in from your LinkedIn profile"}
+                  </span>
+                  <span className="text-xs font-medium text-brand">
+                    {pasteOpen ? "Hide" : filledCount > 0 ? "Redo" : "Open"}
+                  </span>
+                </button>
+
+                {pasteOpen && (
+                  <div className="mt-3 space-y-2">
+                    <p className="text-xs leading-relaxed text-text-2">
+                      Open your LinkedIn profile, copy your <strong>headline</strong> and your{" "}
+                      <strong>About</strong> section, and paste both here. We will suggest the rest
+                      of this form from them. Anything we cannot work out is left blank for you.
+                    </p>
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value.slice(0, MAX_PASTE_CHARS))}
+                      rows={5}
+                      placeholder={"Senior Backend Engineer at Acme | Node.js, Postgres, distributed systems\n\nI have spent eight years building payment infrastructure..."}
+                      className="w-full resize-y rounded-control border border-edge bg-card px-3 py-2 text-sm text-text placeholder:text-text-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] text-text-3">
+                        {pasteText.length > 0 && `${pasteText.length} / ${MAX_PASTE_CHARS}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={applySuggestions}
+                        disabled={suggesting || pasteText.trim().length < 40}
+                        className="btn-brand ring-focus flex h-9 items-center gap-2 rounded-control px-4 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {suggesting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Reading your profile...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Fill in my details
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    {suggestNote && (
+                      <p className="flex items-start gap-1.5 text-xs text-warn">
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                        {suggestNote}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-text mb-1">
                   Professional Headline <span className="text-red-500">*</span>
@@ -558,6 +748,7 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                           className="px-4 py-2.5 text-sm text-text dark:text-slate-100 hover:bg-blue-50 dark:hover:bg-blue-900/30 cursor-pointer"
                         >
                           {ind}
+                          {recommended.industry === ind && <Recommended />}
                         </div>
                       ))
                     ) : industry.trim() ? (
@@ -656,6 +847,12 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                 </p>
               </div>
 
+              <div>
+                <h3 className="text-sm font-semibold text-text mb-3">
+                  Your positioning <span className="text-red-500">*</span>
+                </h3>
+              </div>
+
               <div className="space-y-3">
                 {POSITIONING_OPTIONS.map((option) => (
                   <button
@@ -678,6 +875,7 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                         }`}
                       >
                         {option.value}
+                        {recommended.positioning === option.value && <Recommended />}
                       </p>
                       <p className="text-xs text-text-2 mt-0.5">{option.description}</p>
                     </div>
@@ -715,6 +913,7 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                         }`}
                       >
                         {t.label}
+                        {recommended.tone === t.value && <Recommended />}
                       </p>
                       <p className="text-xs text-text-2 mt-0.5">{t.desc}</p>
                     </button>
@@ -742,6 +941,7 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                 </h3>
                 <ChipMultiSelect
                   options={CONTENT_GOALS}
+                  recommended={recommended.contentGoals}
                   value={contentGoals}
                   onChange={setContentGoals}
                   accent="blue"
@@ -760,6 +960,7 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
                 </p>
                 <ChipMultiSelect
                   options={CONTENT_STYLES}
+                  recommended={recommended.contentStyles}
                   value={contentStyles}
                   onChange={setContentStyles}
                   accent="indigo"
@@ -877,7 +1078,12 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
         </div>
 
         {/* Footer navigation */}
-        <div className="px-8 py-5 bg-[#F6F8FB] border-t border-edge-soft flex justify-between items-center">
+        {/* bg-card-muted, not a literal. This strip was #F6F8FB with no dark
+            override, so in dark mode the entire footer - Back, the step dots
+            and Next - sat on near-white with light grey text on it.
+            card-muted is the token for a nested strip inside a card and
+            carries its own dark value, so there is nothing to keep in step. */}
+        <div className="px-8 py-5 bg-card-muted border-t border-edge-soft flex justify-between items-center">
           <button
             type="button"
             onClick={() => setStep((s) => Math.max(1, s - 1))}
