@@ -314,13 +314,26 @@ export default function OnboardingWizard({ user, isTopUp = false }: OnboardingWi
       take(s.summary, setSummary);
       take(s.positioning, setPositioning);
       take(s.tone, setTone);
-      take(s.targetAudience, (v) => {
-        setAudienceText(v);
-        // The audience box is normally composed from three sub-questions by the
-        // effect above. Clearing `touched` stops that effect overwriting what we
-        // just wrote the next time any of those three changes.
+      // Step 4 asks three questions and composes the final description from
+      // them. Writing only the composed box left all three visibly blank, so
+      // fill the three and let the effect above build the sentence - that way
+      // all four boxes agree, and editing any one of them still works.
+      if (s.audienceWho || s.audiencePain || s.audienceOutcome) {
+        if (s.audienceWho) setAudienceWho(s.audienceWho);
+        if (s.audiencePain) setAudiencePain(s.audiencePain);
+        if (s.audienceOutcome) setAudienceOutcome(s.audienceOutcome);
+        // Marks the audience as user-driven, which is what makes the compose
+        // effect run. It fires once with all three new values batched in.
+        setAudienceTouched(true);
+        filled++;
+      } else if (s.targetAudience) {
+        // The model had an audience but could not split it into the three.
+        // Fill the final box directly; `touched` stays false so the compose
+        // effect does not blank it the moment the user answers one question.
+        setAudienceText(s.targetAudience);
         setAudienceTouched(false);
-      });
+        filled++;
+      }
       if (s.skills.length) { setSkills(s.skills); filled++; }
       if (s.contentGoals.length) { setContentGoals([...s.contentGoals]); filled++; }
       if (s.contentStyles.length) { setContentStyles([...s.contentStyles]); filled++; }
