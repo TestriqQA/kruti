@@ -14,6 +14,7 @@
 import { notFound } from "next/navigation";
 import { getImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
+import { resolveTheme } from "@/lib/image-themes";
 import { generateImageBuffer, buildBackgroundPrompt } from "@/lib/imagen";
 
 export const dynamic = "force-dynamic";
@@ -151,6 +152,11 @@ export default async function RenderPreviewPage() {
           category,
           brief: s.brief,
           seed: `preview-${i}`,
+          // Each sample names the palette it is here to show, so look it up
+          // rather than letting the seed assign one - otherwise the caption
+          // below says "paper" over a tile that rendered indigo, and half
+          // the palettes never appear on the page at all.
+          theme: resolveTheme(s.brief.themeId),
           author: { name: "Jayesh Mistry", headline: "Senior QA Lead at Testriq" },
           slide: s.slide,
         });

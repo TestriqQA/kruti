@@ -75,8 +75,18 @@ export interface DesignBrief {
 export interface RenderOptions {
   category: ImageCategory;
   brief: DesignBrief;
-  /** Stable string (the post id) so an unknown themeId falls back consistently. */
+  /** Stable string (the post id). The palette is assigned from it. */
   seed: string;
+  /**
+   * Force a specific palette instead of the one the seed assigns.
+   *
+   * Only /render-preview sets this. That page exists to show every palette
+   * once, which it cannot do through the seed - assignTheme() spreads ten
+   * fixed seeds over whatever they happen to hash to, which for preview-0..9
+   * is five palettes with ink four times. Generation never passes it, so
+   * real posts keep getting the assigned palette.
+   */
+  theme?: ImageTheme;
   /** Used only by the social-screenshot format. */
   author?: { name?: string | null; headline?: string | null };
   /** Set for carousel slides so the set gets a position indicator. */
@@ -928,7 +938,7 @@ function imageBandHeight(nodeCount: number): number {
  * carousel look like one set.
  */
 export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> {
-  const t = assignTheme(opts.seed);
+  const t = opts.theme ?? assignTheme(opts.seed);
   const composition = compositionFor(opts);
 
   // Reserve a strip at the bottom when the carousel indicator is present, so it
