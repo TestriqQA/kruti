@@ -7,7 +7,7 @@ import {
   UserVisualProfile,
 } from "@/lib/prompts";
 import { usesCodeRender, type ImageCategory } from "@/lib/image-categories";
-import { IMAGE_THEME_IDS, themeMenuBlock, themeIdsFor } from "@/lib/image-themes";
+import { IMAGE_THEME_IDS } from "@/lib/image-themes";
 import {
   VISUAL_STYLE_IDS,
   visualStyleMenuBlock,
@@ -304,8 +304,6 @@ async function getDesignBrief(
     post.body,
     post.postType,
     category,
-    themeMenuBlock(),
-    IMAGE_THEME_IDS.join("|"),
     iconMenuBlock(),
     userProfile
   );
@@ -421,6 +419,7 @@ function fallbackCarouselPlan(post: { title: string }, count: number): CarouselP
 export async function getCarouselPlan(
   post: { title: string; body: string; postType: string },
   count: number,
+  category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<CarouselPlan> {
   const prompt = buildCarouselDesignPrompt(
@@ -428,8 +427,7 @@ export async function getCarouselPlan(
     post.body,
     post.postType,
     count,
-    themeMenuBlock(),
-    IMAGE_THEME_IDS.join("|"),
+    category.briefGuidance,
     iconMenuBlock(),
     userProfile
   );
@@ -495,8 +493,6 @@ async function getArtBrief(
     visualStyleIdsFor(seed).join("|"),
     pageLayoutMenuBlock(),
     PAGE_LAYOUT_IDS.join("|"),
-    themeMenuBlock(seed),
-    themeIdsFor(seed).join("|"),
     userProfile
   );
 
