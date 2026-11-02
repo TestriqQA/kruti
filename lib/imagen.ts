@@ -275,6 +275,7 @@ export type CarouselRenderEvent = {
 export async function renderCarouselFromPlan(
   plan: { themeId?: string; slides: DesignBrief[] },
   postId: string,
+  category: ImageCategory,
   onSlideEvent?: (e: CarouselRenderEvent) => void
 ): Promise<string[]> {
   const total = plan.slides.length;
@@ -283,9 +284,12 @@ export async function renderCarouselFromPlan(
   // resolve would hand each one a different palette and the set would stop
   // looking like a set.
   const theme = assignTheme(postId);
-  const style = resolveVisualStyle(undefined, postId);
+  // The register comes from the post's own chosen style, not from a hash of
+  // the id. This path used to pin category to "infographic" and leave the
+  // style and layout undefined, so a carousel ignored Post.imageStyle
+  // completely and every deck was an infographic whatever the post was.
+  const style = resolveVisualStyle(category.visualStyle, postId);
   const layout = resolvePageLayout(undefined, postId);
-  const category = getImageCategory("infographic");
   // Every slide at one resolution, from IMAGE_SIZE. At 4K this is the path to
   // watch: the slides below go out in parallel under maxDuration = 60.
   const size = resolveImageSize();
@@ -308,6 +312,7 @@ export async function renderCarouselFromPlan(
           textLoad: style.textLoad,
           palette: { phrase: theme.palettePhrase, mode: theme.mode },
           formatLabel: category.label,
+          formatDirection: category.imageDirection,
           slide: { index: i, total },
         });
 
@@ -534,6 +539,13 @@ export function buildArtImagePrompt(opts: {
   textLoad: "low" | "medium" | "high";
   palette: { phrase: string; mode: "light" | "dark" };
   formatLabel: string;
+  /**
+   * What the picture must BE, from the chosen style. Until this existed
+   * formatLabel was passed by both call sites and never interpolated, so the
+   * image model was never told the post's format at all - the only style
+   * instruction reaching it was the visual register.
+   */
+  formatDirection: string;
   /** Set when this image is one slide of a carousel, so the deck coheres. */
   slide?: { index: number; total: number };
 }): string {
@@ -598,7 +610,9 @@ export function buildArtImagePrompt(opts: {
           .filter(Boolean)
           .join("\n");
 
-  return `Create ONE premium, square (1:1) graphic for a LinkedIn feed. A person scrolling past should understand the idea from the picture alone, before reading anything.
+  return `Create ONE premium, square (1:1) ${opts.formatLabel} for a LinkedIn feed. A person scrolling past should understand the idea from the picture alone, before reading anything.
+
+FORMAT - this image is a ${opts.formatLabel}, and that is what it must read as before anything else: ${opts.formatDirection}
 
 LAYOUT - this is a designed page, not a picture with words dropped onto it. Build it on this structure: ${opts.layoutDirection} Hold a generous, even margin on all four sides, align everything to that structure, and leave one clear area to breathe rather than filling every corner.
 
@@ -665,7 +679,10 @@ export async function generateAndStoreArtImage(
 ): Promise<string | null> {
   lastImageGenError = null;
 
-  const style = resolveVisualStyle(brief.visualStyle, postId);
+  // The register is pinned by the post's chosen style. The brief model used
+  // to pick it per generation from a seeded slice, so a photographic style
+  // could come back as a flat cartoon and nothing reconciled the two.
+  const style = resolveVisualStyle(category.visualStyle, postId);
   // Palette: normally assigned from this post alone. A caller generating a SET
   // in one go passes one shared seed plus each image's index instead, which
   // walks consecutive palettes and so gives every image in that set a
@@ -692,6 +709,7 @@ export async function generateAndStoreArtImage(
     textLoad: style.textLoad,
     palette: { phrase: theme.palettePhrase, mode: theme.mode },
     formatLabel: category.label,
+    formatDirection: category.imageDirection,
   });
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);

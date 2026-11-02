@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { renderCarouselFromPlan, lastImageGenError } from "@/lib/imagen";
 import { getCarouselPlan } from "@/lib/image-brief";
+import { resolveImageCategory } from "@/lib/image-categories";
 import { appendImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
@@ -117,9 +118,13 @@ targetAudience: post.plan.user.targetAudience,
   // text (per-slide headline, supporting line and labels) plus the ONE
   // palette id the whole set shares.
   send({ type: "plan", status: "start", message: "Sending the full post to the planner" });
+  // The style the posts model chose for this post. The carousel used to
+  // ignore Post.imageStyle entirely and hardcode an infographic.
+  const category = resolveImageCategory(post.imageStyle);
   const plan = await getCarouselPlan(
     { title: post.title, body: post.body, postType: post.postType },
     CAROUSEL_COUNT,
+    category,
     userVisualProfile
   );
 
@@ -141,7 +146,7 @@ targetAudience: post.plan.user.targetAudience,
   // the set costs nothing. getCarouselPlan always returns a plan now, so
   // there is no diffusion fallback branch to take.
   send({ type: "render", status: "start", total });
-  const images = await renderCarouselFromPlan(plan, post.id, (e) =>
+  const images = await renderCarouselFromPlan(plan, post.id, category, (e) =>
     send({ type: "slide", ...e })
   );
   const savedPrompt = plan.slides.map((s) => s.headline).join(" / ");

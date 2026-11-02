@@ -365,7 +365,7 @@ function Statement({ brief, t, align = "left" }: { brief: DesignBrief; t: ImageT
 
 // ─── Layouts ─────────────────────────────────────────────────────────────────
 
-/** designed-infographic, carousel-hint, and the fallback for anything unmapped. */
+/** designed-infographic, and the fallback for anything unmapped. */
 function Infographic({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
@@ -404,7 +404,7 @@ function Infographic({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme;
   );
 }
 
-/** framework-diagram, timeline-roadmap - ordered steps on one connected spine. */
+/** flowchart-framework, mind-map, handwritten-sketch - steps on one connected spine. */
 function Diagram({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
@@ -481,13 +481,14 @@ function IconComposed({ concept, seed, t }: { concept?: string; seed?: string; t
   );
 }
 
-/** myth-vs-fact, before-after - two panels, the right one carrying the accent. */
+/** before-after - two panels, the right one carrying the accent. */
 function Comparison({ brief, t, category, compact }: { brief: DesignBrief; t: ImageTheme; category: ImageCategory; compact?: boolean }) {
   const nodes = brief.nodes ?? [];
   const icons = brief.icons ?? [];
-  const isMyth = category.id === "myth-vs-fact";
-  const leftLabel = isMyth ? "MYTH" : "BEFORE";
-  const rightLabel = isMyth ? "FACT" : "AFTER";
+  // myth-vs-fact was folded into before-after when the taxonomy moved to the
+  // 16 styles, so there is one pair of labels left rather than two.
+  const leftLabel = "BEFORE";
+  const rightLabel = "AFTER";
 
   // Even-index nodes argue the left side, odd-index the right. With the usual two
   // nodes that is exactly one line each, and more nodes stack without breaking.
@@ -579,7 +580,7 @@ function Comparison({ brief, t, category, compact }: { brief: DesignBrief; t: Im
   );
 }
 
-/** big-stat-hero - one dominant figure, with the icon that gives it context. */
+/** data-chart - one dominant figure, with the icon that gives it context. */
 function StatHero({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   const hero = (brief.bodyText || brief.headline).trim();
   const showHeadline = hero !== brief.headline.trim();
@@ -649,7 +650,7 @@ function QuoteCard({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   );
 }
 
-/** checklist-card - save-bait. The nodes ARE the checklist. */
+/** playbook-cover - save-bait. The nodes ARE the checklist. */
 function Checklist({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; compact?: boolean }) {
   const items = brief.nodes ?? [];
   const icons = brief.icons ?? [];
@@ -702,7 +703,7 @@ function Checklist({ brief, t, compact }: { brief: DesignBrief; t: ImageTheme; c
   );
 }
 
-/** x-screenshot - a believable social card, built rather than imagined. */
+/** social-screenshot - a believable social card, built rather than imagined. */
 function SocialCard({
   brief,
   t,
@@ -775,7 +776,7 @@ function SocialCard({
   );
 }
 
-/** event-banner, announcement-card - one centred, confident statement. */
+/** event-banner - one centred, confident statement. */
 function Banner({ brief, t }: { brief: DesignBrief; t: ImageTheme }) {
   const cta = (brief.cards ?? [])[0] || "";
   const detail = (brief.nodes ?? []).filter((n) => n !== cta);
@@ -860,12 +861,11 @@ function Layout({ category, brief, t, author, compact }: RenderOptions & { t: Im
     case "text-card":
       // The four text-card categories want genuinely different shapes, so they
       // branch on id rather than sharing one generic card.
-      if (category.id === "big-stat-hero") return <StatHero brief={brief} t={t} />;
+      if (category.id === "data-chart") return <StatHero brief={brief} t={t} />;
       if (category.id === "quote-card") return <QuoteCard brief={brief} t={t} />;
-      if (category.id === "x-screenshot") return <SocialCard brief={brief} t={t} author={author} />;
+      if (category.id === "social-screenshot") return <SocialCard brief={brief} t={t} author={author} />;
       return <Checklist brief={brief} t={t} compact={compact} />;
     case "designed-infographic":
-    case "carousel-hint":
     default:
       return <Infographic brief={brief} t={t} compact={compact} />;
   }
@@ -906,12 +906,12 @@ function compositionFor(opts: RenderOptions): Composition {
 
   // Text-light formats, and any slide with nothing to list, carry a full picture.
   if (genApproach === "banner") return "scrim";
-  if (genApproach === "text-card" && id !== "checklist-card" && id !== "x-screenshot") return "scrim";
+  if (genApproach === "text-card" && id !== "playbook-cover" && id !== "social-screenshot") return "scrim";
   if (nodes === 0) return "scrim";
 
   // A social screenshot is meant to look like a real UI card; a photograph
   // behind it breaks the illusion, so it keeps a plain field.
-  if (id === "x-screenshot") return "solid";
+  if (id === "social-screenshot") return "solid";
 
   return "split";
 }

@@ -419,6 +419,7 @@ function fallbackCarouselPlan(post: { title: string }, count: number): CarouselP
 export async function getCarouselPlan(
   post: { title: string; body: string; postType: string },
   count: number,
+  category: ImageCategory,
   userProfile?: UserVisualProfile
 ): Promise<CarouselPlan> {
   const prompt = buildCarouselDesignPrompt(
@@ -426,6 +427,7 @@ export async function getCarouselPlan(
     post.body,
     post.postType,
     count,
+    category.briefGuidance,
     iconMenuBlock(),
     userProfile
   );

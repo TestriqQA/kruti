@@ -34,7 +34,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "framework-diagram",
+    categoryId: "flowchart-framework",
     brief: {
       themeId: "ink",
       headline: "The Churn Loop",
@@ -46,7 +46,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "myth-vs-fact",
+    categoryId: "mind-map",
     brief: {
       themeId: "mono",
       headline: "Pricing Myths",
@@ -58,7 +58,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "big-stat-hero",
+    categoryId: "data-chart",
     brief: {
       themeId: "slate",
       headline: "Of Churn Happens In Week One",
@@ -80,7 +80,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "checklist-card",
+    categoryId: "playbook-cover",
     brief: {
       themeId: "sage",
       headline: "Before You Ship",
@@ -92,7 +92,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "announcement-card",
+    categoryId: "event-banner",
     brief: {
       themeId: "indigo",
       headline: "We Are Hiring",
@@ -104,7 +104,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "x-screenshot",
+    categoryId: "social-screenshot",
     brief: {
       themeId: "teal",
       headline: "On review queues",

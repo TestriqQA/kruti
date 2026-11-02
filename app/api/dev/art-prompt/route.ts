@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     );
 
     // Exactly what generateAndStoreArtImage assembles before it calls the model.
-    const style = resolveVisualStyle(brief.visualStyle, post.id);
+    const style = resolveVisualStyle(category.visualStyle, post.id);
     const theme = assignTheme(post.id);
     const layout = resolvePageLayout(brief.layout, post.id);
 
@@ -101,6 +101,7 @@ export async function GET(req: NextRequest) {
       textLoad: style.textLoad,
       palette: { phrase: theme.palettePhrase, mode: theme.mode },
       formatLabel: category.label,
+      formatDirection: category.imageDirection,
     });
 
     out.push({

@@ -386,7 +386,11 @@ ${rules}
 
 IMAGE CATEGORY (pick the best-fit visual FORMAT for each post from its OWN content):
 ${imageStyleGuide}
-Choose the "imageStyle" id that best matches THIS post's content and tone - a meme for a relatable or funny take, a quote-card for one punchy line, before-after for a teardown, framework-diagram or timeline-roadmap for a model or sequence, big-stat-hero ONLY when the post has a real stat, and realistic-scene / behind-the-scenes / desk-setup / storytelling-scene for human or story posts (these render a tasteful REPRESENTATIVE scene, never a fabricated portrait). SPREAD the choice across the ${postCount} posts. The three groups - Relatable & Human, Educational & Authority, Branded & Quick-Hit - must ALL appear in a batch of ${postCount}, and at least one post must use a Relatable & Human format (a meme or a real scene) unless literally none of the posts is a story, an opinion or a human moment. Never give two posts in the batch the same imageStyle unless their content genuinely calls for the same shape, and never fall back to "infographic" as a default - pick it only when the post really is an explainer with several parts to lay out.
+Read the strategy above and ALL ${postCount} post bodies you are about to write before you decide any of these, then give each post the one style that genuinely fits it. This choice is binding: it is stored on the post and it is what the image model is later told to draw, for a single image and for a carousel alike, so a wrong pick cannot be corrected later.
+
+Match the style to the post: meme-humor or comic-strip for a relatable or funny take; quote-card for one punchy line; before-after for a teardown or a myth; flowchart-framework for a process or model and mind-map for a set of relationships; data-chart ONLY when the post contains a real figure, never an invented one; photorealistic-photo for a human, story or behind-the-scenes moment (a tasteful REPRESENTATIVE scene, never a fabricated portrait); ui-mockup or social-screenshot when the post is about a product, an interface or a conversation; handwritten-sketch for a rough thinking-out-loud idea; playbook-cover for a checklist or a guide; event-banner for a launch, webinar or hiring push; vector-illustration or isometric-3d for a concept that needs a built scene rather than a photograph.
+
+SPREAD the choice across the ${postCount} posts: draw from at least three of the four groups, never give two posts the same imageStyle unless their content genuinely calls for the same shape, and never fall back to "infographic" as a default - pick it only when the post really is an explainer with several parts to lay out.
 
 Generate exactly ${postCount} posts as a JSON array. Each post must follow this exact structure:
 [
@@ -587,6 +591,7 @@ export function buildCarouselDesignPrompt(
   body: string,
   postType: string,
   count: number,
+  formatGuidance: string,
   iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
@@ -601,6 +606,8 @@ Post type: ${postType}
 Author's role: ${role}
 
 Read the post, then plan the ${count} slides as ONE continuous argument.
+
+FORMAT - the whole deck is drawn in the image style chosen for this post, so write every slide to suit it: ${formatGuidance}
 
 SLIDE ARC (follow this order):
 - Slide 1 is the HOOK: the post's single most important claim, stated flat and hard. No labels on this slide.
