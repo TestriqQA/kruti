@@ -14,6 +14,7 @@
 import { notFound } from "next/navigation";
 import { getImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
+import { resolveTheme } from "@/lib/image-themes";
 import { generateImageBuffer, buildBackgroundPrompt } from "@/lib/imagen";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "framework-diagram",
+    categoryId: "flowchart-framework",
     brief: {
       themeId: "ink",
       headline: "The Churn Loop",
@@ -45,7 +46,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "myth-vs-fact",
+    categoryId: "mind-map",
     brief: {
       themeId: "mono",
       headline: "Pricing Myths",
@@ -57,7 +58,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "big-stat-hero",
+    categoryId: "data-chart",
     brief: {
       themeId: "slate",
       headline: "Of Churn Happens In Week One",
@@ -79,7 +80,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "checklist-card",
+    categoryId: "playbook-cover",
     brief: {
       themeId: "sage",
       headline: "Before You Ship",
@@ -91,7 +92,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "announcement-card",
+    categoryId: "event-banner",
     brief: {
       themeId: "indigo",
       headline: "We Are Hiring",
@@ -103,7 +104,7 @@ const SAMPLES: Array<{ categoryId: string; brief: DesignBrief; slide?: { index: 
     },
   },
   {
-    categoryId: "x-screenshot",
+    categoryId: "social-screenshot",
     brief: {
       themeId: "teal",
       headline: "On review queues",
@@ -151,6 +152,11 @@ export default async function RenderPreviewPage() {
           category,
           brief: s.brief,
           seed: `preview-${i}`,
+          // Each sample names the palette it is here to show, so look it up
+          // rather than letting the seed assign one - otherwise the caption
+          // below says "paper" over a tile that rendered indigo, and half
+          // the palettes never appear on the page at all.
+          theme: resolveTheme(s.brief.themeId),
           author: { name: "Jayesh Mistry", headline: "Senior QA Lead at Testriq" },
           slide: s.slide,
         });

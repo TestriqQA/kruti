@@ -238,6 +238,57 @@ export function resolveTheme(id: string | null | undefined, seed?: string): Imag
 }
 
 /**
+ * A well-mixed 32-bit hash of a string.
+ *
+ * The avalanche tail is the point. Plain FNV-1a leaves structure in its LOW
+ * bits, and `% IMAGE_THEMES.length` reads exactly those - so without it,
+ * similarly-shaped seeds (cuids, which is what post ids are) clump onto a
+ * handful of palettes and the spread this module promises never happens.
+ */
+function hash32(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  h ^= h >>> 15;
+  h = Math.imul(h, 2246822507) >>> 0;
+  h ^= h >>> 13;
+  h = Math.imul(h, 3266489909) >>> 0;
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
+ * Pick this image's palette IN CODE. The model is not asked any more.
+ *
+ * It used to choose, from a seeded slice of the menu, and the result was that
+ * every image came out green. Three reasons, all of them measured:
+ *
+ *  1. The carousel and code-render paths called themeMenuBlock() with NO seed,
+ *     and seededSlice() returns the whole list unrotated when the seed is
+ *     missing - so those paths saw the same ten options in the same order on
+ *     every post, for every user, and never had any variety mechanism at all.
+ *  2. Even where the seed WAS passed, the slice keeps 6 of 10 and the three
+ *     green-ish palettes sit at indices 3, 6 and 8 - so all ten rotations
+ *     leave at least one of them on the menu. Checked: 10/10 rotations, and
+ *     14/14 real posts were offered a green.
+ *  3. The choice was then the model's, and it has a strong content-correlated
+ *     colour prior - growth, hiring, people and sustainability posts all pull
+ *     it to green. A per-call "vary this across posts" line cannot fix that,
+ *     because each brief is a separate call that has never seen the others.
+ *
+ * So the menu is gone and the palette is assigned here, evenly over the whole
+ * list. Deterministic on the seed, so a given post keeps its look instead of
+ * reshuffling on every regeneration; `offset` is there for callers that want
+ * to step a post deliberately onto the next palette.
+ */
+export function assignTheme(seed: string, offset = 0): ImageTheme {
+  const i = (hash32(seed || "") + offset) % IMAGE_THEMES.length;
+  return IMAGE_THEMES[i];
+}
+
+/**
  * `#rrggbb` -> `rgba(r, g, b, a)`.
  *
  * The hybrid renderer lays the text over a generated picture, and the scrim that
