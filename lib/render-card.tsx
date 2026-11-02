@@ -1,7 +1,7 @@
 import satori from "satori";
 import sharp from "sharp";
 import type { ImageCategory } from "@/lib/image-categories";
-import { resolveTheme, withAlpha, type ImageTheme } from "@/lib/image-themes";
+import { assignTheme, withAlpha, type ImageTheme } from "@/lib/image-themes";
 import { getRenderFonts, FONT_FAMILY } from "@/lib/og-fonts";
 import { resolveIcon } from "@/lib/image-icons";
 
@@ -928,7 +928,7 @@ function imageBandHeight(nodeCount: number): number {
  * carousel look like one set.
  */
 export async function renderDesignedImage(opts: RenderOptions): Promise<Buffer> {
-  const t = resolveTheme(opts.brief.themeId, opts.seed);
+  const t = assignTheme(opts.seed);
   const composition = compositionFor(opts);
 
   // Reserve a strip at the bottom when the carousel indicator is present, so it

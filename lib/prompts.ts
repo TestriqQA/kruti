@@ -514,8 +514,6 @@ export function buildDesignBriefPrompt(
   body: string,
   postType: string,
   category: ImageCategory,
-  themeMenu: string,
-  themeIds: string,
   iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
@@ -532,16 +530,11 @@ AUTHOR'S ROLE: ${role}
 
 Read the post, find its single most important point, and write the graphic.
 
-THEME - pick the ONE id whose mood matches this post's subject and tone:
-${themeMenu}
-Vary this across posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
-
 ICONS - every graphic carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
 ${iconMenu}
 
 Return ONLY this JSON object:
 {
-  "themeId": "${themeIds}",
   "headline": "string",
   "subheadline": "string",
   "bodyText": "string",
@@ -594,8 +587,6 @@ export function buildCarouselDesignPrompt(
   body: string,
   postType: string,
   count: number,
-  themeMenu: string,
-  themeIds: string,
   iconMenu: string,
   userProfile?: UserVisualProfile
 ): string {
@@ -617,16 +608,11 @@ SLIDE ARC (follow this order):
 - The LAST slide is the TAKEAWAY or call to action that closes the post. No labels on this slide.
 Produce EXACTLY ${count} slides. If the post has fewer distinct points than that, split the most important point into a "what" slide and a "how" slide rather than repeating one or padding with invented material.
 
-ONE SHARED THEME for the whole carousel - pick the ONE id whose mood matches this post's subject and tone:
-${themeMenu}
-Every slide uses this one theme, which is what makes the set cohere. Vary it across different posts: a blunt contrarian take, a warm personal story, a technical how-to and a celebratory win must not all land on the same theme.
-
 ICONS - every slide carries real vector icons, so pick the CONCEPT each one should show from exactly this list (one word, copied exactly):
 ${iconMenu}
 
 Return ONLY this JSON object, with EXACTLY ${count} entries in "slides", in carousel order:
 {
-  "themeId": "${themeIds}",
   "slides": [
     { "headline": "string", "subheadline": "string", "nodes": ["string"], "icons": ["string"], "heroIcon": "string", "backgroundScene": "string" }
   ]
@@ -960,8 +946,6 @@ export function buildArtBriefPrompt(
   styleIds: string,
   layoutMenu: string,
   layoutIds: string,
-  themeMenu: string,
-  themeIds: string,
   userProfile?: UserVisualProfile
 ): string {
   // This brief used to see ONE line of profile - the headline - while the
@@ -1003,9 +987,6 @@ VISUAL STYLE - pick the one id whose register fits this post's subject and mood:
 ${styleMenu}
 Vary this across posts. A security teardown, a hiring joke, a founder lesson and a how-to guide must NOT all land on the same style. Match the style's text capacity to how much the image needs to say.
 
-COLOUR THEME - pick one id for the palette:
-${themeMenu}
-
 LAYOUT - pick how the page is built:
 ${layoutMenu}
 
@@ -1013,7 +994,6 @@ Return ONLY this JSON object:
 {
   "visualStyle": "${styleIds}",
   "layout": "${layoutIds}",
-  "themeId": "${themeIds}",
   "scene": "string",
   "statLine": "string",
   "headline": "string",

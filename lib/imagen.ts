@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
-import { resolveTheme } from "@/lib/image-themes";
+import { assignTheme } from "@/lib/image-themes";
 import {
   generateRecraftImageBuffer,
   getLastRecraftError,
@@ -282,7 +282,7 @@ export async function renderCarouselFromPlan(
   // Resolved once, from the plan and the post - never per slide. A per-slide
   // resolve would hand each one a different palette and the set would stop
   // looking like a set.
-  const theme = resolveTheme(plan.themeId, postId);
+  const theme = assignTheme(postId);
   const style = resolveVisualStyle(undefined, postId);
   const layout = resolvePageLayout(undefined, postId);
   const category = getImageCategory("infographic");
@@ -660,12 +660,19 @@ export async function generateAndStoreArtImage(
     chips?: string[];
   },
   postId: string,
-  category: ImageCategory
+  category: ImageCategory,
+  opts?: { themeSeed?: string; themeOffset?: number }
 ): Promise<string | null> {
   lastImageGenError = null;
 
   const style = resolveVisualStyle(brief.visualStyle, postId);
-  const theme = resolveTheme(brief.themeId, postId);
+  // Palette: normally assigned from this post alone. A caller generating a SET
+  // in one go passes one shared seed plus each image's index instead, which
+  // walks consecutive palettes and so gives every image in that set a
+  // different one. Hashing each post id separately only SPREADS them - over a
+  // ten-image batch two would still land on the same palette often enough to
+  // be the thing a user notices.
+  const theme = assignTheme(opts?.themeSeed ?? postId, opts?.themeOffset ?? 0);
   const layout = resolvePageLayout(brief.layout, postId);
 
   const prompt = buildArtImagePrompt({

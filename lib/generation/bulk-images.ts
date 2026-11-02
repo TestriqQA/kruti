@@ -157,7 +157,14 @@ export async function runBulkImageGeneration(
       // image and carousel paths do it. This branched to a satori layout for
       // 12 of the 17 categories, so a bulk-generated post looked like it came
       // from a different product than one generated from the editor.
-      const imageUrl = await generateAndStoreArtImage(brief, post.id, category);
+      const imageUrl = await generateAndStoreArtImage(brief, post.id, category, {
+        // One seed for the whole run, plus this image's place in it: a bulk
+        // batch then comes out in consecutive palettes rather than whatever
+        // each id happens to hash to. The route caps a run at 10 posts and
+        // there are 10 palettes, so every image in a run differs.
+        themeSeed: posts[0].id,
+        themeOffset: i,
+      });
 
       if (imageUrl) {
         await prisma.post.update({

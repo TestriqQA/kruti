@@ -8,7 +8,7 @@ import {
 } from "@/lib/imagen";
 import { getImageBrief, describeDesignBrief } from "@/lib/image-brief";
 import { resolveImageCategory } from "@/lib/image-categories";
-import { appendImageHistory } from "@/lib/image-history";
+import { appendImageHistory, parseImageHistory } from "@/lib/image-history";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkProfileReady } from "@/lib/profile-guard";
@@ -144,7 +144,14 @@ export async function runSingleImageGeneration(
     // The code renderer is the FALLBACK now, not the default - plain type on a
     // flat field beats no image, but it is nowhere near what a good LinkedIn
     // graphic looks like, and that is the bar.
-    imageUrl = await generateAndStoreArtImage(brief, post.id, category);
+    imageUrl = await generateAndStoreArtImage(brief, post.id, category, {
+      // Regenerating steps onto the NEXT palette rather than redrawing the
+      // same one. Pressing "generate again" almost always means the last
+      // result was not wanted, and handing back an identical colourway reads
+      // as the button having done nothing. The post id still decides where in
+      // the list this post starts, so two posts do not march in lockstep.
+      themeOffset: parseImageHistory(post.imageHistory).length,
+    });
     savedPrompt = [
       `[${category.label}]`,
       brief.visualStyle ?? "auto",
