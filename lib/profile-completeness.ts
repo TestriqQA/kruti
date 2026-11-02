@@ -354,6 +354,80 @@ export const TONE_KEYS = [
   "casual",
 ] as const;
 
+/* ── The onboarding vocabularies ───────────────────────────────────────────────
+ *
+ * These lived only inside OnboardingWizard and SettingsClient, which was fine
+ * while a human was the only thing choosing from them. The profile suggester
+ * now has to EMIT these values, and a suggestion outside the set is silently
+ * dropped by the form - the chip never highlights and the user cannot tell the
+ * difference between "we had no opinion" and "we guessed something invalid".
+ *
+ * So the values move here, where the suggester and the wizard can share one
+ * definition. Display metadata - icons, labels, descriptions - stays in the
+ * component, because that is presentation and this is contract.
+ *
+ * SettingsClient still carries its own copies. That duplication predates this
+ * change and is left alone deliberately rather than widened into a refactor of
+ * a file this feature does not otherwise touch.
+ */
+
+export const INDUSTRIES = [
+  "Technology", "Finance", "Healthcare", "Marketing", "Sales",
+  "Education", "Consulting", "Legal", "Real Estate", "Media",
+  "Manufacturing", "Retail", "Non-profit", "Other",
+] as const;
+
+export const POSITIONING_VALUES = [
+  "Thought Leader",
+  "Industry Expert",
+  "Storyteller",
+  "Educator",
+  "Entertainer",
+  "Contrarian",
+  "Practitioner",
+  "Community Builder",
+] as const;
+
+export const CONTENT_GOALS = [
+  "Lead Generation",
+  "Network Building",
+  "Brand Awareness",
+  "Job Seeking",
+  "Sales / Business Development",
+  "Recruiting Top Talent",
+] as const;
+
+export const CONTENT_STYLES = [
+  "Problem Agitation Solution",
+  "Narrative / Story",
+  "List / Tips",
+  "Data-driven Insights",
+  "Personal Story",
+  "Case Study",
+  "How-to / Tutorial",
+  "Motivational",
+  "Contrarian Take",
+  "Q&A Format",
+  "Behind the Scenes",
+  "Predictions & Trends",
+  "Lessons Learned",
+  "Social Proof / Results",
+] as const;
+
+/**
+ * The four tones onboarding actually offers.
+ *
+ * Narrower than TONE_KEYS on purpose: "formal" and "casual" are accepted from
+ * older profiles and still resolve to a voice, but the wizard does not show
+ * them, so suggesting one would highlight nothing.
+ */
+export const ONBOARDING_TONE_VALUES = [
+  "professional",
+  "conversational",
+  "inspirational",
+  "educational",
+] as const;
+
 /**
  * Normalise a stored tonePrefs value to a known key, or null when it is missing
  * or unrecognised. Handles the bare-string, object and double-encoded shapes

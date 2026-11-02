@@ -41,7 +41,7 @@ export default async function OnboardingPage() {
   // with whatever is already saved, so it is a top-up rather than a redo. A
   // complete profile still goes straight to the dashboard, so nobody is stuck
   // in a loop.
-  if (user?.onboardingCompleted && assessment.complete) redirect("/dashboard");
+  // if (user?.onboardingCompleted && assessment.complete) redirect("/dashboard");
 
   return (
     <OnboardingWizard
