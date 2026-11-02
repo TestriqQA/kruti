@@ -6,7 +6,7 @@ import { useGeneration } from "@/components/GenerationProvider";
 import StrategyConfirmDialog from "@/components/StrategyConfirmDialog";
 import {
   Sparkles, FileText, TrendingUp, Clock, CheckCircle, AlertCircle, ArrowRight,
-  Loader2, BarChart3, Info, Lock, RefreshCw, XCircle, ListChecks, Calendar as CalIcon,
+  Loader2, BarChart3, Info, Lock, RefreshCw, XCircle, Calendar as CalIcon,
   Target, ChevronRight, X, Pencil,
 } from "lucide-react";
 import { cn, safeJsonParse } from "@/lib/utils";
@@ -66,7 +66,7 @@ export default function DashboardClient({
   // away doesn't kill it. This component only reads and controls it.
   const {
     generating, progress, error: generationError,
-    startGeneration, cancelGeneration, postPipeline, showPipeline,
+    startGeneration, cancelGeneration,
   } = useGeneration();
 
   // Time-of-day would mismatch between the server and the first client render.
@@ -257,15 +257,6 @@ export default function DashboardClient({
             <h3 className="flex-1 text-[14.5px] font-semibold text-text">
               Generating your next {postsPerBatch} posts…
             </h3>
-            {postPipeline && (
-              <button
-                onClick={() => showPipeline("posts")}
-                className="ring-focus flex h-8 items-center gap-1.5 rounded-control border border-edge px-3 text-[12.5px] font-semibold text-text-2 hover:bg-card-muted"
-              >
-                <ListChecks className="h-3.5 w-3.5" />
-                View pipeline
-              </button>
-            )}
             <button
               onClick={cancelGeneration}
               className="ring-focus flex h-8 items-center gap-1.5 rounded-control px-3 text-[12.5px] font-semibold text-bad hover:bg-bad-tint"
