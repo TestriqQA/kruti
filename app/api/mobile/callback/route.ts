@@ -36,14 +36,23 @@ import { syncLinkedInProfile } from "@/lib/linkedin";
 const APP_REDIRECT_URI = "krutimobile://oauth-callback";
 
 /**
- * The redirect_uri is derived from the request host at call time rather than
- * read from MOBILE_OAUTH_REDIRECT_URI, so one deployment serves staging and
- * production without an extra env var to keep in step. The previous default
- * pointed at the mobile branch's Vercel preview, which would have made the
- * token exchange fail anywhere else.
+ * The redirect_uri is derived from the request host at call time, so one
+ * deployment serves staging and production with nothing to keep in step.
  *
- * MOBILE_OAUTH_REDIRECT_URI still wins when set, as an escape hatch for a
- * host that is not the public URL LinkedIn has registered.
+ * MOBILE_OAUTH_REDIRECT_URI used to override that, as an escape hatch for a
+ * host that is not the public URL LinkedIn has registered. No such host ever
+ * existed, and the hatch cost a day: the variable was still set to the
+ * app.kruti.io URL on Vercel's Preview environment, so staging authorised
+ * against staging.kruti.io and then exchanged the code against app.kruti.io.
+ * LinkedIn rejected it, and the message named neither the variable nor the
+ * environment.
+ *
+ * Worse than the failure was the near-miss: app.kruti.io is a live deployment
+ * on a DIFFERENT database, so had the URL been registered the exchange would
+ * have succeeded and signed the user into the wrong system.
+ *
+ * The override is gone. A value left in the dashboard is now inert, and is
+ * logged once so whoever finds it knows it does nothing.
  */
 
 function buildErrorRedirect(error: string) {
@@ -247,9 +256,18 @@ export async function GET(req: NextRequest) {
     const proto =
       req.headers.get("x-forwarded-proto") ||
       (host.includes("localhost") || host.startsWith("10.") ? "http" : "https");
-    const redirectUri =
-      process.env.MOBILE_OAUTH_REDIRECT_URI ||
-      `${proto}://${host}/api/mobile/callback`;
+    const redirectUri = `${proto}://${host}/api/mobile/callback`;
+
+    // Surfaced rather than silently ignored: a stale value in the dashboard is
+    // exactly what broke this before, and someone reading the logs should be
+    // told it is no longer doing anything.
+    if (process.env.MOBILE_OAUTH_REDIRECT_URI) {
+      console.warn(
+        "[mobile/callback] MOBILE_OAUTH_REDIRECT_URI is set and IGNORED - the",
+        "redirect is derived from the request host. Safe to delete:",
+        process.env.MOBILE_OAUTH_REDIRECT_URI,
+      );
+    }
     console.log("[mobile/callback] redirect_uri:", redirectUri);
 
     // -- Exchange code for access token --
