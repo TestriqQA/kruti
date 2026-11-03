@@ -31,6 +31,15 @@ export interface ImageTheme {
   /** When to pick it, in the model's terms. */
   when: string;
   mode: "light" | "dark";
+  /**
+   * Which family this palette belongs to.
+   *
+   * An image style names the families that suit it, and the palette is drawn
+   * from those. That is what ties the colour to the post: the style was chosen
+   * from the post's own content, so the colour follows the content instead of
+   * being a hash with no relationship to the subject at all.
+   */
+  family: ThemeFamily;
   /** Page background. */
   bg: string;
   /** A slightly offset background for bands and alternating rows. */
@@ -59,9 +68,14 @@ export interface ImageTheme {
   palettePhrase: string;
 }
 
+export type ThemeFamily = "neutral" | "warm" | "cool" | "natural" | "vivid";
+
+export const THEME_FAMILIES: ThemeFamily[] = ["neutral", "warm", "cool", "natural", "vivid"];
+
 export const IMAGE_THEMES: ImageTheme[] = [
   {
     id: "paper",
+    family: "neutral",
     palettePhrase: "a warm off-white paper field, charcoal type, and a single burnt-amber accent",
     name: "Light editorial",
     when: "measured, credible, analytical posts",
@@ -77,6 +91,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "ink",
+    family: "neutral",
     palettePhrase: "a near-black ink field, light type, and one warm amber accent",
     name: "Deep editorial",
     when: "bold, declarative, thought-leadership posts",
@@ -92,6 +107,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "slate",
+    family: "cool",
     palettePhrase: "a deep navy-slate field, pale type, and one bright sky-blue accent",
     name: "Cool technical",
     when: "engineering, data, and systems posts",
@@ -107,6 +123,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "sage",
+    family: "natural",
     palettePhrase: "a soft pale-green field, deep forest-green type, and a muted sage accent",
     name: "Earthy natural",
     when: "grounded, human, people-and-culture posts",
@@ -122,6 +139,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "clay",
+    family: "warm",
     palettePhrase: "a warm cream field, dark brown type, and a terracotta accent",
     name: "Warm craft",
     when: "personal stories and lessons learned",
@@ -137,6 +155,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "mono",
+    family: "neutral",
     palettePhrase: "a clean white field, near-black type, and a single crimson accent",
     name: "High contrast mono",
     when: "sharp, contrarian, single-point posts",
@@ -152,6 +171,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "teal",
+    family: "natural",
     palettePhrase: "a pale mint field, deep teal type, and a strong teal accent",
     name: "Crisp clinical",
     when: "process, operations, and how-to posts",
@@ -167,6 +187,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "indigo",
+    family: "vivid",
     palettePhrase: "a deep indigo field, pale lilac type, and a bright lime accent",
     name: "Bold statement",
     when: "launches, wins, and celebratory posts",
@@ -182,6 +203,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "block",
+    family: "natural",
     palettePhrase: "a rich dark-teal field, mint type, and a warm apricot accent",
     name: "Colour block",
     when: "energetic, opinionated, high-contrast posts",
@@ -197,6 +219,7 @@ export const IMAGE_THEMES: ImageTheme[] = [
   },
   {
     id: "plum",
+    family: "vivid",
     palettePhrase: "a dark plum field, pale lavender type, and a soft violet accent",
     name: "Muted minimal",
     when: "reflective, nuanced, quieter posts",
@@ -209,6 +232,166 @@ export const IMAGE_THEMES: ImageTheme[] = [
     textMuted: "#AFA1C2",
     accent: "#C4B5FD",
     onAccent: "#2E1065",
+  },
+  {
+    id: "sand",
+    family: "neutral",
+    palettePhrase: "a warm sand field, espresso-brown type, and a rust accent",
+    name: "Warm sand",
+    when: "grounded, practical, hands-on posts",
+    mode: "light",
+    bg: "#F7F1E6",
+    bgAlt: "#EDE4D3",
+    surface: "#FFFDF8",
+    border: "#DFD2BC",
+    text: "#2B2117",
+    textMuted: "#776A58",
+    accent: "#A8502A",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "ember",
+    family: "warm",
+    palettePhrase: "a soft ivory field, deep maroon type, and a burnt-orange accent",
+    name: "Ember",
+    when: "urgent, high-stakes or cautionary posts",
+    mode: "light",
+    bg: "#FDF6F0",
+    bgAlt: "#F7E8DC",
+    surface: "#FFFFFF",
+    border: "#EBD3C1",
+    text: "#4A1D1D",
+    textMuted: "#8A5A4C",
+    accent: "#C2410C",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "rose",
+    family: "warm",
+    palettePhrase: "a pale blush field, deep plum type, and a dusty-rose accent",
+    name: "Blush",
+    when: "human, empathetic, culture and people posts",
+    mode: "light",
+    bg: "#FDF2F4",
+    bgAlt: "#F8E3E8",
+    surface: "#FFFFFF",
+    border: "#EFCDD5",
+    text: "#3F1D2B",
+    textMuted: "#8A5E6C",
+    accent: "#BE4A6E",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "bronze",
+    family: "warm",
+    palettePhrase: "a dark bronze-brown field, warm cream type, and an antique-gold accent",
+    name: "Bronze",
+    when: "craft, mastery and long-game posts",
+    mode: "dark",
+    bg: "#1F1711",
+    bgAlt: "#2A1F17",
+    surface: "#2E2219",
+    border: "#453326",
+    text: "#F6EDE1",
+    textMuted: "#B6A28B",
+    accent: "#D9A441",
+    onAccent: "#1F1711",
+  },
+  {
+    id: "steel",
+    family: "cool",
+    palettePhrase: "a cool grey-blue field, ink-navy type, and an electric-blue accent",
+    name: "Steel",
+    when: "engineering, infrastructure and systems posts",
+    mode: "light",
+    bg: "#F1F4F8",
+    bgAlt: "#E3E9F1",
+    surface: "#FFFFFF",
+    border: "#CFD8E4",
+    text: "#162032",
+    textMuted: "#5D6B80",
+    accent: "#1D4ED8",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "arctic",
+    family: "cool",
+    palettePhrase: "an icy white-blue field, deep slate type, and a bright cyan accent",
+    name: "Arctic",
+    when: "clean, precise, data and tooling posts",
+    mode: "light",
+    bg: "#F2F9FC",
+    bgAlt: "#E2F1F8",
+    surface: "#FFFFFF",
+    border: "#C7E0EC",
+    text: "#13303C",
+    textMuted: "#5B7C89",
+    accent: "#0891B2",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "midnight",
+    family: "cool",
+    palettePhrase: "a near-black navy field, ice-blue type, and a warm coral accent",
+    name: "Midnight",
+    when: "serious, after-hours, incident and risk posts",
+    mode: "dark",
+    bg: "#0B1120",
+    bgAlt: "#121A2C",
+    surface: "#161F33",
+    border: "#243049",
+    text: "#E6EEFB",
+    textMuted: "#95A6C2",
+    accent: "#FB7185",
+    onAccent: "#0B1120",
+  },
+  {
+    id: "forest",
+    family: "natural",
+    palettePhrase: "a deep forest field, pale sage type, and a warm amber accent",
+    name: "Deep forest",
+    when: "sustainable, steady, long-term growth posts",
+    mode: "dark",
+    bg: "#0F1C16",
+    bgAlt: "#16271E",
+    surface: "#1A2D23",
+    border: "#264035",
+    text: "#E4F0E8",
+    textMuted: "#9BB5A6",
+    accent: "#E0A33C",
+    onAccent: "#0F1C16",
+  },
+  {
+    id: "citrus",
+    family: "vivid",
+    palettePhrase: "a warm white field, charcoal type, and a vivid orange accent",
+    name: "Citrus",
+    when: "energetic, launch and momentum posts",
+    mode: "light",
+    bg: "#FFFBF4",
+    bgAlt: "#FFF1DC",
+    surface: "#FFFFFF",
+    border: "#F2DCBC",
+    text: "#1F1A14",
+    textMuted: "#776C5C",
+    accent: "#EA580C",
+    onAccent: "#FFFFFF",
+  },
+  {
+    id: "berry",
+    family: "vivid",
+    palettePhrase: "a deep wine field, blush-pink type, and a hot-magenta accent",
+    name: "Berry",
+    when: "bold, contrarian, attention-grabbing posts",
+    mode: "dark",
+    bg: "#1E0B18",
+    bgAlt: "#2A1123",
+    surface: "#2F1427",
+    border: "#452037",
+    text: "#F9E6F1",
+    textMuted: "#C093AF",
+    accent: "#EC4899",
+    onAccent: "#1E0B18",
   },
 ];
 
@@ -283,6 +466,30 @@ function hash32(s: string): number {
  * reshuffling on every regeneration; `offset` is there for callers that want
  * to step a post deliberately onto the next palette.
  */
+/**
+ * Pick a palette from the families that suit this post's image style.
+ *
+ * assignTheme() spreads evenly over all twenty, which is varied but says
+ * nothing about the post. The style was chosen by the model from the post's
+ * own content, so letting the style name its families is what makes the
+ * colour follow the subject - a hiring story and an incident teardown stop
+ * drawing from the same pool.
+ *
+ * Falls back to the whole list if a style names no family, so a missing
+ * mapping degrades to the old even spread rather than to nothing.
+ */
+export function assignThemeFrom(
+  families: readonly ThemeFamily[] | undefined,
+  seed: string,
+  offset = 0
+): ImageTheme {
+  const pool = families?.length
+    ? IMAGE_THEMES.filter((t) => families.includes(t.family))
+    : [];
+  const list = pool.length > 0 ? pool : IMAGE_THEMES;
+  return list[(hash32(seed || "") + offset) % list.length];
+}
+
 export function assignTheme(seed: string, offset = 0): ImageTheme {
   const i = (hash32(seed || "") + offset) % IMAGE_THEMES.length;
   return IMAGE_THEMES[i];
