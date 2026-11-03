@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // present - but the pipeline validates it anyway, for the website's sake.
   // Same body as before for a plain caller; an app that sends
   // Accept: application/x-ndjson gets the live pipeline instead.
-  return respondByAccept(req, (send) =>
-    runSingleImageGeneration(userId, params.id, body.customPrompt, send)
+  return respondByAccept(req, (send, signal) =>
+    runSingleImageGeneration(userId, params.id, body.customPrompt, send, signal)
   );
 }

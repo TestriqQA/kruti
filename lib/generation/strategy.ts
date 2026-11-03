@@ -8,6 +8,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule } from "@/lib/posting-schedule";
 import type { SendFn } from "@/lib/ndjson";
+import { stopIfCancelled } from "@/lib/ndjson";
 import { promptField } from "@/lib/preview-tools";
 
 /**
@@ -48,6 +49,8 @@ export async function runStrategyGeneration(
   userId: string,
   body: StrategyRequest,
   send: SendFn,
+  /** The route's request.signal, so a user who cancels is not charged. */
+  signal?: AbortSignal,
 ): Promise<void> {
   // The caller has already authenticated. Emitted so the website client still
   // sees its "auth" pipeline step complete.
@@ -230,6 +233,7 @@ export async function runStrategyGeneration(
       allowedTypes,
       ...promptField(prompt),
     });
+    if (stopIfCancelled(signal, send)) return;
     const raw = await generateText(prompt);
     strategy = parseJSON<Record<string, unknown>>(raw);
     strategy.generatedAt = new Date().toISOString(); // stamp when this strategy was created
@@ -246,6 +250,10 @@ export async function runStrategyGeneration(
 
   // Upsert without relying on a specific ON CONFLICT unique constraint
   // (the shared DB ContentPlan unique may differ across branches).
+  // No quota is spent here, but the plan this writes is what the posts run
+  // reads next, so a cancelled strategy must not leave one behind.
+  if (stopIfCancelled(signal, send)) return;
+
   send({ type: "save", status: "start" });
   const existing = await prisma.contentPlan.findFirst({
     where: { userId: user.id, weekStart },

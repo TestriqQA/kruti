@@ -220,9 +220,11 @@ export default function PostEditorClient({
     singleImagePostId,
     lastSingleImage,
     startSingleImageGeneration,
+    cancelSingleImageGeneration,
     carouselPostId,
     lastCarousel,
     startCarouselGeneration,
+    cancelCarouselGeneration,
   } = useGeneration();
   const generatingImage = singleImagePostId === post.id;
   const generatingCarousel = carouselPostId === post.id;
@@ -1567,6 +1569,20 @@ export default function PostEditorClient({
                       {generatingImage ? "Generating..." : imageGenRemaining <= 0 ? "Limit Reached" : imageUrl ? "Regenerate" : "AI Generate"}
                     </button>
                   </div>
+                  {/* Deliberately NOT behind PREVIEW_TOOLS_ENABLED. The only
+                      other cancel lives inside the pipeline modal, which never
+                      renders in production, so without this a user who starts a
+                      run has no way out of it at all. */}
+                  {generatingImage && (
+                    <button
+                      onClick={cancelSingleImageGeneration}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-red-200 text-red-600 rounded-control hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors"
+                      title="Stop generating - this will not use one of your generations"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Cancel image generation
+                    </button>
+                  )}
                   <button
                     onClick={handleGenerateCarousel}
                     disabled={generatingCarousel || imageGenRemaining <= 0}
@@ -1584,6 +1600,16 @@ export default function PostEditorClient({
                       ? "Regenerate Carousel"
                       : "Carousel (4 images)"}
                   </button>
+                  {generatingCarousel && (
+                    <button
+                      onClick={cancelCarouselGeneration}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs px-3 py-2 border border-red-200 text-red-600 rounded-control hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30 transition-colors"
+                      title="Stop generating - this will not use one of your generations"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      Cancel carousel generation
+                    </button>
+                  )}
                   {(imageUrl || carouselImages.length > 0) && (
                     <button
                       onClick={handleCropImages}

@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
   return respondByAccept(
     req,
-    (send) => runStrategyGeneration(userId, body, send),
+    (send, signal) => runStrategyGeneration(userId, body, send, signal),
     strategyErrorMessage,
   );
 }
