@@ -31,6 +31,12 @@ import { useToast } from "@/components/Toast";
 import VariantModal, { Variant } from "@/components/VariantModal";
 import RepurposeModal, { RepurposeResult } from "@/components/RepurposeModal";
 import { useGeneration } from "@/components/GenerationProvider";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
+import {
+  resolveImageCategory,
+  getImageCategoryColor,
+  isResolvableImageStyle,
+} from "@/lib/image-categories";
 import LinkedInPostPreview from "@/components/LinkedInPostPreview";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSession } from "next-auth/react";
@@ -39,11 +45,13 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
-// The image-style picker was removed from this page. The category still
-// lives on Post.imageStyle, is chosen by the model from the post content,
-// and is read server-side by /api/generate/image - which is why nothing
-// here needs it any more. Restoring the control means restoring the select
-// below "Post image", the handleImageStyleChange PATCH, and these imports.
+// The image-style PICKER was removed from this page: the category is chosen
+// by the model from the post content and read server-side by
+// /api/generate/image, so there is nothing here to set. It is still shown
+// read-only under "Post image" on pre-production, because it is the single
+// most useful thing to know when asking why an image came out as it did.
+// Restoring the control means restoring the select, the
+// handleImageStyleChange PATCH, and writing back to Post.imageStyle.
 
 interface Post {
   id: string;
@@ -218,6 +226,12 @@ export default function PostEditorClient({
   } = useGeneration();
   const generatingImage = singleImagePostId === post.id;
   const generatingCarousel = carouselPostId === post.id;
+  // Read only where it is rendered, so production does no work for a panel
+  // it will never draw. resolveImageCategory() always answers - an unset or
+  // unrecognised value falls back to the default category - so the raw
+  // stored value is shown alongside it rather than being papered over.
+  const imageCategory = PREVIEW_TOOLS_ENABLED ? resolveImageCategory(post.imageStyle) : null;
+  const imageStyleIsFallback = Boolean(imageCategory) && !isResolvableImageStyle(post.imageStyle);
   const [posting, setPosting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1619,6 +1633,61 @@ export default function PostEditorClient({
                         : `${imageGenRemaining} of ${IMAGE_GEN_LIMIT} AI generation${IMAGE_GEN_LIMIT === 1 ? "" : "s"} remaining`}
                   </p>
                 </>
+              )}
+
+              {/* Which style the posts model picked for this post. Read-only,
+                  and pre-production only - it explains why a generated image
+                  looks the way it does. Sits outside the document/image branch
+                  above because the style is a property of the post either way. */}
+              {imageCategory && (
+                <div className="mt-3 border-t border-edge-soft pt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-3 mb-1.5">
+                    Image style
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        getImageCategoryColor(post.imageStyle)
+                      )}
+                    >
+                      {imageCategory.label}
+                    </span>
+                    <code className="text-[10px] text-text-3">{imageCategory.id}</code>
+                  </div>
+                  {imageStyleIsFallback ? (
+                    <p className="text-[10px] text-warn mt-1.5 leading-relaxed">
+                      {post.imageStyle
+                        ? `Stored as "${post.imageStyle}", which is not a known style - using the default.`
+                        : "No style stored on this post - using the default."}
+                    </p>
+                  ) : (
+                    post.imageStyle !== imageCategory.id && (
+                      <p className="text-[10px] text-text-3 mt-1.5 leading-relaxed">
+                        Stored as <code>{post.imageStyle}</code>, which maps forward to this
+                        style.
+                      </p>
+                    )
+                  )}
+                  <p className="text-[10px] text-text-3 mt-1.5">
+                    {imageCategory.group} &middot; {imageCategory.genApproach} &middot;{" "}
+                    {imageCategory.visualStyle}
+                  </p>
+                  <details className="mt-1.5 group">
+                    <summary className="cursor-pointer select-none text-[11px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                      <span className="group-open:hidden">What this style means</span>
+                      <span className="hidden group-open:inline">Hide</span>
+                    </summary>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-text-2">
+                      <span className="font-semibold text-text-3">Brief: </span>
+                      {imageCategory.briefGuidance}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-text-2">
+                      <span className="font-semibold text-text-3">Picture: </span>
+                      {imageCategory.imageDirection}
+                    </p>
+                  </details>
+                </div>
               )}
             </div>
           </div>
