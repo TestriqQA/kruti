@@ -147,9 +147,13 @@ export function clampHeadline(raw: string, max = 40): string {
   if (s.length <= max) return s;
   const cut = s.slice(0, max);
   const lastSpace = cut.lastIndexOf(" ");
-  // Trim back to a word boundary so on-image text is never cut mid-word (unless the
-  // first word itself is longer than max).
-  return (lastSpace > max * 0.6 ? cut.slice(0, lastSpace) : cut).trim();
+  // Always fall back to the last WHOLE word. This used to require the space to
+  // sit past 60% of the cap, which quietly broke two-word labels whose first
+  // word is short: "Component Encapsulation" at max 18 cuts to
+  // "Component Encapsul", the space is at 9, 9 > 10.8 is false, so the hard
+  // cut went to the image model - which lettered it onto the graphic exactly
+  // as given. A shorter label reads fine; half a word reads as a bug.
+  return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trim();
 }
 
 /** Subheadline: one clean line, capped so it stays a supporting line. */

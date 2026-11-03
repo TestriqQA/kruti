@@ -24,6 +24,8 @@
  *                   model was never told the post's format at all.
  */
 
+import type { ThemeFamily } from "@/lib/image-themes";
+
 export type RenderApproach =
   | "designed-infographic"
   | "diagram"
@@ -42,6 +44,12 @@ export interface ImageCategory {
   genApproach: RenderApproach;
   /** A lib/image-styles.ts id. Pinned, not re-chosen per generation. */
   visualStyle: string;
+  /**
+   * Which palette families suit this style. The colour is drawn from these
+   * rather than from all twenty, so it follows the post's subject instead of
+   * landing wherever the post id happens to hash.
+   */
+  paletteFamilies: ThemeFamily[];
   /** One line for the text brief: what this format must contain. */
   briefGuidance: string;
   /** One line for the image prompt: what the picture must BE. */
@@ -66,6 +74,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   // ── Photographic & Human ──────────────────────────────────────────────────
   {
     id: "photorealistic-photo",
+    paletteFamilies: ["neutral", "natural"],
     label: "Photorealistic Photo",
     group: GROUP_PHOTO,
     genApproach: "realistic-scene",
@@ -78,6 +87,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "meme-humor",
+    paletteFamilies: ["vivid", "warm"],
     label: "Meme / Relatable Humor",
     group: GROUP_PHOTO,
     genApproach: "meme",
@@ -89,6 +99,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "comic-strip",
+    paletteFamilies: ["vivid", "warm"],
     label: "Comic Strip / Editorial Cartoon",
     group: GROUP_PHOTO,
     genApproach: "meme",
@@ -102,6 +113,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   // ── Data & Structure ──────────────────────────────────────────────────────
   {
     id: "infographic",
+    paletteFamilies: ["cool", "vivid"],
     label: "Infographic / Cheat Sheet",
     group: GROUP_DATA,
     genApproach: "designed-infographic",
@@ -113,6 +125,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "data-chart",
+    paletteFamilies: ["cool", "neutral"],
     label: "Data Chart / Statistical Visual",
     group: GROUP_DATA,
     genApproach: "text-card",
@@ -124,6 +137,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "flowchart-framework",
+    paletteFamilies: ["cool", "natural"],
     label: "Flowchart / Process / Framework",
     group: GROUP_DATA,
     genApproach: "diagram",
@@ -135,6 +149,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "mind-map",
+    paletteFamilies: ["vivid", "natural"],
     label: "Mind Map / Concept Map",
     group: GROUP_DATA,
     genApproach: "diagram",
@@ -146,6 +161,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "before-after",
+    paletteFamilies: ["neutral", "cool"],
     label: "Comparison / Before & After",
     group: GROUP_DATA,
     genApproach: "comparison",
@@ -159,6 +175,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   // ── Illustration & Sketch ─────────────────────────────────────────────────
   {
     id: "vector-illustration",
+    paletteFamilies: ["vivid", "warm"],
     label: "Vector Illustration / Flat 2D",
     group: GROUP_ILLUSTRATION,
     genApproach: "designed-infographic",
@@ -170,6 +187,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "isometric-3d",
+    paletteFamilies: ["cool", "vivid"],
     label: "3D Isometric / Rendered",
     group: GROUP_ILLUSTRATION,
     genApproach: "designed-infographic",
@@ -181,6 +199,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "handwritten-sketch",
+    paletteFamilies: ["warm", "neutral"],
     label: "Handwritten Note / Whiteboard",
     group: GROUP_ILLUSTRATION,
     genApproach: "diagram",
@@ -194,6 +213,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   // ── Cards & Product ───────────────────────────────────────────────────────
   {
     id: "quote-card",
+    paletteFamilies: ["neutral", "warm"],
     label: "Quote / Typography Card",
     group: GROUP_CARD,
     genApproach: "text-card",
@@ -205,6 +225,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "social-screenshot",
+    paletteFamilies: ["neutral", "cool"],
     label: "Social Media Screenshot",
     group: GROUP_CARD,
     genApproach: "text-card",
@@ -216,6 +237,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "ui-mockup",
+    paletteFamilies: ["cool", "neutral"],
     label: "UI Mockup / Dashboard / Device",
     group: GROUP_CARD,
     genApproach: "text-card",
@@ -227,6 +249,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "playbook-cover",
+    paletteFamilies: ["warm", "neutral"],
     label: "Book / Playbook / Checklist Mockup",
     group: GROUP_CARD,
     genApproach: "text-card",
@@ -238,6 +261,7 @@ export const IMAGE_CATEGORIES: ImageCategory[] = [
   },
   {
     id: "event-banner",
+    paletteFamilies: ["vivid", "cool"],
     label: "Event / Webinar / Announcement",
     group: GROUP_CARD,
     genApproach: "banner",
