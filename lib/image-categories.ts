@@ -334,6 +334,20 @@ export function isImageCategoryId(v: unknown): v is string {
 }
 
 /**
+ * True when a stored value resolves to a real style, false when
+ * getImageCategory() would quietly hand back the default instead.
+ *
+ * Not the same question as isImageCategoryId(): canonicalId() also accepts a
+ * legacy alias, a label, and any casing or spacing, so a value can be
+ * perfectly good without matching an id character for character. Comparing a
+ * stored value against the resolved category's id therefore reports false
+ * trouble, which is exactly what this exists to avoid.
+ */
+export function isResolvableImageStyle(raw: string | null | undefined): boolean {
+  return canonicalId(raw) !== undefined;
+}
+
+/**
  * Kept for compatibility. Nothing branches on it any more: every style now
  * goes to the image model, and lib/render-card.tsx survives only as the
  * single-image failure fallback.

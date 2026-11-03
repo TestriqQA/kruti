@@ -5,6 +5,7 @@ import { resolveImageCategory } from "@/lib/image-categories";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { SendFn } from "@/lib/ndjson";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 
 /**
  * The bulk image pipeline, shared by the website and the mobile API.
@@ -164,6 +165,23 @@ export async function runBulkImageGeneration(
         // there are 10 palettes, so every image in a run differs.
         themeSeed: posts[0].id,
         themeOffset: i,
+        // Re-sends the rendering event once the prompt exists. It repeats the
+        // descriptive fields because the client recomputes the row's detail
+        // line from them; dropping them would blank the headline mid-render.
+        //
+        // Left off entirely in production, so no second event goes out at all.
+        onPrompt: PREVIEW_TOOLS_ENABLED
+          ? (prompt) =>
+              send({
+                ...base,
+                status: "rendering",
+                category: category.label,
+                headline: brief.headline || brief.bodyText || "",
+                visual: brief.visual,
+                renderer: "image-model",
+                prompt,
+              })
+          : undefined,
       });
 
       if (imageUrl) {
