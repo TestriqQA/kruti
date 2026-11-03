@@ -30,6 +30,7 @@ import PostImage from "@/components/PostImage";
 import { useToast } from "@/components/Toast";
 import VariantModal, { Variant } from "@/components/VariantModal";
 import RepurposeModal, { RepurposeResult } from "@/components/RepurposeModal";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 import CarouselProgressModal, {
   CarouselProgress,
   CarouselSlideProgress,
@@ -2005,8 +2006,8 @@ export default function PostEditorClient({
         />
       )}
 
-      {/* Live Carousel Pipeline Modal */}
-      {carouselProgress && (
+      {/* Live Carousel Pipeline Modal - staging and local only. */}
+      {PREVIEW_TOOLS_ENABLED && carouselProgress && (
         <CarouselProgressModal
           progress={carouselProgress}
           onClose={() => {

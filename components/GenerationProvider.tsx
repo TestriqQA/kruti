@@ -12,6 +12,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useToast } from "@/components/Toast";
 import { POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { raiseProfileGate, ProfileGateError, isProfileGateError } from "@/lib/profile-gate";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 import PipelineModal, {
   type PipelineState,
   type StepStatus,
@@ -616,8 +617,12 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
     [router, toast]
   );
 
-  const visible =
-    openPipeline === "posts" ? postPipeline : openPipeline === "images" ? imagePipeline : null;
+  // Both generation entry points call setOpenPipeline() as the run starts, so
+  // this is the single gate that keeps the pipeline off production: no state
+  // anywhere else has to know about the flag.
+  const visible = !PREVIEW_TOOLS_ENABLED
+    ? null
+    : openPipeline === "posts" ? postPipeline : openPipeline === "images" ? imagePipeline : null;
 
   return (
     <GenerationContext.Provider
