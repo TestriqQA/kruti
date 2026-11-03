@@ -1746,14 +1746,6 @@ export default function PostEditorClient({
                 Posted to LinkedIn
               </div>
             )}
-            {post.imagePrompt && (
-              <div>
-                <label className="text-xs text-text-2 mb-1 block">Image Prompt</label>
-                <p className="text-xs text-text-2 bg-card-muted p-2 rounded-control leading-relaxed line-clamp-3">
-                  {post.imagePrompt}
-                </p>
-              </div>
-            )}
 
             {/* Rare and irreversible, so it sits at the end of this card rather
                 than in the toolbar next to Save - the same place Settings keeps
