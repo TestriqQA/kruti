@@ -30,12 +30,13 @@ import PostImage from "@/components/PostImage";
 import { useToast } from "@/components/Toast";
 import VariantModal, { Variant } from "@/components/VariantModal";
 import RepurposeModal, { RepurposeResult } from "@/components/RepurposeModal";
+import { useGeneration } from "@/components/GenerationProvider";
 import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
-import CarouselProgressModal, {
-  CarouselProgress,
-  CarouselSlideProgress,
-  SlideStatus,
-} from "@/components/CarouselProgressModal";
+import {
+  resolveImageCategory,
+  getImageCategoryColor,
+  isResolvableImageStyle,
+} from "@/lib/image-categories";
 import LinkedInPostPreview from "@/components/LinkedInPostPreview";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { useSession } from "next-auth/react";
@@ -44,11 +45,13 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
-// The image-style picker was removed from this page. The category still
-// lives on Post.imageStyle, is chosen by the model from the post content,
-// and is read server-side by /api/generate/image - which is why nothing
-// here needs it any more. Restoring the control means restoring the select
-// below "Post image", the handleImageStyleChange PATCH, and these imports.
+// The image-style PICKER was removed from this page: the category is chosen
+// by the model from the post content and read server-side by
+// /api/generate/image, so there is nothing here to set. It is still shown
+// read-only under "Post image" on pre-production, because it is the single
+// most useful thing to know when asking why an image came out as it did.
+// Restoring the control means restoring the select, the
+// handleImageStyleChange PATCH, and writing back to Post.imageStyle.
 
 interface Post {
   id: string;
@@ -82,37 +85,6 @@ interface UserProfile {
   headline: string | null;
 }
 
-// Shape of one NDJSON event streamed by /api/generate/carousel.
-interface CarouselStreamSlide {
-  index: number;
-  role?: string;
-  headline?: string;
-  subheadline?: string;
-  nodes?: string[];
-  visual?: string;
-  connectsFrom?: string;
-  connectsTo?: string;
-}
-interface CarouselStreamEvent {
-  type: string;
-  key?: string;
-  status?: string;
-  message?: string;
-  model?: string | null;
-  theme?: string | null;
-  style?: string;
-  palette?: string;
-  slides?: CarouselStreamSlide[];
-  total?: number;
-  index?: number;
-  url?: string;
-  carouselImages?: string[];
-  imageUrl?: string;
-  count?: number;
-  remaining?: number | null;
-  limit?: number;
-  subscriptionRequired?: boolean;
-}
 
 export default function PostEditorClient({
   post,
@@ -213,8 +185,6 @@ export default function PostEditorClient({
     }
   });
   const [carouselIndex, setCarouselIndex] = useState(0);
-  const [generatingCarousel, setGeneratingCarousel] = useState(false);
-  const [carouselProgress, setCarouselProgress] = useState<CarouselProgress | null>(null);
   const [cropping, setCropping] = useState(false);
   const [documentUrl, setDocumentUrl] = useState<string | null>(post.documentUrl);
   const [documentName, setDocumentName] = useState<string | null>(post.documentName);
@@ -242,7 +212,26 @@ export default function PostEditorClient({
   );
   const [saving, setSaving] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  const [generatingImage, setGeneratingImage] = useState(false);
+  // Image generation runs in GenerationProvider, which sits above every page.
+  // It used to be local state here, and that was the whole bug: navigating away
+  // unmounted this component, so the spinner vanished while the request carried
+  // on and the image landed minutes later with nothing to say it had.
+  const {
+    singleImagePostId,
+    lastSingleImage,
+    startSingleImageGeneration,
+    carouselPostId,
+    lastCarousel,
+    startCarouselGeneration,
+  } = useGeneration();
+  const generatingImage = singleImagePostId === post.id;
+  const generatingCarousel = carouselPostId === post.id;
+  // Read only where it is rendered, so production does no work for a panel
+  // it will never draw. resolveImageCategory() always answers - an unset or
+  // unrecognised value falls back to the default category - so the raw
+  // stored value is shown alongside it rather than being papered over.
+  const imageCategory = PREVIEW_TOOLS_ENABLED ? resolveImageCategory(post.imageStyle) : null;
+  const imageStyleIsFallback = Boolean(imageCategory) && !isResolvableImageStyle(post.imageStyle);
   const [posting, setPosting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -270,9 +259,6 @@ export default function PostEditorClient({
   const [generatingRepurpose, setGeneratingRepurpose] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
-  // Set true when the user dismisses the live carousel modal, so late stream events
-  // don't re-open it (the generation itself keeps running in the background).
-  const carouselClosedRef = useRef(false);
 
   // Weekend detection
   const isWeekend = (() => {
@@ -413,228 +399,58 @@ export default function PostEditorClient({
     }
   }
 
-  async function handleGenerateImage() {
-    setGeneratingImage(true);
-    try {
-      const res = await fetch("/api/generate/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: post.id }),
-      });
-      const data = await res.json();
-      if (raiseProfileGate(data)) return;
-      if (!res.ok || data.error) {
-        toast(data.error || "Failed to generate image", "error");
-        if (data.remaining !== undefined) setImageGenRemaining(data.remaining);
-        return;
-      }
-      if (data.imageUrl) {
-        setImageUrl(data.imageUrl);
-        pushGeneration([data.imageUrl]);
-        setDocumentUrl(null);
-        setDocumentName(null);
-        const remaining = data.remaining ?? 0;
-        setImageGenRemaining(remaining);
-        // Without this the App Router keeps serving the RSC payload it cached
-        // when this page first loaded. Navigate to another post and back, and
-        // the editor re-initialises `generations` from a stale `imageHistory`
-        // and `imageGenRemaining` from a stale `imageGenCount` - so the images
-        // look like they vanished and the per-post limit appears to reset. The
-        // rows were always correct in the database; only the cached payload was
-        // behind. Every other handler here already refreshes; this one did not.
-        router.refresh();
-        toast(
-          remaining > 0
-            ? `Image generated (${remaining} generation${remaining === 1 ? "" : "s"} remaining)`
-            : "Image generated (no more generations left for this post)",
-          "success"
-        );
-      }
-    } finally {
-      setGeneratingImage(false);
-    }
+  // Fire and forget: the provider owns the run, the pipeline and the toast.
+  // The result comes back through lastSingleImage, applied by the effect below,
+  // which is what lets it survive this component unmounting.
+  function handleGenerateImage() {
+    startSingleImageGeneration(post.id);
   }
 
-  async function handleGenerateCarousel() {
-    setGeneratingCarousel(true);
-    carouselClosedRef.current = false;
-    let prog: CarouselProgress = {
-      running: true,
-      preflight: [
-        { key: "auth", label: "Signed in", status: "pending" },
-        { key: "subscription", label: "Subscription", status: "pending" },
-        { key: "ratelimit", label: "Rate limit", status: "pending" },
-        { key: "post", label: "Post loaded", status: "pending" },
-        { key: "quota", label: "Generation quota", status: "pending" },
-      ],
-      plan: { status: "pending" },
-      render: { started: false, total: 0 },
-      slides: [],
-      save: "pending",
-      done: false,
-    };
-    const update = (next: CarouselProgress) => {
-      prog = next;
-      if (!carouselClosedRef.current) setCarouselProgress(next);
-    };
-    update(prog);
+  // Applies a finished run to the editor. Keyed on the result object rather
+  // than a boolean so it runs exactly once per run - including the case where
+  // the run finished while the user was on another page and this component is
+  // only now mounting with the result already waiting.
+  const appliedImageRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!lastSingleImage || lastSingleImage === appliedImageRef.current) return;
+    if (lastSingleImage.postId !== post.id) return;
+    appliedImageRef.current = lastSingleImage;
 
-    const applyEvent = (ev: CarouselStreamEvent) => {
-      switch (ev.type) {
-        case "preflight":
-          update({
-            ...prog,
-            preflight: prog.preflight.map((p) =>
-              p.key === ev.key
-                ? { ...p, status: ev.status === "done" ? "done" : "error", message: ev.message }
-                : p
-            ),
-          });
-          break;
-        case "plan":
-          if (ev.status === "start") {
-            update({ ...prog, plan: { ...prog.plan, status: "running" } });
-          } else if (ev.status === "done") {
-            const slides: CarouselSlideProgress[] = (ev.slides ?? []).map((s) => ({
-              index: s.index,
-              role: s.role,
-              headline: s.headline,
-              subheadline: s.subheadline,
-              nodes: s.nodes,
-              visual: s.visual,
-              connectsFrom: s.connectsFrom,
-              connectsTo: s.connectsTo,
-              status: "queued",
-            }));
-            update({
-              ...prog,
-              plan: {
-                status: "done",
-                model: ev.model,
-                theme: ev.theme ?? undefined,
-                style: ev.style,
-                palette: ev.palette,
-              },
-              slides,
-            });
-          } else if (ev.status === "fallback") {
-            update({ ...prog, plan: { status: "fallback", message: ev.message } });
-          } else if (ev.status === "error") {
-            update({ ...prog, plan: { ...prog.plan, status: "error", message: ev.message } });
-          }
-          break;
-        case "render": {
-          let slides = prog.slides;
-          if (slides.length === 0 && ev.total) {
-            slides = Array.from({ length: ev.total }, (_, i) => ({
-              index: i,
-              status: "queued" as SlideStatus,
-            }));
-          }
-          update({ ...prog, render: { started: true, total: ev.total ?? slides.length }, slides });
-          break;
-        }
-        case "slide":
-          update({
-            ...prog,
-            slides: prog.slides.map((s) =>
-              s.index === ev.index
-                ? {
-                    ...s,
-                    status:
-                      ev.status === "start" ? "rendering" : ev.status === "done" ? "done" : "error",
-                    url: ev.url ?? s.url,
-                    error: ev.message ?? s.error,
-                  }
-                : s
-            ),
-          });
-          break;
-        case "save":
-          update({ ...prog, save: ev.status === "start" ? "running" : "done" });
-          break;
-        case "done": {
-          const imgs = ev.carouselImages ?? [];
-          if (imgs.length > 0) {
-            setCarouselImages(imgs);
-            setCarouselIndex(0);
-            setImageUrl(imgs[0]);
-            pushGeneration(imgs);
-            setDocumentUrl(null);
-            setDocumentName(null);
-          }
-          if (ev.remaining !== undefined && ev.remaining !== null) setImageGenRemaining(ev.remaining);
-          update({ ...prog, running: false, done: true, save: "done" });
-          toast(`Carousel created (${ev.count ?? imgs.length} images)`, "success");
-          router.refresh();
-          break;
-        }
-        case "error":
-          if (ev.remaining !== undefined && ev.remaining !== null) setImageGenRemaining(ev.remaining);
-          update({ ...prog, running: false, error: ev.message || "Carousel generation failed" });
-          // A profile block is not a fault to retry, so it gets the dialog
-          // rather than a red toast the user would dismiss and click again.
-          if (raiseProfileGate(ev)) break;
-          toast(ev.message || "Failed to generate carousel", "error");
-          break;
-      }
-    };
-
-    try {
-      const res = await fetch("/api/generate/carousel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postId: post.id }),
-      });
-      if (!res.ok || !res.body) {
-        let msg = "Failed to generate carousel";
-        try {
-          const d = await res.json();
-          msg = d.error || msg;
-        } catch {
-          /* response was not JSON */
-        }
-        update({ ...prog, running: false, error: msg });
-        toast(msg, "error");
-        return;
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nl: number;
-        while ((nl = buffer.indexOf("\n")) >= 0) {
-          const line = buffer.slice(0, nl).trim();
-          buffer = buffer.slice(nl + 1);
-          if (!line) continue;
-          try {
-            applyEvent(JSON.parse(line) as CarouselStreamEvent);
-          } catch {
-            /* skip a malformed line */
-          }
-        }
-      }
-      const tail = buffer.trim();
-      if (tail) {
-        try {
-          applyEvent(JSON.parse(tail) as CarouselStreamEvent);
-        } catch {
-          /* ignore */
-        }
-      }
-    } catch {
-      update({ ...prog, running: false, error: "Carousel generation failed. Please try again." });
-      toast("Carousel generation failed. Please try again.", "error");
-    } finally {
-      setGeneratingCarousel(false);
-      if (!carouselClosedRef.current) {
-        setCarouselProgress((p) => (p ? { ...p, running: false } : p));
-      }
+    if (lastSingleImage.imageUrl) {
+      setImageUrl(lastSingleImage.imageUrl);
+      pushGeneration([lastSingleImage.imageUrl]);
+      setDocumentUrl(null);
+      setDocumentName(null);
     }
+    setImageGenRemaining(lastSingleImage.remaining);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastSingleImage, post.id]);
+
+  // Same arrangement as the image run: the provider owns the stream, the
+  // progress modal and the toast, so none of it dies when this page unmounts.
+  function handleGenerateCarousel() {
+    startCarouselGeneration(post.id);
   }
+
+  // Applies a finished carousel the same way, and for the same reason: the run
+  // may well have completed while the user was looking at another page.
+  const appliedCarouselRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (!lastCarousel || lastCarousel === appliedCarouselRef.current) return;
+    if (lastCarousel.postId !== post.id) return;
+    appliedCarouselRef.current = lastCarousel;
+
+    if (lastCarousel.images.length > 0) {
+      setCarouselImages(lastCarousel.images);
+      setCarouselIndex(0);
+      setImageUrl(lastCarousel.images[0]);
+      pushGeneration(lastCarousel.images);
+      setDocumentUrl(null);
+      setDocumentName(null);
+    }
+    if (lastCarousel.remaining !== null) setImageGenRemaining(lastCarousel.remaining);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastCarousel, post.id]);
 
   // Crop 1px off every side and re-encode (server-side via sharp). This strips the
   // C2PA / Content-Credentials metadata so the LinkedIn "CR" AI-content tag is gone.
@@ -1818,6 +1634,61 @@ export default function PostEditorClient({
                   </p>
                 </>
               )}
+
+              {/* Which style the posts model picked for this post. Read-only,
+                  and pre-production only - it explains why a generated image
+                  looks the way it does. Sits outside the document/image branch
+                  above because the style is a property of the post either way. */}
+              {imageCategory && (
+                <div className="mt-3 border-t border-edge-soft pt-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-text-3 mb-1.5">
+                    Image style
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                        getImageCategoryColor(post.imageStyle)
+                      )}
+                    >
+                      {imageCategory.label}
+                    </span>
+                    <code className="text-[10px] text-text-3">{imageCategory.id}</code>
+                  </div>
+                  {imageStyleIsFallback ? (
+                    <p className="text-[10px] text-warn mt-1.5 leading-relaxed">
+                      {post.imageStyle
+                        ? `Stored as "${post.imageStyle}", which is not a known style - using the default.`
+                        : "No style stored on this post - using the default."}
+                    </p>
+                  ) : (
+                    post.imageStyle !== imageCategory.id && (
+                      <p className="text-[10px] text-text-3 mt-1.5 leading-relaxed">
+                        Stored as <code>{post.imageStyle}</code>, which maps forward to this
+                        style.
+                      </p>
+                    )
+                  )}
+                  <p className="text-[10px] text-text-3 mt-1.5">
+                    {imageCategory.group} &middot; {imageCategory.genApproach} &middot;{" "}
+                    {imageCategory.visualStyle}
+                  </p>
+                  <details className="mt-1.5 group">
+                    <summary className="cursor-pointer select-none text-[11px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                      <span className="group-open:hidden">What this style means</span>
+                      <span className="hidden group-open:inline">Hide</span>
+                    </summary>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-text-2">
+                      <span className="font-semibold text-text-3">Brief: </span>
+                      {imageCategory.briefGuidance}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-text-2">
+                      <span className="font-semibold text-text-3">Picture: </span>
+                      {imageCategory.imageDirection}
+                    </p>
+                  </details>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1873,14 +1744,6 @@ export default function PostEditorClient({
               <div className="flex items-center gap-2 text-xs text-brand bg-brand-tint px-2 py-1.5 rounded-control">
                 <CheckCircle className="w-3.5 h-3.5" />
                 Posted to LinkedIn
-              </div>
-            )}
-            {post.imagePrompt && (
-              <div>
-                <label className="text-xs text-text-2 mb-1 block">Image Prompt</label>
-                <p className="text-xs text-text-2 bg-card-muted p-2 rounded-control leading-relaxed line-clamp-3">
-                  {post.imagePrompt}
-                </p>
               </div>
             )}
 
@@ -2006,16 +1869,6 @@ export default function PostEditorClient({
         />
       )}
 
-      {/* Live Carousel Pipeline Modal - staging and local only. */}
-      {PREVIEW_TOOLS_ENABLED && carouselProgress && (
-        <CarouselProgressModal
-          progress={carouselProgress}
-          onClose={() => {
-            carouselClosedRef.current = true;
-            setCarouselProgress(null);
-          }}
-        />
-      )}
 
       {/* Pre-publish Checklist Modal */}
       {showPublishChecklist && (

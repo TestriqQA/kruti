@@ -7,6 +7,7 @@ import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { SendFn } from "@/lib/ndjson";
+import { promptField } from "@/lib/preview-tools";
 
 /**
  * The carousel pipeline, shared by the website and the mobile API.
@@ -146,9 +147,12 @@ targetAudience: post.plan.user.targetAudience,
   // the set costs nothing. getCarouselPlan always returns a plan now, so
   // there is no diffusion fallback branch to take.
   send({ type: "render", status: "start", total });
-  const images = await renderCarouselFromPlan(plan, post.id, category, (e) =>
-    send({ type: "slide", ...e })
-  );
+  const images = await renderCarouselFromPlan(plan, post.id, category, (e) => {
+    // Everything except the prompt goes out everywhere; the prompt only where
+    // a pipeline exists to show it.
+    const { prompt, ...rest } = e;
+    send({ type: "slide", ...rest, ...promptField(prompt) });
+  });
   const savedPrompt = plan.slides.map((s) => s.headline).join(" / ");
 
   if (images.length === 0) {

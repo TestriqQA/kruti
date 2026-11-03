@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMobileUserId } from "@/lib/mobileAuth";
 import { runSingleImageGeneration } from "@/lib/generation/single-image";
+import { respondByAccept } from "@/lib/stream-mode";
 
 /**
  * POST /api/mobile/posts/[id]/generate-image
@@ -37,5 +38,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // The post comes from the URL here rather than the body, so it is always
   // present - but the pipeline validates it anyway, for the website's sake.
-  return runSingleImageGeneration(userId, params.id, body.customPrompt);
+  // Same body as before for a plain caller; an app that sends
+  // Accept: application/x-ndjson gets the live pipeline instead.
+  return respondByAccept(req, (send) =>
+    runSingleImageGeneration(userId, params.id, body.customPrompt, send)
+  );
 }

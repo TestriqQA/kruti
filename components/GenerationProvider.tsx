@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
 import { POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { raiseProfileGate, ProfileGateError, isProfileGateError } from "@/lib/profile-gate";
@@ -17,8 +18,66 @@ import PipelineModal, {
   type PipelineState,
   type StepStatus,
 } from "@/components/PipelineModal";
+import CarouselProgressModal, {
+  type CarouselProgress,
+  type CarouselSlideProgress,
+  type SlideStatus,
+} from "@/components/CarouselProgressModal";
 
 type StreamEvent = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+type PipelineKind = "posts" | "images" | "single-image";
+
+/** The outcome of one editor image run, kept so the editor can apply it
+ *  whenever it next mounts - including long after the run finished. */
+export interface SingleImageResult {
+  postId: string;
+  imageUrl: string | null;
+  remaining: number;
+  limit: number;
+}
+
+/** The outcome of one carousel run, kept for the same reason. */
+export interface CarouselResult {
+  postId: string;
+  images: string[];
+  /** null when the run never got far enough to report an allowance. */
+  remaining: number | null;
+  count: number;
+}
+
+// Shape of one NDJSON event streamed by /api/generate/carousel.
+interface CarouselStreamSlide {
+  index: number;
+  role?: string;
+  headline?: string;
+  subheadline?: string;
+  nodes?: string[];
+  visual?: string;
+  connectsFrom?: string;
+  connectsTo?: string;
+}
+interface CarouselStreamEvent {
+  type: string;
+  key?: string;
+  status?: string;
+  message?: string;
+  model?: string | null;
+  theme?: string | null;
+  style?: string;
+  palette?: string;
+  slides?: CarouselStreamSlide[];
+  total?: number;
+  index?: number;
+  url?: string;
+  prompt?: string;
+  carouselImages?: string[];
+  imageUrl?: string;
+  count?: number;
+  remaining?: number | null;
+  limit?: number;
+  subscriptionRequired?: boolean;
+}
 
 interface GenerationContextValue {
   generating: boolean;
@@ -33,10 +92,30 @@ interface GenerationContextValue {
   lastImageBatch: { id: string; imageUrl: string }[] | null;
   startImageGeneration: (postIds: string[]) => void;
   cancelImageGeneration: () => void;
+  /**
+   * Single-post image generation, started from the editor.
+   *
+   * It lives up here for the same reason the other two runs do: the editor
+   * unmounts the moment the user navigates, and a run owned by that component
+   * lost its spinner while the request carried on in the background - the
+   * image would appear minutes later with nothing having said it was coming.
+   */
+  singleImagePostId: string | null;
+  lastSingleImage: SingleImageResult | null;
+  startSingleImageGeneration: (postId: string) => void;
+  cancelSingleImageGeneration: () => void;
+  /** Carousel generation, also started from the editor, same rules. */
+  carouselPostId: string | null;
+  lastCarousel: CarouselResult | null;
+  startCarouselGeneration: (postId: string) => void;
+  cancelCarouselGeneration: () => void;
+  showCarouselProgress: () => void;
+  closeCarouselProgress: () => void;
   /** Live pipeline detail, and control over the popup that shows it. */
   postPipeline: PipelineState | null;
   imagePipeline: PipelineState | null;
-  showPipeline: (kind: "posts" | "images") => void;
+  singleImagePipeline: PipelineState | null;
+  showPipeline: (kind: PipelineKind) => void;
 }
 
 const noop = () => {};
@@ -52,8 +131,19 @@ const GenerationContext = createContext<GenerationContextValue>({
   lastImageBatch: null,
   startImageGeneration: noop,
   cancelImageGeneration: noop,
+  singleImagePostId: null,
+  lastSingleImage: null,
+  startSingleImageGeneration: noop,
+  cancelSingleImageGeneration: noop,
+  carouselPostId: null,
+  lastCarousel: null,
+  startCarouselGeneration: noop,
+  cancelCarouselGeneration: noop,
+  showCarouselProgress: noop,
+  closeCarouselProgress: noop,
   postPipeline: null,
   imagePipeline: null,
+  singleImagePipeline: null,
   showPipeline: noop,
 });
 
@@ -73,6 +163,7 @@ const CHECK_LABELS: Record<string, string> = {
   quota: "Monthly quota",
   input: "Selection valid",
   eligible: "Eligible posts",
+  post: "Post loaded",
 };
 
 const STAGE_LABELS: Record<string, string> = {
@@ -88,10 +179,10 @@ const STAGE_LABELS: Record<string, string> = {
 };
 
 // ── Pipeline state helpers (pure) ────────────────────────────────────────────
-function emptyPipeline(kind: "posts" | "images"): PipelineState {
+function emptyPipeline(kind: "posts" | "images", title?: string): PipelineState {
   return {
     kind,
-    title: kind === "posts" ? "Generating posts" : "Generating images",
+    title: title ?? (kind === "posts" ? "Generating posts" : "Generating images"),
     running: true,
     done: false,
     checks: [],
@@ -370,10 +461,26 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   >(null);
   const [imagePipeline, setImagePipeline] = useState<PipelineState | null>(null);
 
-  const [openPipeline, setOpenPipeline] = useState<"posts" | "images" | null>(null);
+  const [singleImagePostId, setSingleImagePostId] = useState<string | null>(null);
+  const [lastSingleImage, setLastSingleImage] = useState<SingleImageResult | null>(null);
+  const [singleImagePipeline, setSingleImagePipeline] = useState<PipelineState | null>(null);
+
+  const [carouselPostId, setCarouselPostId] = useState<string | null>(null);
+  const [lastCarousel, setLastCarousel] = useState<CarouselResult | null>(null);
+  const [carouselProgress, setCarouselProgress] = useState<CarouselProgress | null>(null);
+  // Separate from the state above on purpose. Closing used to null the
+  // progress AND latch a ref that stopped all further painting, so a
+  // dismissed carousel could never be reopened and the run became
+  // unreachable - no way back in to watch it or cancel it. Now closing only
+  // hides: the run keeps reporting and the modal can be brought back.
+  const [carouselOpen, setCarouselOpen] = useState(false);
+
+  const [openPipeline, setOpenPipeline] = useState<PipelineKind | null>(null);
 
   const abortRef = useRef<AbortController | null>(null);
   const imageAbortRef = useRef<AbortController | null>(null);
+  const singleImageAbortRef = useRef<AbortController | null>(null);
+  const carouselAbortRef = useRef<AbortController | null>(null);
 
   // Lets a long-running run read the CURRENT route without becoming dependent on
   // it - the user may navigate several times before it finishes.
@@ -384,16 +491,27 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
 
   // Closing or reloading the tab DOES kill an in-flight run, so ask first.
   useEffect(() => {
-    if (!generating && !imageGenerating) return;
+    if (!generating && !imageGenerating && !singleImagePostId && !carouselPostId) return;
     const warn = (e: BeforeUnloadEvent) => {
       e.preventDefault();
       e.returnValue = "";
     };
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
-  }, [generating, imageGenerating]);
+  }, [generating, imageGenerating, singleImagePostId, carouselPostId]);
 
-  const showPipeline = useCallback((kind: "posts" | "images") => setOpenPipeline(kind), []);
+  const showPipeline = useCallback((kind: PipelineKind) => setOpenPipeline(kind), []);
+
+  const cancelSingleImageGeneration = useCallback(() => {
+    singleImageAbortRef.current?.abort();
+  }, []);
+
+  const cancelCarouselGeneration = useCallback(() => {
+    carouselAbortRef.current?.abort();
+  }, []);
+
+  const showCarouselProgress = useCallback(() => setCarouselOpen(true), []);
+  const closeCarouselProgress = useCallback(() => setCarouselOpen(false), []);
 
   const cancelGeneration = useCallback(() => {
     abortRef.current?.abort();
@@ -481,6 +599,317 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
       } finally {
         imageAbortRef.current = null;
         setImageGenerating(false);
+      }
+    },
+    [router, toast]
+  );
+
+  // ── Single image run, from the post editor ─────────────────────────────────
+  const startSingleImageGeneration = useCallback(
+    async (postId: string) => {
+      if (!postId) return;
+      if (singleImageAbortRef.current) {
+        toast("An image is already being generated - one at a time.", "info");
+        return;
+      }
+
+      const ac = new AbortController();
+      singleImageAbortRef.current = ac;
+      setSingleImagePostId(postId);
+      setLastSingleImage(null);
+      setSingleImagePipeline(emptyPipeline("images", "Generating image"));
+      setOpenPipeline("single-image");
+
+      let failure: string | null = null;
+      let gateBlocked = false;
+      const outcome: { value: SingleImageResult | null } = { value: null };
+
+      try {
+        const res = await fetch("/api/generate/image", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            // Opts into the pipeline. Without it this route still answers with
+            // the single JSON body the mobile app expects.
+            Accept: "application/x-ndjson",
+          },
+          body: JSON.stringify({ postId }),
+          signal: ac.signal,
+        });
+
+        // The stream itself always answers 200 and reports failure as an event,
+        // so a non-ok here is something that happened BEFORE the run started -
+        // in practice an expired session - and carries a plain JSON body.
+        if (!res.ok || !res.body) {
+          let message = "Image generation failed";
+          try {
+            const body = await res.json();
+            message = body.error || message;
+            gateBlocked = raiseProfileGate(body) || gateBlocked;
+          } catch {
+            /* response was not JSON */
+          }
+          throw gateBlocked ? new ProfileGateError() : new Error(message);
+        }
+
+        await consumeNdjson(res, (ev) => {
+          setSingleImagePipeline((pl) => (pl ? applyImageEvent(pl, ev) : pl));
+
+          if (ev.type === "error") {
+            failure = String(ev.message ?? "Image generation failed");
+            gateBlocked = raiseProfileGate(ev) || gateBlocked;
+          } else if (ev.type === "done") {
+            outcome.value = {
+              postId,
+              imageUrl: (ev.imageUrl as string | null) ?? null,
+              remaining: Number(ev.remaining ?? 0),
+              limit: Number(ev.limit ?? 0),
+            };
+            // A run can finish with no image and still be a `done` - the models
+            // all declined. That is a failure to the user even though the
+            // transport succeeded.
+            if (!ev.imageUrl && ev.error) failure = String(ev.error);
+          }
+        });
+
+        if (gateBlocked) throw new ProfileGateError();
+        if (failure) throw new Error(failure);
+
+        // Published even when the editor is unmounted. Whenever it next mounts
+        // for this post it picks the result up, so a user who navigated away
+        // mid-run comes back to the finished image rather than a dead spinner.
+        if (outcome.value) setLastSingleImage(outcome.value);
+        const remaining = outcome.value?.remaining ?? 0;
+        const text =
+          remaining > 0
+            ? `Image generated (${remaining} generation${remaining === 1 ? "" : "s"} remaining)`
+            : "Image generated (no more generations left for this post)";
+        setSingleImagePipeline((pl) =>
+          pl ? { ...pl, running: false, done: true, summary: text } : pl
+        );
+        toast(text, "success");
+        router.refresh();
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setSingleImagePipeline((pl) =>
+            pl ? { ...pl, running: false, error: "Cancelled by you" } : pl
+          );
+          toast("Image generation cancelled", "info");
+        } else if (isProfileGateError(err)) {
+          setSingleImagePipeline((pl) =>
+            pl ? { ...pl, running: false, error: "Profile incomplete" } : pl
+          );
+        } else {
+          console.error(err);
+          const message = err instanceof Error ? err.message : "Image generation failed";
+          setSingleImagePipeline((pl) => (pl ? { ...pl, running: false, error: message } : pl));
+          toast(message, "error");
+        }
+        // The editor still needs the updated allowance on a refusal - a rate
+        // limit or a spent quota both change what its button should say.
+        if (outcome.value) setLastSingleImage(outcome.value);
+      } finally {
+        singleImageAbortRef.current = null;
+        setSingleImagePostId(null);
+      }
+    },
+    [router, toast]
+  );
+
+  // ── Carousel run, from the post editor ─────────────────────────────────────
+  const startCarouselGeneration = useCallback(
+    async (postId: string) => {
+      if (!postId) return;
+      if (carouselAbortRef.current) {
+        toast("A carousel is already being generated - one at a time.", "info");
+        return;
+      }
+
+      const ac = new AbortController();
+      carouselAbortRef.current = ac;
+      setCarouselOpen(true);
+      setCarouselPostId(postId);
+      setLastCarousel(null);
+
+      // `prog` is the live copy every reducer branch builds on. React state is
+      // not readable mid-run, so the running value is kept here and mirrored
+      // into state on every change - whether or not the modal is on screen, so
+      // reopening it shows where the run has actually got to.
+      let prog: CarouselProgress = {
+        running: true,
+        preflight: [
+          { key: "auth", label: "Signed in", status: "pending" },
+          { key: "subscription", label: "Subscription", status: "pending" },
+          { key: "ratelimit", label: "Rate limit", status: "pending" },
+          { key: "post", label: "Post loaded", status: "pending" },
+          { key: "quota", label: "Generation quota", status: "pending" },
+        ],
+        plan: { status: "pending" },
+        render: { started: false, total: 0 },
+        slides: [],
+        save: "pending",
+        done: false,
+      };
+      const update = (next: CarouselProgress) => {
+        prog = next;
+        setCarouselProgress(next);
+      };
+      update(prog);
+
+      let failure: string | null = null;
+      let gateBlocked = false;
+      const outcome: { value: CarouselResult | null } = { value: null };
+
+      const applyEvent = (ev: CarouselStreamEvent) => {
+        switch (ev.type) {
+          case "preflight":
+            update({
+              ...prog,
+              preflight: prog.preflight.map((p) =>
+                p.key === ev.key
+                  ? { ...p, status: ev.status === "done" ? "done" : "error", message: ev.message }
+                  : p
+              ),
+            });
+            break;
+          case "plan":
+            if (ev.status === "start") {
+              update({ ...prog, plan: { ...prog.plan, status: "running" } });
+            } else if (ev.status === "done") {
+              const slides: CarouselSlideProgress[] = (ev.slides ?? []).map((s) => ({
+                index: s.index,
+                role: s.role,
+                headline: s.headline,
+                subheadline: s.subheadline,
+                nodes: s.nodes,
+                visual: s.visual,
+                connectsFrom: s.connectsFrom,
+                connectsTo: s.connectsTo,
+                status: "queued",
+              }));
+              update({
+                ...prog,
+                plan: {
+                  status: "done",
+                  model: ev.model,
+                  theme: ev.theme ?? undefined,
+                  style: ev.style,
+                  palette: ev.palette,
+                },
+                slides,
+              });
+            } else if (ev.status === "fallback") {
+              update({ ...prog, plan: { status: "fallback", message: ev.message } });
+            } else if (ev.status === "error") {
+              update({ ...prog, plan: { ...prog.plan, status: "error", message: ev.message } });
+            }
+            break;
+          case "render": {
+            let slides = prog.slides;
+            if (slides.length === 0 && ev.total) {
+              slides = Array.from({ length: ev.total }, (_, i) => ({
+                index: i,
+                status: "queued" as SlideStatus,
+              }));
+            }
+            update({ ...prog, render: { started: true, total: ev.total ?? slides.length }, slides });
+            break;
+          }
+          case "slide":
+            update({
+              ...prog,
+              slides: prog.slides.map((s) =>
+                s.index === ev.index
+                  ? {
+                      ...s,
+                      status:
+                        ev.status === "start"
+                          ? "rendering"
+                          : ev.status === "done"
+                          ? "done"
+                          : "error",
+                      url: ev.url ?? s.url,
+                      error: ev.message ?? s.error,
+                      // The terminal `done` event carries no prompt - keep the
+                      // one the render-start event brought.
+                      prompt: ev.prompt ?? s.prompt,
+                    }
+                  : s
+              ),
+            });
+            break;
+          case "save":
+            update({ ...prog, save: ev.status === "start" ? "running" : "done" });
+            break;
+          case "done": {
+            const images = ev.carouselImages ?? [];
+            outcome.value = {
+              postId,
+              images,
+              remaining: ev.remaining ?? null,
+              count: ev.count ?? images.length,
+            };
+            update({ ...prog, running: false, done: true, save: "done" });
+            break;
+          }
+          case "error":
+            // Still published: a refusal changes the allowance the editor shows.
+            outcome.value = { postId, images: [], remaining: ev.remaining ?? null, count: 0 };
+            failure = String(ev.message ?? "Carousel generation failed");
+            gateBlocked = raiseProfileGate(ev) || gateBlocked;
+            update({ ...prog, running: false, error: failure });
+            break;
+        }
+      };
+
+      try {
+        const res = await fetch("/api/generate/carousel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ postId }),
+          signal: ac.signal,
+        });
+        if (!res.ok || !res.body) {
+          let message = "Failed to generate carousel";
+          try {
+            const body = await res.json();
+            message = body.error || message;
+            gateBlocked = raiseProfileGate(body) || gateBlocked;
+          } catch {
+            /* response was not JSON */
+          }
+          update({ ...prog, running: false, error: message });
+          throw gateBlocked ? new ProfileGateError() : new Error(message);
+        }
+
+        await consumeNdjson(res, (ev) => applyEvent(ev as CarouselStreamEvent));
+
+        if (gateBlocked) throw new ProfileGateError();
+        if (failure) throw new Error(failure);
+
+        if (outcome.value) setLastCarousel(outcome.value);
+        toast(`Carousel created (${outcome.value?.count ?? 0} images)`, "success");
+        router.refresh();
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          update({ ...prog, running: false, error: "Cancelled by you" });
+          toast("Carousel generation cancelled", "info");
+        } else if (isProfileGateError(err)) {
+          // A profile block is not a fault to retry, so the dialog stands on its
+          // own - a red toast under it would read as "try again", which can
+          // never clear this.
+          update({ ...prog, running: false, error: "Profile incomplete" });
+        } else {
+          const message = err instanceof Error ? err.message : "Carousel generation failed";
+          update({ ...prog, running: false, error: message });
+          toast(message, "error");
+        }
+        if (outcome.value) setLastCarousel(outcome.value);
+      } finally {
+        carouselAbortRef.current = null;
+        setCarouselPostId(null);
+        // Whatever happened, the modal must stop claiming it is still running.
+        setCarouselProgress((p) => (p ? { ...p, running: false } : p));
       }
     },
     [router, toast]
@@ -622,7 +1051,46 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
   // anywhere else has to know about the flag.
   const visible = !PREVIEW_TOOLS_ENABLED
     ? null
-    : openPipeline === "posts" ? postPipeline : openPipeline === "images" ? imagePipeline : null;
+    : openPipeline === "posts"
+    ? postPipeline
+    : openPipeline === "images"
+    ? imagePipeline
+    : openPipeline === "single-image"
+    ? singleImagePipeline
+    : null;
+
+  /**
+   * An IN-FLIGHT run whose modal is not on screen, so there is always a way
+   * back in to watch it or cancel it. Dismissing the modal used to strand the
+   * run with no route back to either.
+   *
+   * Only the two started from the post editor: the dashboard and the posts
+   * list already carry their own "View pipeline" buttons, and duplicating
+   * those here would put two controls on one page.
+   *
+   * Finished runs are deliberately excluded. Their state is never cleared, so
+   * including them would leave a button floating over every page for the rest
+   * of the session. A pipeline worth studying after the fact can simply be
+   * left open - the modal is built for that ("Finished - here is exactly what
+   * ran").
+   */
+  const dismissedRuns: { key: string; label: string; open: () => void }[] = [];
+  if (PREVIEW_TOOLS_ENABLED) {
+    if (singleImagePipeline?.running && openPipeline !== "single-image") {
+      dismissedRuns.push({
+        key: "single-image",
+        label: "Generating image",
+        open: () => setOpenPipeline("single-image"),
+      });
+    }
+    if (carouselProgress?.running && !carouselOpen) {
+      dismissedRuns.push({
+        key: "carousel",
+        label: "Generating carousel",
+        open: showCarouselProgress,
+      });
+    }
+  }
 
   return (
     <GenerationContext.Provider
@@ -637,8 +1105,19 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         lastImageBatch,
         startImageGeneration,
         cancelImageGeneration,
+        singleImagePostId,
+        lastSingleImage,
+        startSingleImageGeneration,
+        cancelSingleImageGeneration,
+        carouselPostId,
+        lastCarousel,
+        startCarouselGeneration,
+        cancelCarouselGeneration,
+        showCarouselProgress,
+        closeCarouselProgress,
         postPipeline,
         imagePipeline,
+        singleImagePipeline,
         showPipeline,
       }}
     >
@@ -647,8 +1126,35 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         <PipelineModal
           state={visible}
           onClose={() => setOpenPipeline(null)}
-          onCancel={openPipeline === "posts" ? cancelGeneration : cancelImageGeneration}
+          onCancel={
+            openPipeline === "posts"
+              ? cancelGeneration
+              : openPipeline === "single-image"
+              ? cancelSingleImageGeneration
+              : cancelImageGeneration
+          }
         />
+      )}
+      {PREVIEW_TOOLS_ENABLED && carouselOpen && carouselProgress && (
+        <CarouselProgressModal
+          progress={carouselProgress}
+          onClose={closeCarouselProgress}
+          onCancel={cancelCarouselGeneration}
+        />
+      )}
+      {dismissedRuns.length > 0 && (
+        <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-2">
+          {dismissedRuns.map((run) => (
+            <button
+              key={run.key}
+              onClick={run.open}
+              className="ring-focus flex items-center gap-2 rounded-full border border-edge bg-card px-3.5 py-2 text-[12.5px] font-semibold text-text-2 shadow-lift-lg transition-colors hover:bg-card-muted"
+            >
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-brand" />
+              {run.label}
+            </button>
+          ))}
+        </div>
       )}
     </GenerationContext.Provider>
   );

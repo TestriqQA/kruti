@@ -8,6 +8,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule } from "@/lib/posting-schedule";
 import type { SendFn } from "@/lib/ndjson";
+import { promptField } from "@/lib/preview-tools";
 
 /**
  * The strategy pipeline, shared by the website and the mobile API.
@@ -227,7 +228,7 @@ export async function runStrategyGeneration(
         ? "Current strategy is 30+ days old - building a fresh one"
         : "Building a fresh content strategy",
       allowedTypes,
-      prompt,
+      ...promptField(prompt),
     });
     const raw = await generateText(prompt);
     strategy = parseJSON<Record<string, unknown>>(raw);
