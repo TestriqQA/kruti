@@ -222,7 +222,10 @@ export async function runSingleImageGeneration(
       // result was not wanted, and handing back an identical colourway reads
       // as the button having done nothing. The post id still decides where in
       // the list this post starts, so two posts do not march in lockstep.
-      themeOffset: parseImageHistory(post.imageHistory).length,
+      // Starts at 1: offset 0 belongs to this post's carousel, and the very
+      // first single image has no history to offset by, so the two opened on
+      // the same palette every time.
+      themeOffset: 1 + parseImageHistory(post.imageHistory).length,
       // Spread over the rendering event rather than sent alone, because the
       // client recomputes the row's detail line from these fields - a bare
       // prompt event would blank the headline for the rest of the render.

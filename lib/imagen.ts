@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { getImageCategory, type ImageCategory } from "@/lib/image-categories";
 import { renderDesignedImage, type DesignBrief } from "@/lib/render-card";
 import { resolveVisualStyle, resolvePageLayout } from "@/lib/image-styles";
-import { assignTheme } from "@/lib/image-themes";
+import { assignTheme, assignThemeFrom } from "@/lib/image-themes";
 import {
   generateRecraftImageBuffer,
   getLastRecraftError,
@@ -285,7 +285,10 @@ export async function renderCarouselFromPlan(
   // Resolved once, from the plan and the post - never per slide. A per-slide
   // resolve would hand each one a different palette and the set would stop
   // looking like a set.
-  const theme = assignTheme(postId);
+  // Offset 0 here, and the single-image path starts at 1, so a post's deck
+  // and its standalone image can never open on the same palette - they used
+  // to, because the first single image had no history to offset by.
+  const theme = assignThemeFrom(category.paletteFamilies, postId, 0);
   // The register comes from the post's own chosen style, not from a hash of
   // the id. This path used to pin category to "infographic" and leave the
   // style and layout undefined, so a carousel ignored Post.imageStyle
@@ -307,7 +310,7 @@ export async function renderCarouselFromPlan(
             `A clear, concrete scene representing: ${slide.headline || slide.bodyText || ""}`,
           headline: slide.headline ?? "",
           subhead: slide.subheadline,
-          labels: style.textLoad === "low" ? [] : slide.nodes ?? [],
+          labels: labelsFor(style.textLoad, slide.nodes),
           layoutDirection: layout.direction,
           styleDirection: style.direction,
           styleName: style.name,
@@ -528,6 +531,21 @@ async function generateGeminiImageBuffer(
  * explicit instruction that nothing else may appear - which is also what keeps
  * stray lorem-ipsum and invented sub-captions out of the frame.
  */
+/**
+ * How many labels the frame can actually hold.
+ *
+ * Every extra string is one more thing competing for room, and the edges are
+ * where they lose: a crowded frame is what pushes a label half outside it.
+ * Capping the count is the fix that costs nothing visually - fewer strings
+ * means each one can sit well inside the composition. Shrinking the artwork
+ * to make room would just trade one problem for a smaller picture.
+ */
+function labelsFor(textLoad: "low" | "medium" | "high", nodes: string[] | undefined): string[] {
+  const all = (nodes ?? []).filter(Boolean);
+  if (textLoad === "low") return [];
+  return all.slice(0, textLoad === "medium" ? 3 : 5);
+}
+
 export function buildArtImagePrompt(opts: {
   scene: string;
   /** The one big figure, when the post turns on a number. */
@@ -622,6 +640,8 @@ export function buildArtImagePrompt(opts: {
 
 FORMAT - this image is a ${opts.formatLabel}, and that is what it must read as before anything else: ${opts.formatDirection}
 
+FRAMING - the square IS the whole picture, not a window onto a larger one. Compose the entire scene to fit inside it: every object, figure, panel, device and label is whole and completely visible, and the composition is pulled in from the edges so the frame slices nothing. Only the background field itself runs to the edges. If something will not fit whole, draw it smaller or leave it out - never let the edge cut it.
+
 LAYOUT - this is a designed page, not a picture with words dropped onto it. Build it on this structure: ${opts.layoutDirection} Hold a generous, even margin on all four sides, align everything to that structure, and leave one clear area to breathe rather than filling every corner.
 
 VISUAL STYLE - ${opts.styleName}: ${opts.styleDirection}
@@ -646,7 +666,7 @@ COLOUR: ${p.phrase}. ${
     p.mode === "dark" ? "Dark, rich and high contrast." : "Light, clean and airy."
   } Keep to that family - one accent, used sparingly, is what makes a graphic look designed rather than generated. Describe colour only through the artwork; never letter a colour name, hex code or swatch row onto the image.
 
-SAFE AREA: every piece of type must sit fully inside the frame with clear air around it - at least 6% of the frame's width as margin on all four sides. No letter may touch or run off an edge, and no line may be cut short by the bottom of the image. If the words do not fit at the size you want, set them smaller or break them onto another line; never crop them.
+TYPE PLACEMENT: set every string whole, reading end to end with no letter leaving the frame. Put type where the artwork is quiet and well inside the composition, never along an edge and never across a busy object. A string that will not fit at the size you want is set smaller or broken onto another line - it is never pushed past an edge, never trailed off, and never continued outside the picture.
 ${
     opts.slide
       ? `
@@ -706,7 +726,11 @@ export async function generateAndStoreArtImage(
   // different one. Hashing each post id separately only SPREADS them - over a
   // ten-image batch two would still land on the same palette often enough to
   // be the thing a user notices.
-  const theme = assignTheme(opts?.themeSeed ?? postId, opts?.themeOffset ?? 0);
+  const theme = assignThemeFrom(
+    category.paletteFamilies,
+    opts?.themeSeed ?? postId,
+    opts?.themeOffset ?? 0
+  );
   const layout = resolvePageLayout(brief.layout, postId);
 
   const prompt = buildArtImagePrompt({
@@ -714,7 +738,7 @@ export async function generateAndStoreArtImage(
     headline: brief.headline ?? "",
     // The art brief reuses `nodes` for the short labels that sit on elements in
     // the scene. A low-text style gets none, whatever the brief returned.
-    labels: style.textLoad === "low" ? [] : brief.nodes ?? [],
+    labels: labelsFor(style.textLoad, brief.nodes),
     statLine: brief.statLine,
     subhead: brief.subhead,
     chips: brief.chips,
