@@ -12,6 +12,7 @@ import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { SendFn } from "@/lib/ndjson";
+import { stopIfCancelled } from "@/lib/ndjson";
 import { PREVIEW_TOOLS_ENABLED, promptField } from "@/lib/preview-tools";
 
 /**
@@ -44,6 +45,8 @@ export async function runSingleImageGeneration(
   postId: unknown,
   customPrompt: unknown,
   send: SendFn,
+  /** The route's request.signal, so a user who cancels is not charged. */
+  signal?: AbortSignal,
 ): Promise<void> {
   // The caller has already authenticated. Emitted so the website's pipeline
   // shows its first check complete rather than stuck pending.
@@ -202,6 +205,10 @@ export async function runSingleImageGeneration(
       return;
     }
 
+    // Cheapest possible exit: the brief is done but the image model has not
+    // been called yet, so a cancel landing here costs nothing at all.
+    if (stopIfCancelled(signal, send)) return;
+
     const rendering = {
       ...base,
       status: "rendering",
@@ -251,6 +258,12 @@ export async function runSingleImageGeneration(
       savedPrompt = describeDesignBrief(category, brief);
     }
   }
+
+  // The point that actually charges someone. Everything above has already
+  // been paid for in model calls, but the user asked to stop, so the image
+  // is not saved to the post and imageGenCount is left alone - they keep
+  // the generation they cancelled.
+  if (stopIfCancelled(signal, send)) return;
 
   if (imageUrl) {
     await prisma.post.update({

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   // Captured before the closure so TypeScript keeps the narrowing from the
   // session check above.
   const userId = session.user.id;
-  return respondByAccept(req, (send) =>
-    runSingleImageGeneration(userId, body.postId, body.customPrompt, send)
+  return respondByAccept(req, (send, signal) =>
+    runSingleImageGeneration(userId, body.postId, body.customPrompt, send, signal)
   );
 }

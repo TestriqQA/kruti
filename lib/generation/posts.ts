@@ -10,6 +10,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
 import { IMAGE_CATEGORIES, imageStyleTaxonomyBlock, clampImageStyle } from "@/lib/image-categories";
 import type { SendFn } from "@/lib/ndjson";
+import { stopIfCancelled } from "@/lib/ndjson";
 import { promptField } from "@/lib/preview-tools";
 
 /**
@@ -34,6 +35,8 @@ export async function runPostsGeneration(
   userId: string,
   planId: string | undefined,
   send: SendFn,
+  /** The route's request.signal, so a user who cancels is not charged. */
+  signal?: AbortSignal,
 ): Promise<void> {
   // The caller has already authenticated. Emitted so the website client still
   // sees its "auth" pipeline step complete.
@@ -187,6 +190,7 @@ export async function runPostsGeneration(
       message: "Searching the web for current facts",
       ...promptField(researchPrompt),
     });
+    if (stopIfCancelled(signal, send)) return;
     researchBrief = await generateGroundedText(researchPrompt);
     send({
       type: "research",
@@ -244,6 +248,8 @@ export async function runPostsGeneration(
     ...promptField(prompt),
   });
 
+  // The big one: writing every post in the batch is a single long call.
+  if (stopIfCancelled(signal, send)) return;
   const raw = await generateText(prompt);
   const posts = parseJSON<
     Array<{
@@ -299,6 +305,12 @@ export async function runPostsGeneration(
 
   // One slot per post, in order. If slots somehow run out the post is left
   // unscheduled rather than silently reusing a date that is already taken.
+  // Deliberately before the loop and nowhere inside it. The cycle counter is
+  // incremented once at the end from however many rows were created, so
+  // stopping part way through would leave a half-written batch the user is
+  // partly charged for. Past this line the save runs to completion.
+  if (stopIfCancelled(signal, send)) return;
+
   send({ type: "save", status: "start", total: posts.length });
   const createdPosts = [];
   for (let idx = 0; idx < posts.length; idx++) {

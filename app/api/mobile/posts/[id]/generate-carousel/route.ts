@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   return respondByAccept(
     req,
-    (send) => runCarouselGeneration(userId, params.id, send),
+    (send, signal) => runCarouselGeneration(userId, params.id, send, signal),
     (err) => (err as Error)?.message || "Carousel generation failed",
   );
 }
