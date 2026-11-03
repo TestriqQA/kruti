@@ -10,6 +10,7 @@ import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { formatPostBody, cleanInline } from "@/lib/format";
 import { IMAGE_CATEGORIES, imageStyleTaxonomyBlock, clampImageStyle } from "@/lib/image-categories";
 import type { SendFn } from "@/lib/ndjson";
+import { promptField } from "@/lib/preview-tools";
 
 /**
  * The post-generation pipeline, shared by the website and the mobile API.
@@ -184,7 +185,7 @@ export async function runPostsGeneration(
       type: "research",
       status: "start",
       message: "Searching the web for current facts",
-      prompt: researchPrompt,
+      ...promptField(researchPrompt),
     });
     researchBrief = await generateGroundedText(researchPrompt);
     send({
@@ -240,7 +241,7 @@ export async function runPostsGeneration(
     count: postCount,
     styles: styleAssignment,
     allowedTypes,
-    prompt,
+    ...promptField(prompt),
   });
 
   const raw = await generateText(prompt);
