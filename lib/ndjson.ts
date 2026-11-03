@@ -51,6 +51,38 @@ export function ndjsonResponse(
   });
 }
 
+/**
+ * True when the caller has hung up, in which case the run should stop.
+ *
+ * Aborting a fetch in the browser closes the connection, which aborts the
+ * route handler's `request.signal`. Without this nothing watches that: the
+ * run carried on to completion, saved its result and charged the user for a
+ * generation they had explicitly cancelled.
+ *
+ * Checked at two kinds of place - before anything expensive, so a cancel that
+ * arrives in time costs nothing at all, and immediately before the database
+ * write, which is the point that actually charges someone.
+ *
+ * The terminal event is for the buffered caller's benefit. A cancelled
+ * streaming caller is by definition no longer listening, but respondByAccept
+ * still needs one terminal event or it reports the run as broken.
+ */
+export function stopIfCancelled(
+  signal: AbortSignal | undefined,
+  send: SendFn,
+): boolean {
+  if (!signal?.aborted) return false;
+  // 499 is the conventional 'client closed request'. Nothing will read it on
+  // the stream path; it keeps the buffered path from answering a bare 500.
+  send({
+    type: "error",
+    message: "Cancelled",
+    cancelled: true,
+    status: 499,
+  });
+  return true;
+}
+
 /** Thrown to end a run early with a user-facing message. */
 export class StreamAbort extends Error {
   constructor(message: string, readonly extra: StreamEvent = {}) {

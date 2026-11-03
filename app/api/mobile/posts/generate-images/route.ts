@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   return respondByAccept(
     req,
-    (send) => runBulkImageGeneration(userId, body.postIds, send),
+    (send, signal) => runBulkImageGeneration(userId, body.postIds, send, signal),
     () => "Image generation failed",
   );
 }

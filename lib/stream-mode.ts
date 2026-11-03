@@ -23,6 +23,9 @@ import { ndjsonResponse, type SendFn, type StreamEvent } from "@/lib/ndjson";
  * an HTTP status rather than a sentinel event buried in a 200 stream. That was
  * agreed with the app side and it is also just correct: there is nothing to
  * stream to someone we have not identified.
+ *
+ * Cancellation is handed ONLY to a streaming caller - see the note at the
+ * branch below.
  */
 
 const NDJSON_TYPE = "application/x-ndjson";
@@ -51,11 +54,21 @@ function statusForError(event: StreamEvent): number {
 
 export async function respondByAccept(
   req: NextRequest,
-  run: (send: SendFn) => Promise<void>,
+  /**
+   * The run. Its second argument is an abort signal, present only when the
+   * caller is streaming; see the branch below for why.
+   */
+  run: (send: SendFn, signal?: AbortSignal) => Promise<void>,
   onError: (err: unknown) => string = () => "Something went wrong",
 ): Promise<Response> {
   if (wantsNdjson(req)) {
-    return ndjsonResponse(run, onError);
+    // Only a streaming caller is handed the signal, because only a streaming
+    // caller has a cancel control in front of it. A buffered caller - the
+    // mobile app - can lose its connection simply by being backgrounded, and
+    // discarding a generation it has already paid for because the OS blinked
+    // would be worse than finishing the job and letting it collect the result
+    // on the next fetch, which is what it does today.
+    return ndjsonResponse((send) => run(send, req.signal), onError);
   }
 
   const events: StreamEvent[] = [];

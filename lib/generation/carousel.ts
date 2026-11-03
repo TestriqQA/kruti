@@ -7,6 +7,7 @@ import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { SendFn } from "@/lib/ndjson";
+import { stopIfCancelled } from "@/lib/ndjson";
 import { promptField } from "@/lib/preview-tools";
 
 /**
@@ -31,6 +32,8 @@ export async function runCarouselGeneration(
   userId: string,
   postId: string | undefined,
   send: SendFn,
+  /** The route's request.signal, so a user who cancels is not charged. */
+  signal?: AbortSignal,
 ): Promise<void> {
   send({ type: "preflight", key: "auth", status: "done" });
 
@@ -146,6 +149,10 @@ targetAudience: post.plan.user.targetAudience,
   // Stage 2 - Renderer. Laid out in code, so the slide text is exact and
   // the set costs nothing. getCarouselPlan always returns a plan now, so
   // there is no diffusion fallback branch to take.
+  // Four image-model calls go out in parallel below, so this is the last
+  // moment a cancel costs nothing.
+  if (stopIfCancelled(signal, send)) return;
+
   send({ type: "render", status: "start", total });
   const images = await renderCarouselFromPlan(plan, post.id, category, (e) => {
     // Everything except the prompt goes out everywhere; the prompt only where
@@ -162,6 +169,11 @@ targetAudience: post.plan.user.targetAudience,
     });
     return;
   }
+
+  // The point that actually charges someone - see the single-image pipeline
+  // for the reasoning. The slides are already rendered and uploaded, but
+  // nothing is attached to the post and imageGenCount is left alone.
+  if (stopIfCancelled(signal, send)) return;
 
   // Stage 3 - Persist to the post.
   send({ type: "save", status: "start" });
