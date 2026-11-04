@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { startOfCycle } from "@/lib/post-quota";
 
 // Auto-detect dev mode: bypasses payment only when Razorpay keys are missing
 const DEV_MODE =
@@ -38,12 +39,14 @@ export async function POST(req: NextRequest) {
         trialEnd: null,
         currentPeriodEnd,
         currency,
+        ...startOfCycle(),
       },
       create: {
         userId: session.user.id,
         status: "active",
         currentPeriodEnd,
         currency,
+        ...startOfCycle(),
       },
     });
 

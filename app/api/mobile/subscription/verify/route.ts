@@ -21,8 +21,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
 import { getMobileUserId } from "@/lib/mobileAuth";
+import { redeemPayment } from "@/lib/payment-ledger";
+import { startOfCycle } from "@/lib/post-quota";
 
 export async function POST(req: NextRequest) {
   const userId = await getMobileUserId(req);
@@ -82,18 +83,57 @@ export async function POST(req: NextRequest) {
   const currentPeriodEnd = new Date();
   currentPeriodEnd.setMonth(currentPeriodEnd.getMonth() + 1);
 
-  await prisma.subscription.update({
-    where: { userId },
-    data: {
-      razorpaySubscriptionId: razorpay_order_id, // store order id here
-      status: "active",
-      trialEnd: null,
-      currentPeriodEnd,
-    },
-  });
+  // A payment works exactly once - see lib/payment-ledger. The claim and
+  // everything below commit as one transaction, so a failure anywhere
+  // releases the payment instead of burning it.
+  //
+  // The status guard inside stays as a second line, for the case where the
+  // ledger is unavailable. It does not get in the way of a real second
+  // month: create-order writes status "none" before each new payment.
+  const redemption = await redeemPayment(
+    razorpay_payment_id,
+    userId,
+    async (tx) => {
+      const activated = await tx.subscription.updateMany({
+        where: { userId, status: { not: "active" } },
+        data: {
+          razorpaySubscriptionId: razorpay_order_id, // store order id here
+          status: "active",
+          trialEnd: null,
+          currentPeriodEnd,
+          // Mobile is one order per month, so every payment that reaches here
+          // buys a new cycle and gets a full allowance - not only the first.
+          ...startOfCycle(),
+        },
+      });
+
+      if (activated.count === 0) {
+        // Already active: the order reference and period are still kept
+        // current, exactly as before. Only the counter is left alone.
+        await tx.subscription.update({
+          where: { userId },
+          data: {
+            razorpaySubscriptionId: razorpay_order_id,
+            status: "active",
+            trialEnd: null,
+            currentPeriodEnd,
+          },
+        });
+      }
+    }
+  );
+
+  // Only a DIFFERENT account reusing this payment is refused. The same user
+  // sending it twice is a retry, and they are already subscribed.
+  if (redemption.outcome === "taken") {
+    return NextResponse.json(
+      { error: "This payment has already been used on another account." },
+      { status: 409 },
+    );
+  }
 
   console.log(
-    `[mobile/verify] activated user=${userId} order=${razorpay_order_id} until=${currentPeriodEnd.toISOString()}`,
+    `[mobile/verify] activated user=${userId} order=${razorpay_order_id} until=${currentPeriodEnd.toISOString()} (${redemption.outcome})`,
   );
   return NextResponse.json({
     success: true,

@@ -8,8 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMobileUserId } from "@/lib/mobileAuth";
-
-const POST_LIMIT_PER_CYCLE = 30;
+import { postsRemainingInCycle, postLimitFor } from "@/lib/post-quota";
 
 export async function GET(req: NextRequest) {
   const userId = await getMobileUserId(req);
@@ -46,15 +45,17 @@ export async function GET(req: NextRequest) {
   const drafts = allPosts.filter((p) => p.status === "draft").length;
 
   const sub = user.subscription;
-  // A cycle older than 30 days has already rolled over — the generate route
-  // zeroes the counter when it next runs (see api/mobile/generate/posts). If
-  // we report the stale count here the app shows "limit reached" and disables
-  // Generate for a batch the backend would happily allow.
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const cycleStale =
-    !sub?.cyclePostsResetAt || new Date(sub.cyclePostsResetAt) < thirtyDaysAgo;
-  const used = cycleStale ? 0 : (sub?.postsGeneratedThisCycle ?? 0);
-  const postsRemaining = Math.max(0, POST_LIMIT_PER_CYCLE - used);
+  // Both numbers come from lib/post-quota so the app, the website and the
+  // generation route cannot disagree. It also handles the rollover: a cycle
+  // older than 30 days has already rolled, and reporting the stale count here
+  // showed "limit reached" for a batch the backend would happily allow.
+  const POST_LIMIT_PER_CYCLE = postLimitFor(sub);
+  const rawRemaining = postsRemainingInCycle(user.role, sub, now);
+  // An admin is unlimited, which postsRemainingInCycle reports as Infinity -
+  // and JSON turns that into null. The app expects a number here, so an admin
+  // is reported as having a full allowance.
+  const postsRemaining = Number.isFinite(rawRemaining) ? rawRemaining : POST_LIMIT_PER_CYCLE;
+  const used = Math.max(0, POST_LIMIT_PER_CYCLE - postsRemaining);
 
   // Posts per generation batch = number of posting days (mirrors web).
   const schedule = user.postingSchedule

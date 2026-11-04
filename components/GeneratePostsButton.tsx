@@ -24,7 +24,9 @@ export default function GeneratePostsButton({ recentPlan, postsRemaining, classN
   const { generating, startGeneration } = useGeneration();
   const [showConfirm, setShowConfirm] = useState(false);
 
-  const limitReached = postsRemaining < POSTS_PER_BATCH;
+  // See DashboardClient: the batch shrinks to the remaining allowance, so
+  // only a spent allowance disables this.
+  const limitReached = postsRemaining <= 0;
 
   const strategyTheme = recentPlan
     ? (() => {

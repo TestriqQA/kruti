@@ -24,7 +24,7 @@ export default async function PostsPage() {
     }),
     prisma.subscription.findUnique({
       where: { userId: session.user.id },
-      select: { postsGeneratedThisCycle: true, cyclePostsResetAt: true },
+      select: { postsGeneratedThisCycle: true, cyclePostsResetAt: true, status: true },
     }),
   ]);
 
