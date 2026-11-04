@@ -12,6 +12,7 @@ import { IMAGE_CATEGORIES, imageStyleTaxonomyBlock, clampImageStyle } from "@/li
 import type { SendFn } from "@/lib/ndjson";
 import { stopIfCancelled } from "@/lib/ndjson";
 import { promptField } from "@/lib/preview-tools";
+import { postLimitFor } from "@/lib/post-quota";
 
 /**
  * The post-generation pipeline, shared by the website and the mobile API.
@@ -28,7 +29,6 @@ import { promptField } from "@/lib/preview-tools";
  * 401 rather than an event inside a 200 stream.
  */
 
-const POST_LIMIT_PER_CYCLE = 30;
 const SLOT_FORMAT = "EEE, MMM d - hh:mm a";
 
 export async function runPostsGeneration(
@@ -104,22 +104,27 @@ export async function runPostsGeneration(
   }
   send({ type: "preflight", key: "profile", status: "done" });
 
-  // The schedule decides WHICH days posts land on; the batch size is fixed.
-  const schedule = parsePostingSchedule(user.postingSchedule);
-  const postCount = POSTS_PER_BATCH;
-  const timezone = user.timezone || "Asia/Kolkata";
-  send({
-    type: "preflight",
-    key: "schedule",
-    status: "done",
-    days: schedule.days,
-    time: schedule.time,
-    timezone,
-    batchSize: postCount,
-  });
-
-  // Enforce the per-cycle limit.
+  // ── Allowance ───────────────────────────────────────────────────────────
+  //
+  // Settled BEFORE the batch size, because the batch now shrinks to fit what
+  // is left rather than being refused outright. A trial with 2 posts to spare
+  // was told the limit was reached while the dashboard said 2 remaining.
   const subscription = user.subscription;
+  const isAdmin = user.role === "admin";
+  const postLimit = postLimitFor(subscription);
+
+  // checkActiveSubscription() creates this row before the run reaches here, so
+  // a missing one means something upstream went wrong. It used to be an
+  // `if (subscription)` wrapped around the entire check, which meant no row =
+  // no limit of any kind, and an account in that state could generate without
+  // end. Refusing is the only safe reading.
+  if (!isAdmin && !subscription) {
+    const message = "We could not read your subscription. Please reload and try again.";
+    send({ type: "preflight", key: "quota", status: "error", message });
+    send({ type: "error", message, status: 403 });
+    return;
+  }
+
   if (subscription) {
     // Reset the counter once the 30-day window has elapsed.
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -130,21 +135,38 @@ export async function runPostsGeneration(
       });
       subscription.postsGeneratedThisCycle = 0;
     }
-
-    if (user.role !== "admin" && subscription.postsGeneratedThisCycle + postCount > POST_LIMIT_PER_CYCLE) {
-      const remaining = POST_LIMIT_PER_CYCLE - subscription.postsGeneratedThisCycle;
-      const message = `Post generation limit reached for this billing cycle. You have ${remaining} post(s) remaining out of ${POST_LIMIT_PER_CYCLE}.`;
-      send({ type: "preflight", key: "quota", status: "error", message, postsRemaining: remaining });
-      send({ type: "error", message, postsRemaining: remaining, postsLimit: POST_LIMIT_PER_CYCLE });
-      return;
-    }
   }
+
+  const used = subscription?.postsGeneratedThisCycle ?? 0;
+  const allowanceLeft = isAdmin ? POSTS_PER_BATCH : Math.max(0, postLimit - used);
+  if (allowanceLeft <= 0) {
+    const message = `You have used all ${postLimit} posts for this cycle.`;
+    send({ type: "preflight", key: "quota", status: "error", message, postsRemaining: 0 });
+    send({ type: "error", message, postsRemaining: 0, postsLimit: postLimit });
+    return;
+  }
+
+  // A short batch beats a refusal: it spends exactly what is left.
+  const postCount = Math.min(POSTS_PER_BATCH, allowanceLeft);
   send({
     type: "preflight",
     key: "quota",
     status: "done",
-    used: subscription?.postsGeneratedThisCycle ?? 0,
-    limit: POST_LIMIT_PER_CYCLE,
+    used,
+    limit: postLimit,
+  });
+
+  // The schedule decides WHICH days posts land on.
+  const schedule = parsePostingSchedule(user.postingSchedule);
+  const timezone = user.timezone || "Asia/Kolkata";
+  send({
+    type: "preflight",
+    key: "schedule",
+    status: "done",
+    days: schedule.days,
+    time: schedule.time,
+    timezone,
+    batchSize: postCount,
   });
 
   const strategy = JSON.parse(plan.strategy) as {
@@ -262,7 +284,10 @@ export async function runPostsGeneration(
       bestTimeToPost: string;
       callToAction: string;
     }>
-  >(raw);
+    // The model is ASKED for postCount posts and usually obliges, but nothing
+    // forces it to. A longer answer used to be created in full while the
+    // allowance had only accounted for postCount of them.
+  >(raw).slice(0, postCount);
   send({
     type: "write",
     status: "done",
@@ -311,6 +336,30 @@ export async function runPostsGeneration(
   // partly charged for. Past this line the save runs to completion.
   if (stopIfCancelled(signal, send)) return;
 
+  // The allowance is CLAIMED here, in one statement that tests and increments
+  // together, and this is the check that actually holds the line. The preflight
+  // above is only a fast fail: it reads a number, then spends half a minute in
+  // the model before anything is written back, and two runs overlapping in that
+  // window - two tabs, a double click, a retry - both read the same count and
+  // both passed it. That is how an account got past 30.
+  //
+  // updateMany applies the condition and the increment in a single UPDATE, so
+  // the second run matches no row and stops here, before a post exists.
+  if (!isAdmin && subscription) {
+    const claimed = await prisma.subscription.updateMany({
+      where: {
+        id: subscription.id,
+        postsGeneratedThisCycle: { lte: postLimit - posts.length },
+      },
+      data: { postsGeneratedThisCycle: { increment: posts.length } },
+    });
+    if (claimed.count === 0) {
+      const message = `You have used all ${postLimit} posts for this cycle.`;
+      send({ type: "error", message, postsRemaining: 0, postsLimit: postLimit });
+      return;
+    }
+  }
+
   send({ type: "save", status: "start", total: posts.length });
   const createdPosts = [];
   for (let idx = 0; idx < posts.length; idx++) {
@@ -355,18 +404,25 @@ export async function runPostsGeneration(
   }
   send({ type: "save", status: "done", count: createdPosts.length });
 
-  // Increment the billing cycle counter.
-  let postsRemaining = POST_LIMIT_PER_CYCLE;
-  if (subscription) {
-    const newCount = subscription.postsGeneratedThisCycle + createdPosts.length;
-    await prisma.subscription.update({
+  // The allowance was claimed before the loop, so there is nothing to add here
+  // - only something to hand back, when the loop created fewer rows than it
+  // planned to. The remaining figure is read from the row rather than computed
+  // from the count this request started with, which another run may have moved
+  // on since.
+  let postsRemaining = postLimit;
+  if (!isAdmin && subscription) {
+    const shortfall = Math.max(0, posts.length - createdPosts.length);
+    const row = await prisma.subscription.update({
       where: { id: subscription.id },
       data: {
-        postsGeneratedThisCycle: newCount,
+        ...(shortfall > 0
+          ? { postsGeneratedThisCycle: { decrement: shortfall } }
+          : {}),
         cyclePostsResetAt: subscription.cyclePostsResetAt ?? new Date(),
       },
+      select: { postsGeneratedThisCycle: true },
     });
-    postsRemaining = POST_LIMIT_PER_CYCLE - newCount;
+    postsRemaining = Math.max(0, postLimit - row.postsGeneratedThisCycle);
   }
 
   send({
@@ -375,6 +431,6 @@ export async function runPostsGeneration(
     count: createdPosts.length,
     weekTheme: strategy.weekTheme,
     postsRemaining,
-    postsLimit: POST_LIMIT_PER_CYCLE,
+    postsLimit: postLimit,
   });
 }

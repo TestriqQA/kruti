@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyWebhookSignature } from "@/lib/razorpay";
+import { startOfCycle } from "@/lib/post-quota";
 
 /**
  * Razorpay Webhook handler.
@@ -66,6 +67,44 @@ export async function POST(req: NextRequest) {
           ? new Date(subEntity.current_end * 1000)
           : null;
 
+        // A paid cycle begins with its full allowance, so the counter resets
+        // here - otherwise a trial user who spent all 7 posts and then paid
+        // started their first paid month at 7/30.
+        //
+        // The guard matters as much as the reset. subscription.charged fires
+        // on every renewal and Razorpay RETRIES deliveries, so a redelivered
+        // charge would otherwise hand back allowance the user had already
+        // spent since. The reset is therefore attempted only on rows that are
+        // not already on the cycle this event describes, which a redelivery
+        // of an applied charge never matches.
+        //
+        // Each branch is written as a positive condition on purpose: NOT(...)
+        // over a nullable column is SQL-unknown rather than true, and a
+        // trialing row - the case this exists for - has no currentPeriodEnd.
+        await prisma.subscription.updateMany({
+          where: {
+            razorpaySubscriptionId,
+            OR: [
+              { status: { not: "active" } },
+              ...(currentPeriodEnd
+                ? [
+                    { currentPeriodEnd: null },
+                    { currentPeriodEnd: { not: currentPeriodEnd } },
+                  ]
+                : []),
+            ],
+          },
+          data: {
+            status: "active",
+            ...(currentPeriodEnd && { currentPeriodEnd }),
+            trialEnd: null,
+            ...startOfCycle(),
+          },
+        });
+
+        // Whatever the guard skipped is an already-active row on this same
+        // cycle; its status and period are still kept current, and only its
+        // counter is left alone.
         await prisma.subscription.updateMany({
           where: { razorpaySubscriptionId },
           data: {

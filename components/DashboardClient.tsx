@@ -92,7 +92,11 @@ export default function DashboardClient({
     setNoticeOpen(false);
   }
 
-  const limitReached = postsRemaining < postsPerBatch;
+  // Not `< postsPerBatch`. The run now shortens the batch to whatever is
+  // left, so a trial with 2 posts to spare can still generate 2; refusing at
+  // anything under a full batch stranded the remainder and showed a count the
+  // user could not spend.
+  const limitReached = postsRemaining <= 0;
   const blocked = profileGaps.length > 0;
 
   const strategy = recentPlan
