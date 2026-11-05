@@ -97,6 +97,22 @@ export default function DashboardClient({
   // anything under a full batch stranded the remainder and showed a count the
   // user could not spend.
   const limitReached = postsRemaining <= 0;
+
+  // The number every label must quote: what the next run will actually
+  // create, which is the batch shortened to the allowance left.
+  const batch = Math.max(0, Math.min(postsPerBatch, postsRemaining));
+  const batchPosts = `${batch} post${batch === 1 ? "" : "s"}`;
+
+  // The allowance is not shown anywhere on screen, so this is the only way
+  // to read it from a browser while testing. Gated on PREVIEW_TOOLS_ENABLED
+  // like the rest of the preview tooling, so it never reaches production.
+  useEffect(() => {
+    if (!PREVIEW_TOOLS_ENABLED) return;
+    console.log(
+      `[quota] dashboard: ${postsRemaining} of ${postsLimit} posts left this cycle, next batch ${batch}`
+    );
+  }, [postsRemaining, postsLimit, batch]);
+
   const blocked = profileGaps.length > 0;
 
   const strategy = recentPlan
@@ -185,7 +201,9 @@ export default function DashboardClient({
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {limitReached ? "Post Limit Reached" : `Generate Next ${postsPerBatch} Posts`}
+              {limitReached
+                ? "Post Limit Reached"
+                : `Generate Next ${batch} Post${batch === 1 ? "" : "s"}`}
               {!generating && !limitReached && (
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               )}
@@ -260,7 +278,7 @@ export default function DashboardClient({
           <div className="mb-3 flex items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-brand" />
             <h3 className="flex-1 text-[14.5px] font-semibold text-text">
-              Generating your next {postsPerBatch} posts…
+              Generating your next {batchPosts}…
             </h3>
             {PREVIEW_TOOLS_ENABLED && postPipeline && (
               <button

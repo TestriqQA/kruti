@@ -11,7 +11,6 @@ import {
 import { usePathname, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/Toast";
-import { POSTS_PER_BATCH } from "@/lib/posting-schedule";
 import { raiseProfileGate, ProfileGateError, isProfileGateError } from "@/lib/profile-gate";
 import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 import PipelineModal, {
@@ -268,7 +267,11 @@ function applyPostEvent(
     case "preflight": {
       let detail: string | undefined = ev.message;
       if (ev.key === "schedule" && Array.isArray(ev.days)) {
-        detail = `${ev.days.join(", ")} at ${ev.time}`;
+        // batchSize comes from the server, which has already shortened the
+        // batch to the allowance left - so it is the real number.
+        const n = typeof ev.batchSize === "number" ? ev.batchSize : null;
+        const size = n === null ? "" : ` \u00b7 ${n} post${n === 1 ? "" : "s"}`;
+        detail = `${ev.days.join(", ")} at ${ev.time}${size}`;
       } else if (ev.key === "quota" && ev.status === "done") {
         detail = `${ev.used}/${ev.limit} used this cycle`;
       }
@@ -969,7 +972,10 @@ export function GenerationProvider({ children }: { children: React.ReactNode }) 
         if (!planId) throw new Error("Strategy generation failed. Please try again.");
 
         log(`${reused ? "Using your strategy" : "New strategy ready"}: "${weekTheme ?? "Content theme"}"`);
-        log(`Generating ${POSTS_PER_BATCH} posts for your scheduled days...`);
+        // No number here: the batch is shortened server-side to whatever
+        // allowance is left, and the real count arrives on the schedule
+        // preflight a moment later.
+        log("Generating posts for your scheduled days...");
 
         // ── Stage B: posts ──
         let created = 0;
