@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import { useGeneration } from "@/components/GenerationProvider";
 import StrategyConfirmDialog from "@/components/StrategyConfirmDialog";
-import { POSTS_PER_BATCH } from "@/lib/posting-schedule";
+import { nextBatchSize } from "@/lib/posting-schedule";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -27,6 +28,17 @@ export default function GeneratePostsButton({ recentPlan, postsRemaining, classN
   // See DashboardClient: the batch shrinks to the remaining allowance, so
   // only a spent allowance disables this.
   const limitReached = postsRemaining <= 0;
+
+  // What this click will ACTUALLY produce, not the nominal batch size.
+  const batch = nextBatchSize(postsRemaining);
+  const posts = `${batch} post${batch === 1 ? "" : "s"}`;
+
+  // See DashboardClient: the allowance has no on-screen home, so it is
+  // logged on preview builds only, never production.
+  useEffect(() => {
+    if (!PREVIEW_TOOLS_ENABLED) return;
+    console.log(`[quota] posts page: ${postsRemaining} posts left this cycle, next batch ${batch}`);
+  }, [postsRemaining, batch]);
 
   const strategyTheme = recentPlan
     ? (() => {
@@ -60,7 +72,7 @@ export default function GeneratePostsButton({ recentPlan, postsRemaining, classN
         title={
           limitReached
             ? "You've used all the posts in this billing cycle"
-            : `Generate your next ${POSTS_PER_BATCH} posts`
+            : `Generate your next ${posts}`
         }
         className={cn(
           "flex flex-shrink-0 items-center gap-2 rounded-control bg-brand px-4 py-2.5 text-sm font-medium text-white shadow-lift shadow-blue-200 transition-opacity hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-70 dark:shadow-blue-900/30",
@@ -76,7 +88,7 @@ export default function GeneratePostsButton({ recentPlan, postsRemaining, classN
           ? "Generating..."
           : limitReached
           ? "Post Limit Reached"
-          : `Generate ${POSTS_PER_BATCH} Posts`}
+          : `Generate ${batch} Post${batch === 1 ? "" : "s"}`}
       </button>
 
       {showConfirm && recentPlan && (
