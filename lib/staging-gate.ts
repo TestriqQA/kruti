@@ -28,9 +28,19 @@ const PRODUCTION_HOSTS = new Set(["kruti.io", "www.kruti.io"]);
  * anyone - it would silently stop subscription activations and renewals being
  * recorded on staging, which is the one thing that must keep working while the
  * site is locked. The route verifies its own signature, so it is not open.
+ *
+ * The mobile app is here for a sharper reason: a request carries exactly ONE
+ * Authorization header, and the app has to spend it on `Bearer <jwt>` or the
+ * API cannot tell who is calling. It can never also send `Basic`. So gating
+ * these paths does not ask the app for a password - it makes the app
+ * impossible to use against staging at all, with no configuration that fixes
+ * it. Every route under /api/mobile verifies its own token and answers 401
+ * without a valid one, so they are exactly as protected as they were before
+ * this gate existed; they are simply not behind the second lock. The website -
+ * every page a person can actually look at - stays gated.
  */
 function isExempt(pathname: string): boolean {
-  return pathname.startsWith("/api/webhooks/");
+  return pathname.startsWith("/api/webhooks/") || pathname.startsWith("/api/mobile/");
 }
 
 /**
