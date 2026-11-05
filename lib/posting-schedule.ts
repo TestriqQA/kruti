@@ -25,6 +25,18 @@ export const DEFAULT_POSTING_SCHEDULE: PostingSchedule = {
 export const POSTS_PER_BATCH = 5;
 
 /**
+ * How many posts the next run will actually create.
+ *
+ * POSTS_PER_BATCH is the nominal size; a run shortens it to whatever allowance
+ * is left. Any label that quotes a number has to quote THIS one - quoting the
+ * nominal size offered a trial user with 2 posts to spare "Generate 5 Posts"
+ * and then handed them 2.
+ */
+export function nextBatchSize(postsRemaining: number): number {
+  return Math.max(0, Math.min(POSTS_PER_BATCH, postsRemaining));
+}
+
+/**
  * Parse the JSON string stored on `User.postingSchedule`, falling back to
  * DEFAULT_POSTING_SCHEDULE for missing, malformed or empty values.
  */
