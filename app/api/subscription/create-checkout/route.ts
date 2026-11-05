@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
   // ── END DEV BYPASS ─────────────────────────────────────────────────────────
 
   try {
-    const { razorpay, getPlanId } = await import("@/lib/razorpay");
+    const { razorpay, getPlanId, getOrCreateCustomerId } = await import("@/lib/razorpay");
 
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
@@ -73,16 +73,15 @@ export async function POST(req: NextRequest) {
     // Create or retrieve Razorpay Customer
     let customerId = user.subscription?.razorpayCustomerId;
     if (!customerId) {
-      // fail_existing: 0 → if a Razorpay customer with this email already
-      // exists (e.g. from a previous checkout attempt), reuse it instead of
-      // throwing "Customer already exists" and failing every retry.
-      const customer = await razorpay.customers.create({
-        name: user.name ?? "User",
-        email: user.email ?? undefined,
-        fail_existing: 0,
-        notes: { userId: session.user.id },
-      } as Parameters<typeof razorpay.customers.create>[0]);
-      customerId = customer.id;
+      // Reuses the existing Razorpay customer when this email already has
+      // one. Creating blindly failed every retry with "Customer already
+      // exists for the merchant" - see getOrCreateCustomerId for why the
+      // fail_existing flag that was meant to prevent that did nothing.
+      customerId = await getOrCreateCustomerId(
+        user.name ?? "User",
+        user.email ?? undefined,
+        session.user.id
+      );
 
       // Upsert subscription row with customer ID
       if (user.subscription) {
