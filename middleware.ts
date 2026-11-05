@@ -1,5 +1,6 @@
 import { withAuth } from "next-auth/middleware";
 import { NextRequest, NextResponse } from "next/server";
+import { checkStagingGate } from "@/lib/staging-gate";
 
 /**
  * Crawler-facing files that must answer 200 to an anonymous request.
@@ -55,7 +56,6 @@ const PUBLIC_API_PREFIXES = [
   "/api/subscription",
   "/api/profile",
   "/api/cron",
-  "/api/site-gate",
   "/api/onboarding",
   // The mobile app authenticates with a Bearer JWT, not a session cookie,
   // so the cookie check below can never pass for it. Without this the whole
@@ -156,6 +156,13 @@ const authMiddleware = withAuth(
 // ── Main middleware: auth check (only for the app's own routes) ──
 export default function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Before everything else. On a locked deployment nothing is served at all -
+  // not public pages, not the sign-in screen, not a 404 - until the browser
+  // presents the right credentials. Unset variables make this a no-op, which
+  // is the case in production and in local development.
+  const locked = checkStagingGate(req);
+  if (locked) return locked;
 
   // Public content, crawler files, assets and unknown URLs: hand straight to
   // Next. An unknown URL reaching Next is what produces a 404 rather than a
