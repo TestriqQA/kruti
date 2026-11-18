@@ -63,18 +63,33 @@ const softwareApplication = {
   description:
     "AI tool that plans, writes, schedules and publishes LinkedIn posts, images and newsletter drafts.",
   publisher: { "@type": "Organization", name: "Kruti.io" },
+  // One offer per plan, INR only: the homepage quotes no USD price, and a
+  // currency published here that the page never shows is a mismatch Google
+  // can flag. Add a USD offer only when the page itself carries those numbers.
   offers: [
     {
       "@type": "Offer",
-      price: "999",
+      name: "Free Forever",
+      price: "0",
       priceCurrency: "INR",
-      description: "Monthly plan for users in India. 7-day free trial.",
+      description:
+        "Personalized content strategy, editable LinkedIn text posts, and automatic scheduling and publishing.",
     },
     {
       "@type": "Offer",
-      price: "19",
-      priceCurrency: "USD",
-      description: "Monthly plan for international users. 7-day free trial.",
+      name: "Semi-Automatic",
+      price: "6300",
+      priceCurrency: "INR",
+      description:
+        "30 posts per month with image and carousel generation, plus photo and PDF uploads. Each post is reviewed and marked ready to publish.",
+    },
+    {
+      "@type": "Offer",
+      name: "Full Automation",
+      price: "9300",
+      priceCurrency: "INR",
+      description:
+        "30 posts per month generated from an approved strategy, with suitable images or carousels added and posts scheduled for automatic publishing.",
     },
   ],
 };

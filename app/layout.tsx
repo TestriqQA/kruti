@@ -27,18 +27,18 @@ const display = Plus_Jakarta_Sans({
  */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+  title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
   description:
-    "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+    "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     siteName: "Kruti.io",
-    title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+    title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
     description:
-      "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+      "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
     url: "/",
     locale: "en_IN",
     // Absolute on purpose: a relative og:image resolved against the dev origin
@@ -50,9 +50,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+    title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
     description:
-      "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+      "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
     images: [absoluteUrl(OG_IMAGE_PATH)],
   },
   verification: {

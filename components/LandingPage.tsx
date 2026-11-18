@@ -21,9 +21,13 @@ import {
   Sparkles,
   AlertCircle,
   Send,
+  ThumbsUp,
+  MessageCircle,
+  Repeat2,
+  Globe,
+  User,
   ShieldCheck,
   CreditCard,
-  Clock,
   RefreshCw,
 } from "lucide-react";
 import Footer from "@/components/Footer";
@@ -44,20 +48,20 @@ const steps = [
   {
     n: "01",
     icon: Linkedin,
-    title: "Connect your LinkedIn",
-    desc: "Sign in securely. We read your profile, headline, and experience to learn your authentic voice.",
+    title: "Connect your LinkedIn profile",
+    desc: "Tell Kruti what you want to achieve and how you want your posts to sound.",
   },
   {
     n: "02",
     icon: Sparkles,
-    title: "Generate your strategy",
-    desc: "AI builds a personalized content plan - themes, pillars, and post types. No prompts to write.",
+    title: "Get a strategy and drafts",
+    desc: "Kruti finds topics relevant to your expertise and goals, then turns them into a content strategy and editable posts.",
   },
   {
     n: "03",
     icon: Send,
-    title: "Publish & grow",
-    desc: "Review the drafts, add an image in one click, and publish straight to LinkedIn.",
+    title: "Keep publishing consistently",
+    desc: "On Free Forever, Kruti schedules your text posts to publish automatically. You can edit and save them before they go live.",
   },
 ];
 
@@ -136,46 +140,119 @@ const testimonials = [
   },
 ];
 
-const pricingIncludes = [
-  "30 AI-generated posts per month",
-  "Professional image generation",
-  "Content calendar & scheduling",
-  "One-click LinkedIn publishing",
-  "Personalized content strategy",
-  "Newsletter drafts",
+/** The three plans. `featured` is the visually promoted card, `linkedinCta`
+ *  marks the one whose button starts LinkedIn sign-in (so the icon does not
+ *  travel with the highlight), and `highlight` is the approval model the paid
+ *  cards are meant to be scanned by.
+ *  Free Forever deliberately carries NO post count: the allowance is still to be
+ *  confirmed, and a number here would be a promise nobody has checked. */
+type Plan = {
+  name: string;
+  price: string;
+  period?: string;
+  tagline: string;
+  features: string[];
+  cta: string;
+  featured?: boolean;
+  badge?: string;
+  highlight?: string;
+  linkedinCta?: boolean;
+};
+
+const plans: Plan[] = [
+  {
+    name: "Free Forever",
+    price: "₹0",
+    tagline: "Get a strategy and publish text posts automatically.",
+    features: [
+      "Personalized content strategy based on your LinkedIn profile and inputs",
+      "Editable LinkedIn text posts",
+      "A content calendar you can edit anytime",
+    ],
+    cta: "Start free",
+    linkedinCta: true,
+  },
+  {
+    name: "Semi-Automatic",
+    price: "₹6,300",
+    period: "/month",
+    tagline: "Create posts with visuals and approve each one.",
+    highlight: "Approve each post",
+    features: [
+      "30 posts per month",
+      "Generate images and carousels",
+      "Upload photos and PDFs from your computer",
+      "Review and edit each post, then mark it ready to publish",
+    ],
+    cta: "Choose Semi-Automatic",
+    featured: true,
+    badge: "Most popular",
+  },
+  {
+    name: "Full Automation",
+    price: "₹9,300",
+    period: "/month",
+    tagline: "Approve the strategy and let Kruti fill your calendar.",
+    highlight: "Approve the strategy",
+    features: [
+      "30 posts per month",
+      "Approve your strategy and ask Kruti to generate posts",
+      "Kruti adds suitable images or carousels where applicable",
+      "Posts are added to your calendar for automatic publishing",
+      "Edit the post text and media before publishing",
+    ],
+    cta: "Choose Full Automation",
+  },
 ];
 
 const faqs = [
   {
-    q: "Is my LinkedIn account safe? Will I get banned?",
-    a: "Absolutely safe. Kruti.io uses LinkedIn's official API and OAuth 2.0 - the same authorized method used by major platforms like Hootsuite and Buffer. We never store your password, never use scrapers or automation, and never violate LinkedIn's terms. Your account is never at risk because we only publish content you explicitly approve.",
+    q: "Is Kruti really free forever?",
+    a: "Yes. Free Forever includes a personalized content strategy, editable text posts, and automatic scheduling and publishing for LinkedIn.",
   },
   {
-    q: "Will the AI-generated posts sound like me?",
-    a: "Yes. Kruti.io reads your LinkedIn profile - your headline, about section, experience, and activity - to understand your tone, expertise, and audience. Every post matches your authentic professional voice, not generic AI-speak.",
+    q: "What does Kruti use to decide what I should post?",
+    a: "Kruti uses your LinkedIn profile and the goals, tone, and writing style you share to suggest topics and create your content strategy.",
   },
   {
-    q: "Can I edit posts before publishing?",
-    a: "Always. Every post is created as a draft first. You can review, edit, rewrite, or discard any post before marking it ready. You stay in full control of what goes live.",
+    q: "Can I change a scheduled post?",
+    a: "Yes. You can edit and save the text before it goes live. On Full Automation, you can also edit the media Kruti adds.",
   },
   {
-    q: "Do I need to write prompts or instructions?",
-    a: "No. Unlike other AI tools, Kruti.io doesn't need prompts. It builds your content strategy automatically from your LinkedIn profile and industry. Just click generate.",
+    q: "What's the difference between Semi-Automatic and Full Automation?",
+    a: "With Semi-Automatic, you generate or upload visuals, review each post, and mark it ready to publish. With Full Automation, you approve the strategy and request generation. Kruti creates the posts with suitable visuals where applicable and schedules them for automatic publishing.",
   },
   {
-    q: "What happens after the 7-day free trial?",
-    a: "After the trial it's one simple plan at ₹999/month (or $19/month for international users) - everything included, no tiers or add-ons. You can cancel anytime from your account settings with no lock-in.",
-  },
-  {
-    q: "How does billing work and can I cancel anytime?",
-    a: "Payments are processed securely by Razorpay and billed monthly. You can cancel or manage your subscription anytime from your account settings - you keep access until the end of your billing cycle.",
+    q: "Can I add images, carousels, or my own files on Free Forever?",
+    a: "Free Forever covers text posts. Semi-Automatic includes image and carousel generation and lets you upload photos and PDFs. Full Automation adds suitable images or carousels while generating posts.",
   },
 ];
 
-const trust = ["Free to start", "No credit card", "Cancel anytime", "Official LinkedIn API"];
+const sampleIntro =
+  "Your goals and writing style shape what Kruti suggests. Here's an example for a project manager who wants to share practical lessons in a direct, conversational tone.";
+
+const sampleDays = [
+  { day: "Monday", title: "A simple way to improve project handoffs" },
+  { day: "Wednesday", title: "A checklist to use before kicking off a project" },
+  { day: "Friday", title: "One change that made team updates easier to read" },
+];
+
+const sampleActions = [
+  { icon: ThumbsUp, label: "Like" },
+  { icon: MessageCircle, label: "Comment" },
+  { icon: Repeat2, label: "Repost" },
+  { icon: Send, label: "Send" },
+];
+
+const samplePost = [
+  "A project handoff can look complete until the first unexpected decision comes up.",
+  "Before handing over a project, write down three things: what's done, what's still open, and who makes the next decision.",
+  "That last line can save the new owner a round of messages. Give them a person to contact and a clear reason to reach out.",
+  "What's one thing you always include in a handoff?",
+];
 
 const pricingTrust = [
-  { icon: Clock, label: "7-day free trial" },
+  { icon: Sparkles, label: "Free Forever plan" },
   { icon: CreditCard, label: "No credit card to start" },
   { icon: RefreshCw, label: "Cancel anytime" },
   { icon: ShieldCheck, label: "Secure payments via Razorpay" },
@@ -426,16 +503,17 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
             <div className="animate-fade-up">
               <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-sm font-medium text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                 <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                Powered by AI, crafted with love in India
+                AI content creation and scheduling for LinkedIn
               </span>
             </div>
             <h1 className="animate-fade-up [animation-delay:80ms] mt-6 font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[3.5rem]">
-              Stop writing LinkedIn posts.{" "}
-              <span className="text-blue-600 dark:text-blue-400">Start growing your brand.</span>
+              Stay active on LinkedIn{" "}
+              <span className="text-blue-600 dark:text-blue-400">while you focus on your work</span>
             </h1>
             <p className="animate-fade-up [animation-delay:140ms] mt-6 max-w-xl text-lg leading-relaxed text-slate-600 dark:text-slate-400">
-              Kruti.io turns your LinkedIn profile into a content engine - generating 30 strategic
-              posts, professional images, and newsletters every month, all in your authentic voice.
+              Spend less time researching what to post. Kruti uses your LinkedIn profile, goals,
+              tone, and writing style to find relevant topics, build your content strategy, and
+              write posts you can edit. It schedules your text posts to publish automatically.
             </p>
             <div className="animate-fade-up [animation-delay:200ms] mt-8 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               <button
@@ -443,30 +521,110 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
                 className="group inline-flex items-center gap-2.5 rounded-lg bg-blue-600 px-6 py-3.5 text-base font-semibold text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
               >
                 <Linkedin className="h-5 w-5" />
-                Start creating for free
+                Start free
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
               <a
-                href="#how"
+                href="#sample"
                 className="inline-flex items-center gap-1 text-base font-medium text-slate-700 transition-colors hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400"
               >
-                See how it works <ArrowUpRight className="h-4 w-4" />
+                See a sample content plan <ArrowUpRight className="h-4 w-4" />
               </a>
             </div>
-            <div className="animate-fade-up [animation-delay:260ms] mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-500 dark:text-slate-500">
-              {trust.map((t) => (
-                <span key={t} className="inline-flex items-center gap-1.5">
-                  <Check className="h-4 w-4 text-blue-500" />
-                  {t}
-                </span>
-              ))}
-            </div>
+            <p className="animate-fade-up [animation-delay:260ms] mt-7 text-sm text-slate-500 dark:text-slate-500">
+              Personalized strategy, editable text posts, and automatic publishing. Free forever.
+            </p>
           </div>
           <div className="animate-fade-up [animation-delay:120ms]">
             <ProductPanel />
           </div>
         </div>
       </section>
+
+      {/* ── Product example ──────────────────────────────── */}
+      <Section id="sample" className="border-t border-slate-200 py-14 dark:border-white/10 sm:py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <Eyebrow>Illustrative example</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
+            See what Kruti would put on your calendar
+          </h2>
+          <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">{sampleIntro}</p>
+        </div>
+
+        <div className="mx-auto mt-10 grid max-w-5xl gap-6 lg:grid-cols-2">
+          {/* Sample week */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex items-center gap-2 border-b border-slate-100 px-5 py-3.5 text-sm font-semibold text-slate-900 dark:border-white/10 dark:text-white">
+              <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Sample week
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-white/[0.06]">
+              {sampleDays.map((d) => (
+                <div key={d.day} className="px-5 py-4">
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-blue-600 dark:text-blue-400">
+                    {d.day}
+                  </div>
+                  <div className="mt-1.5 text-[15px] leading-relaxed text-slate-700 dark:text-slate-200">
+                    {d.title}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Example post, shown the way it will look on LinkedIn */}
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_60px_-28px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-white/10">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-white">
+                <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400" /> Example post
+              </div>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                <Calendar className="h-3 w-3" /> Monday · 9:00 AM
+              </span>
+            </div>
+
+            {/* Author row - deliberately "Your name": this is the visitor's own
+                future post, not a testimonial from an invented person. */}
+            <div className="flex items-start gap-3 px-5 pt-4">
+              <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-[#0A66C2] text-white">
+                <User className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">Your name</span>
+                  <span className="text-xs text-slate-400">· 1st</span>
+                </div>
+                <div className="truncate text-xs text-slate-500 dark:text-slate-400">Project manager</div>
+                <div className="mt-0.5 flex items-center gap-1 text-xs text-slate-400">
+                  Scheduled by Kruti <Globe className="h-3 w-3" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3.5 px-5 pb-4 pt-3.5">
+              {samplePost.map((para, i) => (
+                <p key={i} className="text-[15px] leading-relaxed text-slate-700 dark:text-slate-300">
+                  {para}
+                </p>
+              ))}
+            </div>
+            <div className="flex items-center justify-around border-t border-slate-100 px-2 py-1.5 dark:border-white/10">
+              {sampleActions.map((a) => (
+                <span
+                  key={a.label}
+                  className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-2 text-xs font-medium text-slate-500 dark:text-slate-400"
+                >
+                  <a.icon className="h-4 w-4" />
+                  {a.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="mx-auto mt-6 max-w-5xl text-center text-sm text-slate-500 dark:text-slate-500">
+          Illustrative example. Your calendar and posts are generated from your own profile and inputs.
+        </p>
+      </Section>
 
       {/* ── Stats band ───────────────────────────────────────────────────── */}
       <section aria-label="Key metrics" className="border-y border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.02]">
@@ -492,8 +650,15 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
       {/* ── How it works ─────────────────────────────────────────────────── */}
       <Section id="how" className="border-t border-slate-200 py-14 dark:border-white/10 sm:py-20">
         <Eyebrow>How it works</Eyebrow>
-        <h2 className="mt-3 max-w-2xl font-display text-3xl font-bold tracking-tight sm:text-4xl">
-          From zero to 30 posts in three steps
+        {/* The question is set as a muted quote and the outcome in blue, so the
+            heading reads as a before/after at a glance. Words are exactly the
+            approved copy - only the treatment differs. */}
+        <h2 className="mt-3 max-w-3xl font-display text-3xl font-bold leading-[1.35] tracking-tight sm:text-4xl">
+          From{" "}
+          <span className="inline-block rounded-xl bg-slate-100 px-2.5 py-0.5 text-slate-400 dark:bg-white/5 dark:text-slate-500">
+            “What should I post?”
+          </span>{" "}
+          to <span className="text-blue-600 dark:text-blue-400">a calendar you can edit</span>
         </h2>
         <div className="relative mt-10 grid gap-10 sm:grid-cols-3 sm:gap-8">
           {/* connecting line behind the step icons (desktop) */}
@@ -608,45 +773,70 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
         </div>
       </Section>
 
-      {/* ── Pricing ──────────────────────────────────────────────────────── */}
+      {/* ── Plans ─────────────────────────────────────── */}
       <Section id="pricing" className="border-t border-slate-200 py-14 dark:border-white/10 sm:py-20">
         <div className="mx-auto max-w-2xl text-center">
-          <Eyebrow>Simple pricing</Eyebrow>
+          <Eyebrow>Plans</Eyebrow>
           <h2 className="mt-3 font-display text-3xl font-bold tracking-tight sm:text-4xl">
-            One plan. Everything included.
+            Choose how you want to create and publish
           </h2>
-          <p className="mt-4 text-lg text-slate-600 dark:text-slate-400">
-            No tiers, no add-ons, no surprises. Start with a 7-day free trial.
-          </p>
         </div>
-        <div className="mx-auto mt-10 max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03] sm:grid sm:grid-cols-2">
-          <div className="border-b border-slate-100 p-8 dark:border-white/10 sm:border-b-0 sm:border-r">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
-              7-day free trial
-            </span>
-            <div className="mt-5 flex items-end gap-1.5">
-              <span className="font-display text-5xl font-bold tracking-tight">₹999</span>
-              <span className="mb-1.5 text-slate-500 dark:text-slate-400">/month</span>
+
+        <div className="mx-auto mt-12 grid max-w-6xl items-start gap-6 lg:grid-cols-3">
+          {plans.map((plan) => (
+            <div
+              key={plan.name}
+              className={`relative flex h-full flex-col rounded-2xl border p-7 ${
+                plan.featured
+                  ? "border-blue-600 bg-white shadow-[0_24px_60px_-28px_rgba(37,99,235,0.45)] dark:border-blue-400 dark:bg-white/[0.05]"
+                  : "border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03]"
+              }`}
+            >
+              {plan.badge && (
+                <span className="absolute -top-3 left-7 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white dark:bg-blue-500">
+                  {plan.badge}
+                </span>
+              )}
+
+              <h3 className="font-display text-lg font-semibold">{plan.name}</h3>
+
+              <div className="mt-3 flex items-end gap-1.5">
+                <span className="font-display text-4xl font-bold tracking-tight">{plan.price}</span>
+                {plan.period && (
+                  <span className="mb-1 text-slate-500 dark:text-slate-400">{plan.period}</span>
+                )}
+              </div>
+
+              <p className="mt-3 text-[15px] leading-relaxed text-slate-600 dark:text-slate-400">
+                {plan.tagline}
+              </p>
+
+              {plan.highlight && (
+                <span className="mt-4 inline-flex w-fit items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">
+                  <Check className="h-3.5 w-3.5" />
+                  {plan.highlight}
+                </span>
+              )}
+
+              <ul className="mt-5 space-y-3">
+                {plan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-2.5">
+                    <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                    <span className="text-[15px] leading-relaxed text-slate-700 dark:text-slate-300">
+                      {f}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-auto pt-7">
+                <CTAButton onClick={handleSignIn} full>
+                  {plan.linkedinCta && <Linkedin className="h-4 w-4" />}
+                  {plan.cta}
+                </CTAButton>
+              </div>
             </div>
-            <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">or $19/month for international users</p>
-            <div className="mt-7">
-              <CTAButton onClick={handleSignIn} full>
-                <Linkedin className="h-4 w-4" /> Start your free trial
-              </CTAButton>
-              <p className="mt-3 text-center text-xs text-slate-400">No credit card required. Cancel anytime.</p>
-            </div>
-          </div>
-          <div className="p-8">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white">Everything included</p>
-            <ul className="mt-4 space-y-3">
-              {pricingIncludes.map((item) => (
-                <li key={item} className="flex items-center gap-3">
-                  <Check className="h-4 w-4 flex-shrink-0 text-blue-600 dark:text-blue-400" />
-                  <span className="text-[15px] text-slate-700 dark:text-slate-300">{item}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          ))}
         </div>
 
         {/* Trust row */}
@@ -688,19 +878,19 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
               Questions, answered
             </h2>
             <p className="mt-4 text-[15px] leading-relaxed text-slate-600 dark:text-slate-400">
-              Everything you need to know about Kruti.io - how it works, your account safety, and billing.
+              Everything you need to know about Kruti.io - how it works, what it uses, and what each plan includes.
             </p>
             <div className="mt-7 rounded-2xl border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-white/[0.03]">
               <p className="font-display text-base font-semibold">Still have questions?</p>
               <p className="mt-1.5 text-sm leading-relaxed text-slate-500 dark:text-slate-400">
-                Start your 7-day free trial - no credit card needed - and see it work for yourself.
+                Start on Free Forever - no credit card needed - and see it work for yourself.
               </p>
               <button
                 onClick={handleSignIn}
                 className="group mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-400"
               >
                 <Linkedin className="h-4 w-4" />
-                Start creating for free
+                Start free
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </button>
             </div>
@@ -719,18 +909,18 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
         <div className="relative overflow-hidden rounded-3xl bg-slate-900 px-6 py-16 text-center dark:bg-blue-600 sm:px-12">
           <div className="pointer-events-none absolute inset-0 opacity-20 [background:radial-gradient(circle_at_50%_0%,#60a5fa,transparent_60%)]" />
           <h2 className="relative font-display text-3xl font-bold tracking-tight text-white sm:text-4xl">
-            Ready to build your brand on LinkedIn?
+            Give your next LinkedIn post a starting point
           </h2>
-          <p className="relative mx-auto mt-3 max-w-lg text-base text-slate-300 dark:text-blue-50">
-            Join the founders and marketers growing their presence with content that actually sounds
-            human.
+          <p className="relative mx-auto mt-3 max-w-xl text-base text-slate-300 dark:text-blue-50">
+            Get a personalized strategy, editable drafts, and automatic text publishing with Kruti
+            Free Forever.
           </p>
           <button
             onClick={handleSignIn}
             className="relative mt-8 inline-flex items-center gap-2.5 rounded-lg bg-white px-6 py-3.5 text-base font-semibold text-slate-900 transition-transform hover:-translate-y-0.5"
           >
             <Linkedin className="h-5 w-5" />
-            Get started free
+            Start free
             <ArrowRight className="h-4 w-4" />
           </button>
           <p className="relative mt-5 text-xs text-slate-400 dark:text-blue-100/80">
