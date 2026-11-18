@@ -62,7 +62,9 @@ export async function POST(
     }
   }
 
-  const result = await postToLinkedIn(userId, {
+  let result;
+  try {
+    result = await postToLinkedIn(userId, {
     title: post.title,
     body: post.body,
     hashtags: post.hashtags,
@@ -70,10 +72,25 @@ export async function POST(
     // 2+ images are published as a swipeable PDF carousel document, not a
     // multi-image grid — that is the only way LinkedIn renders a real carousel.
     carouselImages: images,
-    documentUrl: post.documentUrl,
-    documentName: post.documentName,
-    customSignature: post.customSignature,
-  });
+      documentUrl: post.documentUrl,
+      documentName: post.documentName,
+      customSignature: post.customSignature,
+    });
+  } catch (err) {
+    // The atomic claim above set status to "publishing". Without this the post
+    // stays there for good: every retry hits the claim and 409s, and the cron
+    // only ever selects status "ready", so nothing picks it up again either.
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[publish:mobile] post ${post.id} user ${userId} threw:`, message);
+    await prisma.post.update({
+      where: { id: post.id },
+      data: { status: "ready", postError: message.slice(0, 500) },
+    });
+    return NextResponse.json(
+      { success: false, error: `Publishing failed before it reached LinkedIn: ${message.slice(0, 200)}` },
+      { status: 500 },
+    );
+  }
 
   await prisma.post.update({
     where: { id: post.id },

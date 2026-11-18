@@ -23,6 +23,34 @@ export interface LinkedInPostResult {
   linkedinPostId?: string;
   error?: string;
   requiresReauth?: boolean;
+  /** LinkedIn's own HTTP status when it refused the post. */
+  linkedinStatus?: number;
+}
+
+/**
+ * Turn LinkedIn's HTTP status into something the person reading the screen can
+ * act on.
+ *
+ * Every non-401 refusal used to come back as "Failed to post to LinkedIn.
+ * Please try again later." - the same sentence for a missing permission, a
+ * duplicate, LinkedIn rate limiting the account and LinkedIn being down. Four
+ * different problems with four different answers, and the screen could not
+ * tell them apart, so every report had to go to the server logs before anyone
+ * could even start.
+ */
+function linkedInErrorMessage(status: number, body: string): string {
+  if (status === 403)
+    return "LinkedIn refused the post. The posting permission is missing or was withdrawn - sign out and sign in again to grant it.";
+  if (status === 422)
+    return "LinkedIn rejected this as a duplicate of something already on the account. Change the text and try again.";
+  if (status === 429)
+    return "LinkedIn is rate limiting this account. Wait a while before trying again.";
+  if (status >= 500)
+    return "LinkedIn is having trouble right now. Try again in a few minutes.";
+  // Anything else: carry the status and a short slice of LinkedIn's own words,
+  // because an unrecognised failure is exactly the one worth seeing verbatim.
+  const detail = (body || "").replace(/\s+/g, " ").trim().slice(0, 200);
+  return `LinkedIn refused the post (HTTP ${status})${detail ? `: ${detail}` : "."}`;
 }
 
 export async function postToLinkedIn(
@@ -232,7 +260,8 @@ export async function postToLinkedIn(
 
     return {
       success: false,
-      error: "Failed to post to LinkedIn. Please try again later.",
+      linkedinStatus: res.status,
+      error: linkedInErrorMessage(res.status, errText),
     };
   }
 

@@ -720,6 +720,14 @@ export default function PostEditorClient({
         setStatus("published");
         toast("Successfully posted to LinkedIn!", "success");
         router.refresh();
+      } else if (data.alreadyPublished) {
+        // The post is live. Showing a red "Failed to post" for it was telling
+        // the user the opposite of the truth, and it is what most of the
+        // "publishing is broken" reports turned out to be.
+        setPostResult({ success: true });
+        setStatus("published");
+        toast("This post is already on LinkedIn.", "success");
+        router.refresh();
       } else {
         setPostResult({ success: false, error: data.error });
         toast(`Failed to post: ${data.error}`, "error");
