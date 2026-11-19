@@ -45,7 +45,13 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
-import { postScheduleKind, scheduleNote, needsAttention } from "@/lib/post-schedule";
+import {
+  postScheduleKind,
+  scheduleNote,
+  needsAttention,
+  unmetRequirements,
+} from "@/lib/post-schedule";
+import { describePublishError } from "@/lib/publish-error";
 // The image-style PICKER was removed from this page: the category is chosen
 // by the model from the post content and read server-side by
 // /api/generate/image, so there is nothing here to set. It is still shown
@@ -97,6 +103,8 @@ export default function PostEditorClient({
   nextPostId = null,
   postIndex = null,
   postTotal = 0,
+  profileComplete = true,
+  entitled = true,
 }: {
   post: Post;
   postSignature: string | null;
@@ -108,6 +116,13 @@ export default function PostEditorClient({
   /** 1-based position of this post in the same ordered list prev/next walk. */
   postIndex?: number | null;
   postTotal?: number;
+  /**
+   * The two conditions this screen cannot work out for itself, both of which
+   * decide whether auto-publish will ever touch the post. They default to true
+   * so a caller that does not pass them shows nothing rather than a false alarm.
+   */
+  profileComplete?: boolean;
+  entitled?: boolean;
 }) {
   const router = useRouter();
   const { toast } = useToast();
@@ -207,6 +222,13 @@ export default function PostEditorClient({
    */
   const scheduleKind = postScheduleKind(post);
   const scheduleHint = scheduleNote(post);
+  // Everything auto-publish needs that this post does not have yet. Empty when
+  // it is genuinely good to go, which is the only time the user should be left
+  // to assume it is.
+  const blockers = unmetRequirements(post, { profileComplete, entitled });
+  // The stored failure, said in plain language, with LinkedIn's own words kept
+  // behind a disclosure rather than shown to someone who cannot use them.
+  const publishError = describePublishError(post.postError);
 
   // Schedule date/time state - display in user's configured timezone
   const initDate = post.scheduledAt ? new Date(post.scheduledAt) : null;
@@ -1197,12 +1219,22 @@ export default function PostEditorClient({
       )}
 
       {/* Last auto-post error */}
-      {post.postError && !post.postedToLinkedIn && !postResult && (
+      {publishError && !post.postedToLinkedIn && !postResult && (
         <div className="bg-bad-tint border border-bad/30 rounded-control p-4 flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-bad flex-shrink-0" />
-          <div>
-            <p className="text-sm font-medium text-bad">Auto-post failed</p>
-            <p className="text-xs text-bad mt-1">{post.postError}</p>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-bad">Auto-post could not publish this</p>
+            <p className="text-xs text-bad mt-1">{publishError.message}</p>
+            {publishError.detail && (
+              <details className="mt-2">
+                <summary className="ring-focus cursor-pointer text-[11px] font-semibold text-bad/80">
+                  Technical details
+                </summary>
+                <p className="mt-1 break-words font-mono text-[10.5px] leading-snug text-bad/80">
+                  {publishError.detail}
+                </p>
+              </details>
+            )}
           </div>
         </div>
       )}
@@ -1841,7 +1873,34 @@ export default function PostEditorClient({
                   Weekend selected - posts may get less engagement
                 </p>
               )}
-              {scheduleHint && (
+              {!post.postedToLinkedIn && blockers.length > 0 && (
+                <div className="bg-bad-tint border border-bad/30 rounded-control mt-2 px-3 py-2.5">
+                  <p className="text-[11px] font-semibold text-bad">
+                    {blockers.length === 1
+                      ? "This will not auto-publish yet"
+                      : `This will not auto-publish yet - ${blockers.length} things to fix`}
+                  </p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {blockers.map((r) => (
+                      <li key={r.label} className="flex items-start gap-1.5 text-[11px] leading-snug text-bad">
+                        <span aria-hidden="true" className="mt-px flex-shrink-0">&#10007;</span>
+                        <span>
+                          <span className="font-semibold">{r.label}.</span> {r.fix}
+                          {r.href && (
+                            <>
+                              {" "}
+                              <a href={r.href} className="ring-focus font-semibold underline">
+                                Open
+                              </a>
+                            </>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {scheduleHint && blockers.length === 0 && (
                 <p
                   className={cn(
                     "mt-2 flex items-start gap-1.5 rounded-control px-2.5 py-2 text-[11px] leading-snug",

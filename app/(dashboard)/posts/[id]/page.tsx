@@ -3,7 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import PostEditorClient from "@/components/PostEditorClient";
-import { shouldShowWatermark } from "@/lib/subscription-check";
+import { shouldShowWatermark, isEntitled } from "@/lib/subscription-check";
+import { checkProfileReady } from "@/lib/profile-guard";
 
 export default async function PostEditorPage({ params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
@@ -31,6 +32,16 @@ export default async function PostEditorPage({ params }: { params: { id: string 
 
   if (!post) notFound();
 
+  // The two conditions the editor cannot work out for itself. Both decide
+  // whether auto-publish will ever touch this post, and until now neither was
+  // visible anywhere - a post with an inactive subscription simply sat in
+  // "Scheduled" and no screen explained it.
+  const profile = await checkProfileReady(session.user.id);
+  const entitled = isEntitled({
+    role: user?.role,
+    subscriptionStatus: user?.subscription?.status,
+  });
+
   const idx = siblings.findIndex((p) => p.id === post.id);
   const prevPostId = idx > 0 ? siblings[idx - 1].id : null;
   const nextPostId = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1].id : null;
@@ -56,6 +67,8 @@ export default async function PostEditorPage({ params }: { params: { id: string 
       nextPostId={nextPostId}
       postIndex={idx >= 0 ? idx + 1 : null}
       postTotal={siblings.length}
+      profileComplete={profile.ready}
+      entitled={entitled}
     />
   );
 }
