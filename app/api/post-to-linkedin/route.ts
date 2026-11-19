@@ -19,7 +19,26 @@ export async function POST(req: NextRequest) {
 
   const rl = checkRateLimit(session.user.id, "linkedin-post", RATE_LIMITS.linkedinPost);
   if (!rl.allowed) {
-    return NextResponse.json({ error: `Too many requests. Try again in ${rl.retryAfterSecs}s.` }, { status: 429 });
+    // The cooldown goes out as a NUMBER as well as inside the sentence. Clients
+    // were scraping it back out of the text with /(\d+)\s*s/, which breaks the
+    // moment this wording changes. `rateLimited` says whose refusal this is:
+    // ours, not LinkedIn's, which the sentence alone never made clear.
+    const retryAfterSecs = rl.retryAfterSecs ?? RATE_LIMITS.linkedinPost.windowSecs;
+    console.warn(
+      `[publish:web] rate limited user ${session.user.id} for ${retryAfterSecs}s ` +
+        `(limit ${RATE_LIMITS.linkedinPost.maxRequests} per ${RATE_LIMITS.linkedinPost.windowSecs}s, per user)`,
+    );
+    return NextResponse.json(
+      {
+        error: `Too many requests. Try again in ${retryAfterSecs}s.`,
+        rateLimited: true,
+        retryAfterSecs,
+        limit: RATE_LIMITS.linkedinPost.maxRequests,
+        windowSecs: RATE_LIMITS.linkedinPost.windowSecs,
+        scope: "user",
+      },
+      { status: 429, headers: { "Retry-After": String(retryAfterSecs) } },
+    );
   }
 
   const body = await req.json();
@@ -56,13 +75,19 @@ export async function POST(req: NextRequest) {
     customSignature: post.customSignature,
   });
 
-  // Update post record
+  // A failed publish must never leave the post reading as Published. "published"
+  // is a value PATCH /api/content/[id] accepts, so a post can already carry it
+  // before the attempt - and keeping it there on failure hid the failure
+  // completely: nothing retries the post, and nobody can tell it never went out.
+  // Anything else the post was (draft, ready) is left alone.
+  const statusOnFailure = post.status === "published" ? "ready" : post.status;
+
   const updated = await prisma.post.update({
     where: { id: postId },
     data: {
       postedToLinkedIn: result.success,
       linkedinPostId: result.linkedinPostId ?? undefined,
-      status: result.success ? "published" : post.status,
+      status: result.success ? "published" : statusOnFailure,
       postError: result.error ?? null,
     },
   });
@@ -74,9 +99,23 @@ export async function POST(req: NextRequest) {
       post: updated,
     });
   } else {
+    console.error(
+      `[publish:web] post ${postId} user ${session.user.id} failed:`,
+      result.linkedinStatus ?? "-",
+      result.error,
+    );
+    // 502, not 500: the request was fine, the upstream refused it. The real
+    // LinkedIn status and message ride along so the caller can tell an expired
+    // token from a duplicate post from LinkedIn being down.
     return NextResponse.json(
-      { success: false, error: result.error },
-      { status: 500 }
+      {
+        success: false,
+        error: result.error,
+        requiresReauth: result.requiresReauth ?? false,
+        ...(result.linkedinStatus !== undefined && { linkedinStatus: result.linkedinStatus }),
+        ...(result.linkedinMessage !== undefined && { linkedinMessage: result.linkedinMessage }),
+      },
+      { status: 502 },
     );
   }
 }

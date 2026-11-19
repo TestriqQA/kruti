@@ -49,7 +49,7 @@ What it does. Reads the connected LinkedIn profile and builds a personalised con
 
 Who it is for. Individual professionals who publish on LinkedIn under their own name: founders, consultants, marketers, salespeople and subject-matter experts who want to post consistently without writing each post themselves. It is a single-user personal-brand tool.
 
-Pricing. One plan, with no tiers or add-ons. Rs 999 per month for users in India, or USD 19 per month for international users. A 7-day free trial is available and no payment card is required to start the trial.
+Pricing. Three plans, all quoted in Indian rupees. Free Forever costs Rs 0 and includes a personalised content strategy, editable LinkedIn text posts, and automatic scheduling and publishing. Semi-Automatic costs Rs 6,300 per month and adds 30 posts per month, image and carousel generation, and uploads of the user's own photos and PDFs; the user reviews each post and marks it ready to publish. Full Automation costs Rs 9,300 per month and adds 30 posts per month generated from a strategy the user approves, with suitable images or carousels added where applicable and posts scheduled for automatic publishing. No payment card is required to start on Free Forever.
 
 Technology. Post, strategy and newsletter text is generated with Google Gemini 2.5 Flash; Gemini 2.5 Pro is used for carousel planning and image briefs. Images are generated with Google Gemini 3.1 Flash Image. Publishing to LinkedIn uses LinkedIn's official API with OAuth 2.0; Kruti.io does not scrape LinkedIn and does not ask for or store a user's LinkedIn password.
 

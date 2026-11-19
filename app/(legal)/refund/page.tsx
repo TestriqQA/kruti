@@ -27,38 +27,40 @@ export default function RefundPolicyPage() {
           All payments are processed securely through <strong>Razorpay</strong>.
         </p>
         <p>
-          Our subscription plans are:
+          Our plans are:
         </p>
         <ul className="list-disc pl-5 space-y-1">
-          <li><strong>Content Pro (INR):</strong> &#8377;999 per month</li>
-          <li><strong>Content Pro (USD):</strong> $19 per month</li>
+          <li><strong>Free Forever:</strong> &#8377;0 (<strong>No payment is taken</strong>)</li>
+          <li><strong>Semi-Automatic:</strong> &#8377;6,300 per month</li>
+          <li><strong>Full Automation:</strong> &#8377;9,300 per month</li>
         </ul>
         <p>
-          Please read this policy carefully before subscribing. By completing a payment, you
+          Because no payment is taken on Free Forever, this policy applies only to the two paid
+          plans. Please read it carefully before subscribing. By completing a payment, you
           acknowledge that you have read and agree to this Refund Policy.
         </p>
       </LegalSection>
 
-      <LegalSection id="free-trial" title="2. Free Trial Period">
+      <LegalSection id="free-forever" title="2. Free Forever Plan">
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            Every new user receives a <strong>7-day free trial</strong> automatically upon their
-            first sign-in via LinkedIn.
+            Every user starts on <strong>Free Forever</strong> upon their first sign-in via
+            LinkedIn. It does not expire.
           </li>
           <li>
-            No payment information is required to start the trial.
+            No payment information is required, and no charge is ever made for this plan.
           </li>
           <li>
-            The trial provides full access to all Content Pro features, including AI content
-            generation, image creation, scheduling, and LinkedIn auto-posting.
+            Free Forever includes a personalised content strategy, editable LinkedIn text posts,
+            and automatic scheduling and publishing to LinkedIn.
           </li>
           <li>
-            The trial expires automatically after 7 days. You will not be charged unless you
-            actively subscribe.
+            Image generation, carousel generation, and uploading your own photos or PDFs are not
+            included in Free Forever. Those are available on the paid plans.
           </li>
           <li>
-            We encourage you to use the trial period to fully evaluate the Service before
-            committing to a paid subscription.
+            Because no payment is taken on Free Forever, the refund terms set out below do not
+            apply to it. They apply only once you subscribe to a paid plan.
           </li>
         </ul>
       </LegalSection>
