@@ -13,6 +13,7 @@ import { cn, safeJsonParse } from "@/lib/utils";
 import PostImage from "@/components/PostImage";
 import type { ProfileGap } from "@/lib/profile-completeness";
 import { StatCard, Pill, StatusBadge, MixBar, PillarRow } from "@/components/dashboard/bits";
+import { postScheduleKind, needsAttention, type PostScheduleKind } from "@/lib/post-schedule";
 import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 
 interface Post {
@@ -155,12 +156,10 @@ export default function DashboardClient({
   const batchStart = batchDates.length > 0 ? new Date(batchDates[0]) : null;
   const batchEnd = batchDates.length > 0 ? new Date(batchDates[batchDates.length - 1]) : null;
 
-  const statusOf = (p: Post): "scheduled" | "draft" | "published" =>
-    p.postedToLinkedIn || p.status === "published"
-      ? "published"
-      : p.status === "ready"
-        ? "scheduled"
-        : "draft";
+  // One rule, shared with the cron - see lib/post-schedule.ts. This was three
+  // byte-identical copies that could only say scheduled/draft/published, so a
+  // post stranded by the 72-hour window was indistinguishable from a healthy one.
+  const statusOf = (p: Post): PostScheduleKind => postScheduleKind(p);
 
   return (
     <div className="space-y-5">
@@ -379,11 +378,15 @@ export default function DashboardClient({
                         aria-hidden="true"
                         className={cn(
                           "absolute left-0 top-[26px] h-[11px] w-[11px] rounded-full border-2 bg-card",
-                          kind === "published"
-                            ? "border-ok"
-                            : kind === "scheduled"
-                              ? "border-brand"
-                              : "border-violet"
+                          // needsAttention first: a post that will never go out
+                          // on its own must not wear the same dot as a draft.
+                          needsAttention(kind)
+                            ? "border-bad"
+                            : kind === "published"
+                              ? "border-ok"
+                              : kind === "scheduled" || kind === "due"
+                                ? "border-brand"
+                                : "border-violet"
                         )}
                       />
                       <Link href={`/posts/${post.id}`} className="ring-focus flex min-w-0 flex-1 items-center gap-4 rounded-control">

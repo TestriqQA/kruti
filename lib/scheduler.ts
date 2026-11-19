@@ -11,11 +11,22 @@ import { cleanupOldImages } from "@/lib/image-cleanup";
 import { replyCutoff } from "@/lib/support";
 import { assessProfile, PROFILE_REQUIREMENTS_VERSION } from "@/lib/profile-completeness";
 import { PROFILE_SELECT } from "@/lib/profile-guard";
+// The window below and what the UI calls "missed" have to be the same number,
+// or a surface would promise a publish the cron has already given up on.
+import { AUTO_POST_STALE_MS } from "@/lib/post-schedule";
+// One rule for "may a job act for this account", shared with the request-time
+// check. Spelling the status list out in each job is what hid an admin's posts.
+import { ENTITLED_USER_FILTER } from "@/lib/subscription-check";
 
 // ─── Auto-Post Job ──────────────────────────────────────────────────────────
-// Finds posts with status "ready" that are due (past-due or within the next
-// 5 minutes) and publishes them to LinkedIn. Called every 5 min by Vercel Cron.
-// Posts older than 72 hours past their scheduled time are skipped as stale.
+// Publishes posts with status "ready" whose time has come. Run every minute by
+// Vercel Cron, and it never publishes before the time the user set - together
+// that keeps "Auto-Publish Date & Time" honest to about a minute.
+//
+// One post per run, on purpose, so two never land on a feed together; a backlog
+// therefore drains at one a minute. Posts more than 72 hours past their time are
+// skipped for good - see AUTO_POST_STALE_MS in lib/post-schedule.ts, which is
+// also what the UI calls "Missed".
 // How many due posts to consider in one run. Only ever ONE is published; the
 // rest are candidates in case the first few are held back by the profile gate.
 const AUTO_POST_CANDIDATES = 20;
@@ -32,8 +43,12 @@ export async function runAutoPost(): Promise<{
   let skippedIncompleteProfile = 0;
 
   const now = new Date();
-  const windowEnd = new Date(now.getTime() + 5 * 60 * 1000); // 5 min ahead (matches cron interval)
-  const staleThreshold = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
+  // No look-ahead. It used to be now + 5 minutes, to match a cron that only ran
+  // every 5 minutes - which meant a post set for 15:40 could go out at 15:35.
+  // The editor calls this field "Auto-Publish Date & Time", so publishing BEFORE
+  // it is worse than publishing a little after. The cron runs every minute now,
+  // so "a little after" is at most about a minute.
+  const staleThreshold = new Date(now.getTime() - AUTO_POST_STALE_MS);
 
   // Over-fetched on purpose. The profile gate below runs in JS - completeness
   // is not expressible as a Prisma filter - so fetching a single row would let
@@ -45,14 +60,10 @@ export async function runAutoPost(): Promise<{
       postedToLinkedIn: false,
       scheduledAt: {
         gte: staleThreshold, // Skip posts older than 72 hours
-        lte: windowEnd,      // Include past-due posts + next 5 min
+        lte: now,            // Due now or overdue - never before its time
       },
       plan: {
-        user: {
-          subscription: {
-            status: { in: ["active", "trialing", "cancel_pending"] },
-          },
-        },
+        user: ENTITLED_USER_FILTER,
       },
     },
     include: { plan: { include: { user: { select: PROFILE_SELECT } } } },
@@ -105,33 +116,70 @@ export async function runAutoPost(): Promise<{
   }
 
   for (const post of duePosts) {
+    // Claim the row before doing anything slow with it.
+    //
+    // This job had no claim at all, which was survivable while it ran every
+    // five minutes and a publish took seconds. It is not survivable now that it
+    // runs every minute: the route is capped at 60s but Vercel starts the next
+    // invocation on schedule regardless, so a slow publish - a carousel PDF, a
+    // large image, LinkedIn being slow - leaves two runs selecting the same row
+    // and posting it to the member's feed twice.
+    //
+    // updateMany with the guard in its WHERE is what makes this atomic: the
+    // second run matches zero rows and moves on. Same pattern the website and
+    // mobile publish routes already use.
+    const claimed = await prisma.post.updateMany({
+      where: { id: post.id, postedToLinkedIn: false, status: "ready" },
+      data: { status: "publishing" },
+    });
+    if (claimed.count === 0) {
+      console.log(`[Cron:auto-post] ${post.id} already claimed by another run - skipping`);
+      continue;
+    }
+
     console.log(`[Cron:auto-post] Posting ${post.id} for user ${post.plan.userId}`);
-    const result = await postToLinkedIn(post.plan.userId, {
-      title: post.title,
-      body: post.body,
-      hashtags: post.hashtags,
-      imageUrl: post.imageUrl,
-      carouselImages: post.carouselImages ? (JSON.parse(post.carouselImages) as string[]) : null,
-      documentUrl: post.documentUrl,
-      documentName: post.documentName,
-    });
+    try {
+      const result = await postToLinkedIn(post.plan.userId, {
+        title: post.title,
+        body: post.body,
+        hashtags: post.hashtags,
+        imageUrl: post.imageUrl,
+        carouselImages: post.carouselImages ? (JSON.parse(post.carouselImages) as string[]) : null,
+        documentUrl: post.documentUrl,
+        documentName: post.documentName,
+      });
 
-    await prisma.post.update({
-      where: { id: post.id },
-      data: {
-        postedToLinkedIn: result.success,
-        linkedinPostId: result.linkedinPostId ?? undefined,
-        status: result.success ? "published" : "ready",
-        postError: result.error ?? null,
-      },
-    });
+      await prisma.post.update({
+        where: { id: post.id },
+        data: {
+          postedToLinkedIn: result.success,
+          linkedinPostId: result.linkedinPostId ?? undefined,
+          // Back to "ready" on failure, because the claim above moved it to
+          // "publishing" and only "ready" is ever selected again.
+          status: result.success ? "published" : "ready",
+          postError: result.error ?? null,
+        },
+      });
 
-    if (result.success) {
-      posted++;
-      console.log(`[Cron:auto-post] ✅ Posted ${post.id} → ${result.linkedinPostId}`);
-    } else {
+      if (result.success) {
+        posted++;
+        console.log(`[Cron:auto-post] ✅ Posted ${post.id} → ${result.linkedinPostId}`);
+      } else {
+        failed++;
+        console.error(`[Cron:auto-post] ❌ Failed ${post.id}: ${result.error}`);
+      }
+    } catch (err) {
+      // Without this the row stays "publishing" for good: every later run skips
+      // it because it only selects "ready", and nothing ever reports it either.
       failed++;
-      console.error(`[Cron:auto-post] ❌ Failed ${post.id}: ${result.error}`);
+      console.error(`[Cron:auto-post] ❌ Threw while posting ${post.id}:`, err);
+      await prisma.post.updateMany({
+        where: { id: post.id, status: "publishing" },
+        data: {
+          status: "ready",
+          postError: "Publishing was interrupted. It will be retried automatically.",
+        },
+      });
     }
   }
 
@@ -151,9 +199,10 @@ export async function runNewsletterSend(): Promise<{ sent: number; failed: numbe
     where: {
       status: "scheduled",
       scheduledAt: { gte: now, lt: windowEnd },
-      user: {
-        subscription: { status: { in: ["active", "trialing"] } },
-      },
+      // Was ["active", "trialing"], which also dropped cancel_pending - so a
+      // user who cancelled kept getting posts published but silently stopped
+      // getting the newsletters they had paid through the period for.
+      user: ENTITLED_USER_FILTER,
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
@@ -293,11 +342,7 @@ export async function runTokenRefresh(): Promise<{ refreshed: number; failed: nu
     where: {
       provider: "linkedin",
       access_token: { not: null },
-      user: {
-        subscription: {
-          status: { in: ["active", "trialing", "cancel_pending"] },
-        },
-      },
+      user: ENTITLED_USER_FILTER,
     },
     select: { userId: true, expires_at: true },
   });
