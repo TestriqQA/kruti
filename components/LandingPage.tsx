@@ -152,6 +152,8 @@ type Plan = {
   period?: string;
   tagline: string;
   features: string[];
+  /** What this plan does NOT include, shown under a divider with a cross. */
+  missing?: string[];
   cta: string;
   featured?: boolean;
   badge?: string;
@@ -169,6 +171,10 @@ const plans: Plan[] = [
       "Editable LinkedIn text posts",
       "A content calendar you can edit anytime",
     ],
+    missing: [
+      "Image and carousel generation",
+      "Photo and PDF uploads",
+    ],
     cta: "Start free",
     linkedinCta: true,
   },
@@ -183,6 +189,10 @@ const plans: Plan[] = [
       "Generate images and carousels",
       "Upload photos and PDFs from your computer",
       "Review and edit each post, then mark it ready to publish",
+    ],
+    missing: [
+      "Approve your strategy and ask Kruti to generate posts",
+      "Kruti adds suitable images or carousels for you",
     ],
     cta: "Choose Semi-Automatic",
     featured: true,
@@ -786,10 +796,13 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
           {plans.map((plan) => (
             <div
               key={plan.name}
-              className={`relative flex h-full flex-col rounded-2xl border p-7 ${
+              // The lift and shadow are on transform/box-shadow only, so the
+              // text never reflows on hover. motion-reduce drops the movement
+              // and keeps the shadow, for anyone who asked not to be moved.
+              className={`group relative flex h-full flex-col rounded-2xl border p-7 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
                 plan.featured
-                  ? "border-blue-600 bg-white shadow-[0_24px_60px_-28px_rgba(37,99,235,0.45)] dark:border-blue-400 dark:bg-white/[0.05]"
-                  : "border-slate-200 bg-white dark:border-white/10 dark:bg-white/[0.03]"
+                  ? "border-blue-600 bg-white shadow-[0_24px_60px_-28px_rgba(37,99,235,0.45)] hover:shadow-[0_34px_70px_-26px_rgba(37,99,235,0.6)] dark:border-blue-400 dark:bg-white/[0.05]"
+                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-[0_28px_60px_-28px_rgba(15,23,42,0.4)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20"
               }`}
             >
               {plan.badge && (
@@ -828,6 +841,25 @@ export default function LandingPage({ callbackUrl }: { callbackUrl?: string }) {
                   </li>
                 ))}
               </ul>
+
+              {/* What the plan leaves out, below a single rule so the two lists
+                  never read as one. Muted rather than red: these are not errors,
+                  they are the reason the paid plans exist. */}
+              {plan.missing && (
+                <>
+                  <div className="mt-4 border-t border-slate-200 dark:border-white/10" />
+                  <ul className="mt-4 space-y-3">
+                    {plan.missing.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5">
+                        <X className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500 dark:text-red-400" />
+                        <span className="text-[15px] font-medium leading-relaxed text-slate-800 dark:text-slate-100">
+                          {f}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
 
               <div className="mt-auto pt-7">
                 <CTAButton onClick={handleSignIn} full>
