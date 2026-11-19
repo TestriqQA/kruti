@@ -9,6 +9,7 @@ import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { StatCard, Pill, StatusBadge } from "@/components/dashboard/bits";
+import { postScheduleKind, type PostScheduleKind } from "@/lib/post-schedule";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, isToday, addMonths, subMonths, startOfWeek } from "date-fns";
 import { toZonedTime, formatInTimeZone, fromZonedTime } from "date-fns-tz";
 
@@ -172,21 +173,24 @@ export default function CalendarClient({ posts: initialPosts, userTimezone = "As
   const fmtShort = (d: Date | string) =>
     formatInTimeZone(new Date(d), userTimezone, "MMM d");
 
-  const statusOf = (p: Post): "scheduled" | "draft" | "published" =>
-    p.postedToLinkedIn || p.status === "published"
-      ? "published"
-      : p.status === "ready"
-        ? "scheduled"
-        : "draft";
+  // One rule, shared with the cron - see lib/post-schedule.ts. This was three
+  // byte-identical copies that could only say scheduled/draft/published, so a
+  // post stranded by the 72-hour window was indistinguishable from a healthy one.
+  const statusOf = (p: Post): PostScheduleKind => postScheduleKind(p);
 
   const viewingThisMonth =
     currentDate.getFullYear() === new Date().getFullYear() &&
     currentDate.getMonth() === new Date().getMonth();
 
-  const DOT: Record<"scheduled" | "draft" | "published", string> = {
+  // Every state, or the calendar would paint a post the cron has retired in the
+  // same colour as a healthy one - which is the whole thing being fixed here.
+  const DOT: Record<PostScheduleKind, string> = {
     scheduled: "bg-brand",
+    due: "bg-violet",
     draft: "bg-violet",
     published: "bg-ok",
+    missed: "bg-bad",
+    unscheduled: "bg-bad",
   };
 
   return (

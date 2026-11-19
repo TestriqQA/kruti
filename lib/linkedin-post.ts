@@ -27,6 +27,12 @@ export interface LinkedInPostResult {
   linkedinStatus?: number;
   /** LinkedIn's own message, trimmed. Undefined when the failure is ours. */
   linkedinMessage?: string;
+  /**
+   * Set when LinkedIn refused the post as a duplicate and named the share it
+   * already has. That URN IS the post, so this is a recoverable refusal: the
+   * content is live and our record of it is simply out of date.
+   */
+  duplicateOf?: string;
 }
 
 /**
@@ -59,19 +65,27 @@ function describeLinkedInError(status: number, errText: string): {
   if (typeof detail !== "string") detail = String(detail);
   detail = detail.replace(/\s+/g, " ").trim().slice(0, 300);
 
-  const prefix =
-    status === 429
-      ? "LinkedIn is rate limiting this account"
-      : status === 403
-        ? "LinkedIn refused the post"
-        : status >= 500
-          ? "LinkedIn is having trouble"
-          : "LinkedIn rejected the post";
+  // A prefix plus LinkedIn's own words tells the reader WHAT happened but
+  // never what to do about it, and the four causes below each need something
+  // different: a withdrawn permission needs signing in again, a duplicate
+  // needs the text changed, rate limiting needs waiting, and LinkedIn being
+  // down needs nothing at all. detail is still carried in linkedinMessage for
+  // whoever reads the logs.
+  const message =
+    status === 403
+      ? "LinkedIn refused the post. The posting permission is missing or was withdrawn - sign out and sign in again to grant it."
+      : status === 422
+        ? "This post is already on LinkedIn - LinkedIn refused it as a duplicate."
+        : status === 429
+          ? "LinkedIn is rate limiting this account. Wait a while before trying again."
+          : status >= 500
+            ? "LinkedIn is having trouble right now. Try again in a few minutes."
+            // Anything else: carry the status and LinkedIn's own words, because an
+            // unrecognised failure is exactly the one worth seeing verbatim.
+            : `LinkedIn refused the post (HTTP ${status})${detail ? `: ${detail}` : "."}`;
 
   return {
-    error: detail
-      ? `${prefix} (HTTP ${status}): ${detail}`
-      : `${prefix} (HTTP ${status}).`,
+    error: message,
     linkedinStatus: status,
     linkedinMessage: detail || undefined,
   };
@@ -283,7 +297,18 @@ export async function postToLinkedIn(
       };
     }
 
-    return { success: false, ...describeLinkedInError(res.status, errText) };
+    // LinkedIn answers a duplicate with the urn of the share it already has:
+    // "Content is a duplicate of urn:li:share:7528730858439127040". That is
+    // the post, live on the member's feed - we just never recorded it,
+    // usually because an earlier attempt was cut off after LinkedIn had
+    // created the share but before we wrote it down. Handing the urn back
+    // lets the caller reconcile instead of leaving the user to retry
+    // something that can never succeed - and it was those retries that got
+    // the account blocked with a 429 "UGC action was blocked".
+    const duplicateOf =
+      res.status === 422 ? errText.match(/urn:li:(?:share|ugcPost):d+/)?.[0] : undefined;
+
+    return { success: false, duplicateOf, ...describeLinkedInError(res.status, errText) };
   }
 
   const data = await res.json();
