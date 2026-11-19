@@ -25,6 +25,12 @@ export interface LinkedInPostResult {
   requiresReauth?: boolean;
   /** LinkedIn's own HTTP status when it refused the post. */
   linkedinStatus?: number;
+  /**
+   * Set when LinkedIn refused the post as a duplicate and named the share it
+   * already has. That URN IS the post, so this is a recoverable refusal: the
+   * content is live and our record of it is simply out of date.
+   */
+  duplicateOf?: string;
 }
 
 /**
@@ -42,7 +48,7 @@ function linkedInErrorMessage(status: number, body: string): string {
   if (status === 403)
     return "LinkedIn refused the post. The posting permission is missing or was withdrawn - sign out and sign in again to grant it.";
   if (status === 422)
-    return "LinkedIn rejected this as a duplicate of something already on the account. Change the text and try again.";
+    return "This post is already on LinkedIn - LinkedIn refused it as a duplicate.";
   if (status === 429)
     return "LinkedIn is rate limiting this account. Wait a while before trying again.";
   if (status >= 500)
@@ -258,9 +264,21 @@ export async function postToLinkedIn(
       };
     }
 
+    // LinkedIn answers a duplicate with the urn of the share it already has:
+    // "Content is a duplicate of urn:li:share:7528730858439127040". That is
+    // the post, live on the member's feed - we just never recorded it,
+    // usually because an earlier attempt was cut off after LinkedIn had
+    // created the share but before we wrote it down. Handing the urn back
+    // lets the caller reconcile instead of leaving the user to retry
+    // something that can never succeed - and it was those retries that got
+    // the account blocked with a 429 "UGC action was blocked".
+    const duplicateOf =
+      res.status === 422 ? errText.match(/urn:li:(?:share|ugcPost):\d+/)?.[0] : undefined;
+
     return {
       success: false,
       linkedinStatus: res.status,
+      duplicateOf,
       error: linkedInErrorMessage(res.status, errText),
     };
   }

@@ -92,21 +92,33 @@ export async function POST(
     );
   }
 
+  // Same reconciliation as the website route: a duplicate refusal names the
+  // share LinkedIn already has, so the post is live and only our record was
+  // stale.
+  const live = result.success || !!result.duplicateOf;
+  const linkedinPostId = result.linkedinPostId ?? result.duplicateOf;
+  if (result.duplicateOf) {
+    console.warn(
+      `[publish:mobile] post ${post.id} was already on LinkedIn as ${result.duplicateOf} - reconciling`
+    );
+  }
+
   await prisma.post.update({
     where: { id: post.id },
     data: {
-      postedToLinkedIn: result.success,
-      linkedinPostId: result.linkedinPostId ?? undefined,
-      status: result.success ? "published" : "ready",
-      postError: result.error ?? null,
+      postedToLinkedIn: live,
+      linkedinPostId: linkedinPostId ?? undefined,
+      status: live ? "published" : "ready",
+      postError: live ? null : result.error ?? null,
     },
   });
 
-  if (!result.success) {
+  if (!live) {
     return NextResponse.json(
       {
         success: false,
         error: result.error || "Failed to publish to LinkedIn.",
+        linkedinStatus: result.linkedinStatus,
         requiresReauth: result.requiresReauth ?? false,
       },
       { status: 502 },

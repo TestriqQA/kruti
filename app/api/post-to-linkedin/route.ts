@@ -132,22 +132,35 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Update post record
+  // A duplicate refusal is not a failure: LinkedIn named the share it already
+  // has, so the content IS live and only our record was stale. Reconciling to
+  // that urn breaks the loop - the user stops retrying a post that can never
+  // succeed, and the account stops earning LinkedIn's 429 "UGC action was
+  // blocked" for hammering it.
+  const live = result.success || !!result.duplicateOf;
+  const linkedinPostId = result.linkedinPostId ?? result.duplicateOf;
+  if (result.duplicateOf) {
+    console.warn(
+      `[publish] post ${post.id} was already on LinkedIn as ${result.duplicateOf} - reconciling`
+    );
+  }
+
   const updated = await prisma.post.update({
     where: { id: postId },
     data: {
-      postedToLinkedIn: result.success,
-      linkedinPostId: result.linkedinPostId ?? undefined,
+      postedToLinkedIn: live,
+      linkedinPostId: linkedinPostId ?? undefined,
       // Back to what it was, because the claim above moved it to "publishing".
-      status: result.success ? "published" : post.status,
-      postError: result.error ?? null,
+      status: live ? "published" : post.status,
+      postError: live ? null : result.error ?? null,
     },
   });
 
-  if (result.success) {
+  if (live) {
     return NextResponse.json({
       success: true,
-      linkedinPostId: result.linkedinPostId,
+      linkedinPostId,
+      alreadyPublished: !result.success,
       post: updated,
     });
   } else {
