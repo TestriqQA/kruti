@@ -74,21 +74,27 @@ export default function TermsOfUsePage() {
           <li>You are responsible for maintaining the security of your LinkedIn account.</li>
           <li>You must provide accurate and complete information during onboarding.</li>
           <li>
-            A <strong>7-day free trial</strong> is automatically created upon your first sign-in,
-            granting full access to Content Pro features.
+            Your account starts on the <strong>Free Forever</strong> plan upon your first
+            sign-in. It does not expire and requires no payment information.
           </li>
           <li>
-            You must not create accounts for the purpose of abusing the free trial or any
-            promotional offers.
+            You must not create multiple accounts for the purpose of abusing the Free Forever
+            plan or any promotional offers.
           </li>
         </ul>
       </LegalSection>
 
       <LegalSection id="subscription-billing" title="4. Subscription and Billing">
-        <p>After your free trial, continued access requires a paid subscription:</p>
+        <p>
+          Free Forever requires no payment and no subscription. Upgrading to a paid plan adds a
+          recurring subscription:
+        </p>
         <ul className="list-disc pl-5 space-y-1.5">
           <li>
-            <strong>Content Pro:</strong> &#8377;999/month (INR) or $19/month (USD)
+            <strong>Semi-Automatic:</strong> &#8377;6,300/month
+          </li>
+          <li>
+            <strong>Full Automation:</strong> &#8377;9,300/month
           </li>
           <li>
             Billing is handled by <strong>Razorpay</strong> and recurs monthly on the anniversary
@@ -99,12 +105,13 @@ export default function TermsOfUsePage() {
             renewal date.
           </li>
           <li>
-            You may select your preferred currency (INR or USD) at checkout. Currency cannot be
-            changed after subscription activation without canceling and resubscribing.
+            Where a currency other than INR is offered at checkout, the amount shown at checkout
+            applies. Currency cannot be changed after subscription activation without canceling
+            and resubscribing.
           </li>
           <li>
             If a payment fails, your account status will change to &ldquo;past due.&rdquo; After
-            repeated failures, access to the dashboard may be restricted until payment is
+            repeated failures, access to paid features may be restricted until payment is
             resolved.
           </li>
           <li>
