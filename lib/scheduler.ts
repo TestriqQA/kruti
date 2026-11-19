@@ -11,6 +11,9 @@ import { cleanupOldImages } from "@/lib/image-cleanup";
 import { replyCutoff } from "@/lib/support";
 import { assessProfile, PROFILE_REQUIREMENTS_VERSION } from "@/lib/profile-completeness";
 import { PROFILE_SELECT } from "@/lib/profile-guard";
+// The window below and what the UI calls "missed" have to be the same number,
+// or a surface would promise a publish the cron has already given up on.
+import { AUTO_POST_STALE_MS } from "@/lib/post-schedule";
 
 // ─── Auto-Post Job ──────────────────────────────────────────────────────────
 // Finds posts with status "ready" that are due (past-due or within the next
@@ -33,7 +36,7 @@ export async function runAutoPost(): Promise<{
 
   const now = new Date();
   const windowEnd = new Date(now.getTime() + 5 * 60 * 1000); // 5 min ahead (matches cron interval)
-  const staleThreshold = new Date(now.getTime() - 72 * 60 * 60 * 1000); // 72 hours ago
+  const staleThreshold = new Date(now.getTime() - AUTO_POST_STALE_MS);
 
   // Over-fetched on purpose. The profile gate below runs in JS - completeness
   // is not expressible as a Prisma filter - so fetching a single row would let

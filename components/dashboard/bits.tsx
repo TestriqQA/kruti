@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { PostScheduleKind } from "@/lib/post-schedule";
 
 /**
  * Small pieces the dashboard is assembled from. Kept together so the stat
@@ -120,21 +121,36 @@ export function Pill({ children, className }: { children: React.ReactNode; class
 
 /* ── Status badge ──────────────────────────────────────────────────────────── */
 
-const STATUS = {
-  scheduled: "bg-brand-tint text-brand",
-  draft: "bg-warn-tint text-warn",
-  published: "bg-ok-tint text-ok",
-} as const;
+/**
+ * Every state the auto-post cron actually distinguishes - see
+ * lib/post-schedule.ts. It used to be three, which meant a post the cron had
+ * abandoned wore the same blue "Scheduled" badge as one going out tomorrow.
+ *
+ * The label is spelled out rather than taken from the key, because the two
+ * states worth noticing do not read as words on their own: "unscheduled" says
+ * nothing to a reader, and "due" sounds like a problem when it is not one.
+ */
+const STATUS: Record<PostScheduleKind, { label: string; className: string }> = {
+  published: { label: "Published", className: "bg-ok-tint text-ok" },
+  scheduled: { label: "Scheduled", className: "bg-brand-tint text-brand" },
+  // Its time has passed and the cron still has it, so this is reassurance.
+  due: { label: "Publishing", className: "bg-violet-tint text-violet" },
+  // These two never go out on their own. Red, because only the user can fix them.
+  missed: { label: "Missed", className: "bg-bad-tint text-bad" },
+  unscheduled: { label: "No date", className: "bg-bad-tint text-bad" },
+  draft: { label: "Draft", className: "bg-warn-tint text-warn" },
+};
 
-export function StatusBadge({ kind }: { kind: keyof typeof STATUS }) {
+export function StatusBadge({ kind }: { kind: PostScheduleKind }) {
+  const { label, className } = STATUS[kind];
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-control px-3 py-1.5 text-[12px] font-semibold capitalize",
-        STATUS[kind]
+        "inline-flex items-center rounded-control px-3 py-1.5 text-[12px] font-semibold",
+        className
       )}
     >
-      {kind}
+      {label}
     </span>
   );
 }

@@ -44,6 +44,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
+import { postScheduleKind, scheduleNote, needsAttention } from "@/lib/post-schedule";
 // The image-style picker was removed from this page. The category still
 // lives on Post.imageStyle, is chosen by the model from the post content,
 // and is read server-side by /api/generate/image - which is why nothing
@@ -224,6 +225,18 @@ export default function PostEditorClient({
   const [signature, setSignature] = useState(
     post.customSignature !== null ? (post.customSignature || "") : (postSignature || "")
   );
+
+  /**
+   * What the auto-post cron can see RIGHT NOW, which is the saved post and not
+   * the form: typing a new date arms nothing until Save. handleSave finishes
+   * with router.refresh(), so this prop is current again immediately after one.
+   *
+   * Until this existed, a post the 72-hour window had retired looked identical
+   * to a healthy one on every screen - still "Scheduled", still in the upcoming
+   * list - so nobody ever learned they had to reschedule it.
+   */
+  const scheduleKind = postScheduleKind(post);
+  const scheduleHint = scheduleNote(post);
 
   // Schedule date/time state - display in user's configured timezone
   const initDate = post.scheduledAt ? new Date(post.scheduledAt) : null;
@@ -1929,6 +1942,19 @@ export default function PostEditorClient({
                 <p className="text-xs text-warn mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   Weekend selected - posts may get less engagement
+                </p>
+              )}
+              {scheduleHint && (
+                <p
+                  className={cn(
+                    "mt-2 flex items-start gap-1.5 rounded-control px-2.5 py-2 text-[11px] leading-snug",
+                    needsAttention(scheduleKind)
+                      ? "bg-bad-tint text-bad"
+                      : "bg-card-muted text-text-2"
+                  )}
+                >
+                  <AlertCircle className="mt-px h-3 w-3 flex-shrink-0" />
+                  <span>{scheduleHint}</span>
                 </p>
               )}
             </div>
