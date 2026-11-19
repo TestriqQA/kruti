@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { postId?: string };
 
   return ndjsonResponse(
-    (send) => runCarouselGeneration(userId, body.postId, send),
+    (send) => runCarouselGeneration(userId, body.postId, send, req.signal),
     (err) => (err as Error)?.message || "Carousel generation failed",
   );
 }

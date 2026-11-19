@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as StrategyRequest;
 
   return ndjsonResponse(
-    (send) => runStrategyGeneration(userId, body, send),
+    (send) => runStrategyGeneration(userId, body, send, req.signal),
     strategyErrorMessage,
   );
 }

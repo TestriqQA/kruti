@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { startOfCycle } from "@/lib/post-quota";
 
 // ── Lifetime Free Email Domains ──────────────────────────────────────────────
 // Users with LinkedIn accounts from these email domains get a permanent free
@@ -79,13 +80,17 @@ export async function ensureLifetimeSubscription(userId: string): Promise<boolea
       currentPeriodEnd: new Date("2099-12-31T23:59:59Z"),
       trialEnd: null,
       trialRemindersSent: "",
-      postsGeneratedThisCycle: 0,
+      ...startOfCycle(),
     },
     update: {
       status: "active",
       currentPeriodEnd: new Date("2099-12-31T23:59:59Z"),
       trialEnd: null,
       trialRemindersSent: "",
+      // Upgrading a trial to lifetime is an activation: full allowance. The
+      // early return above means this runs on the transition, once, so it
+      // cannot keep handing the counter back on every check.
+      ...startOfCycle(),
     },
   });
 

@@ -25,6 +25,8 @@ export interface CarouselSlideProgress {
   status: SlideStatus;
   url?: string;
   error?: string;
+  /** The exact prompt sent to the image model for this slide. */
+  prompt?: string;
 }
 
 export interface CarouselProgress {
@@ -55,12 +57,35 @@ function StepIcon({ status }: { status: StepStatus | SlideStatus }) {
 
 const ROLE_LABEL: Record<string, string> = { hook: "Hook", point: "Key point", takeaway: "Takeaway" };
 
+/**
+ * The exact prompt sent to the model for one slide, collapsed by default.
+ * Mirrors PipelineModal's PromptBlock so the two read the same way.
+ */
+function PromptBlock({ prompt }: { prompt: string }) {
+  return (
+    <details className="mt-2 group">
+      <summary className="cursor-pointer select-none text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+        <span className="group-open:hidden">Show prompt</span>
+        <span className="hidden group-open:inline">Hide prompt</span>
+        <span className="ml-1.5 font-normal text-text-3">
+          ({prompt.length.toLocaleString()} chars)
+        </span>
+      </summary>
+      <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-control bg-slate-50 p-3 text-[11px] leading-relaxed text-text-2 dark:bg-white/[0.04]">
+        {prompt}
+      </pre>
+    </details>
+  );
+}
+
 export default function CarouselProgressModal({
   progress,
   onClose,
+  onCancel,
 }: {
   progress: CarouselProgress;
   onClose: () => void;
+  onCancel: () => void;
 }) {
   const { preflight, plan, render, slides, save, done, error, running } = progress;
   const hasPackets = slides.some((s) => s.headline);
@@ -84,13 +109,23 @@ export default function CarouselProgressModal({
                 : "Pipeline"}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-card-muted rounded-control transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 text-text-2" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {running && (
+              <button
+                onClick={onCancel}
+                className="flex items-center gap-1.5 rounded-control border border-red-200 px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/30"
+              >
+                Cancel run
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-card-muted rounded-control transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5 text-text-2" />
+            </button>
+          </div>
         </div>
 
         {/* Body */}
@@ -223,7 +258,7 @@ export default function CarouselProgressModal({
                       {s.visual && (
                         <details className="mt-1.5">
                           <summary className="text-[11px] text-text-3 cursor-pointer select-none">
-                            Visual prompt
+                            Visual brief
                           </summary>
                           <p className="text-[11px] text-text-2 mt-1 leading-relaxed">
                             {s.visual}
@@ -244,6 +279,7 @@ export default function CarouselProgressModal({
                           )}
                         </div>
                       )}
+                      {s.prompt && <PromptBlock prompt={s.prompt} />}
                     </div>
                   </div>
                 ))}

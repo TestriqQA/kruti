@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { postIds?: string[] };
 
   return ndjsonResponse(
-    (send) => runBulkImageGeneration(userId, body.postIds, send),
+    (send) => runBulkImageGeneration(userId, body.postIds, send, req.signal),
     () => "Image generation failed",
   );
 }

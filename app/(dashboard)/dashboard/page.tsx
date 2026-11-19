@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import DashboardClient from "@/components/DashboardClient";
 import { getNextScheduledSlots, toZonedDayKey } from "@/lib/timezone";
 import { parsePostingSchedule, POSTS_PER_BATCH } from "@/lib/posting-schedule";
-import { postsRemainingInCycle, POST_LIMIT_PER_CYCLE } from "@/lib/post-quota";
+import { postsRemainingInCycle, postLimitFor } from "@/lib/post-quota";
 import { assessProfile } from "@/lib/profile-completeness";
 
 export default async function DashboardPage() {
@@ -196,7 +196,7 @@ export default async function DashboardPage() {
       upcomingPosts={postsToShow}
       batchDates={batchDates.map((d) => d.toISOString())}
       postsRemaining={postsRemaining}
-      postsLimit={POST_LIMIT_PER_CYCLE}
+      postsLimit={postLimitFor(subscription)}
       isTrialExpired={isTrialExpired}
       postsPerBatch={postsPerBatch}
       cycleResetDate={subscription?.cyclePostsResetAt

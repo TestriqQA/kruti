@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
   return respondByAccept(
     req,
-    (send) => runPostsGeneration(userId, body.planId, send),
+    (send, signal) => runPostsGeneration(userId, body.planId, send, signal),
     () => "Failed to generate posts",
   );
 }

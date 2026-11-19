@@ -77,3 +77,60 @@ function timingSafeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return crypto.timingSafeEqual(Buffer.from(a, "utf-8"), Buffer.from(b, "utf-8"));
 }
+
+// ── Customer lookup ─────────────────────────────────────────────────────────
+
+/** True for Razorpay's "Customer already exists for the merchant" rejection. */
+function isDuplicateCustomer(err: unknown): boolean {
+  const e = err as { error?: { description?: string } } | undefined;
+  return /already exists/i.test(e?.error?.description ?? "");
+}
+
+/**
+ * The Razorpay customer id for this user, creating one only if needed.
+ *
+ * Two things make this more than a `customers.create` call.
+ *
+ *   - `fail_existing` is documented as a STRING flag, so the number 0 the code
+ *     used to send was ignored and Razorpay fell back to its default of
+ *     failing. The guard the comment described had therefore never worked:
+ *     anyone whose email already existed as a customer - a previous attempt, a
+ *     restored database, a switch between test and live keys - hit
+ *     "Customer already exists for the merchant" on every retry, with no way
+ *     through.
+ *
+ *   - Even with the flag right, a duplicate can still surface, and Razorpay has
+ *     no lookup-by-email endpoint. So the fallback pages through the customer
+ *     list and matches the address. It is bounded: this is a recovery path, and
+ *     a merchant with more customers than this has bigger lookups to build.
+ */
+export async function getOrCreateCustomerId(
+  name: string,
+  email: string | undefined,
+  userId: string
+): Promise<string> {
+  try {
+    const customer = await razorpay.customers.create({
+      name,
+      email,
+      // A string, per Razorpay's own schema. 0 is silently ignored.
+      fail_existing: "0",
+      notes: { userId },
+    } as unknown as Parameters<typeof razorpay.customers.create>[0]);
+    return customer.id;
+  } catch (err) {
+    if (!isDuplicateCustomer(err) || !email) throw err;
+
+    const wanted = email.toLowerCase();
+    for (let skip = 0; skip < 400; skip += 100) {
+      const page = (await razorpay.customers.all({ count: 100, skip })) as unknown as {
+        items?: Array<{ id: string; email?: string }>;
+      };
+      const items = page.items ?? [];
+      const hit = items.find((c) => c.email?.toLowerCase() === wanted);
+      if (hit) return hit.id;
+      if (items.length < 100) break;
+    }
+    throw err;
+  }
+}

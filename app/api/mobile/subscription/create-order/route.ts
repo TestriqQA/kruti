@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMobileUserId } from "@/lib/mobileAuth";
+import { startOfCycle } from "@/lib/post-quota";
 
 // Amounts in paise — Razorpay's smallest currency unit.
 const AMOUNT_INR_PAISE = 99900; //  ₹999.00
@@ -59,12 +60,14 @@ export async function POST(req: NextRequest) {
         trialEnd: null,
         currentPeriodEnd,
         currency,
+        ...startOfCycle(),
       },
       create: {
         userId,
         status: "active",
         currentPeriodEnd,
         currency,
+        ...startOfCycle(),
       },
     });
 

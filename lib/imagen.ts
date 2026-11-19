@@ -256,6 +256,8 @@ export type CarouselRenderEvent = {
   status: "start" | "done" | "error";
   url?: string;
   message?: string;
+  /** The exact prompt sent to the image model for this slide. */
+  prompt?: string;
 };
 
 /**
@@ -318,6 +320,12 @@ export async function renderCarouselFromPlan(
           formatDirection: category.imageDirection,
           slide: { index: i, total },
         });
+
+        // Re-emitted as a `start` carrying the prompt. The burst above fires
+        // before any prompt exists, so this is the first moment the caller can
+        // be told what this slide actually asks the model for. Consumers merge
+        // by index, so this updates the row rather than adding one.
+        onSlideEvent?.({ index: i, status: "start", prompt });
 
         const res = await generateImageBuffer(prompt, size, {
           style: "digital_illustration",
@@ -695,7 +703,16 @@ export async function generateAndStoreArtImage(
   },
   postId: string,
   category: ImageCategory,
-  opts?: { themeSeed?: string; themeOffset?: number }
+  opts?: {
+    themeSeed?: string;
+    themeOffset?: number;
+    /**
+     * Called with the exact prompt the moment it is assembled, before the
+     * model call. A pipeline can then show the prompt while the image is
+     * still rendering instead of only once it lands.
+     */
+    onPrompt?: (prompt: string) => void;
+  }
 ): Promise<string | null> {
   lastImageGenError = null;
 
@@ -735,6 +752,8 @@ export async function generateAndStoreArtImage(
     formatLabel: category.label,
     formatDirection: category.imageDirection,
   });
+
+  opts?.onPrompt?.(prompt);
 
   console.log(`[ArtImage] ${category.id} / ${style.id} / ${theme.id}`);
   // A designed graphic with type on it, so Recraft is told to illustrate

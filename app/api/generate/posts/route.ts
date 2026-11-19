@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as { planId?: string };
 
   return ndjsonResponse(
-    (send) => runPostsGeneration(userId, body.planId, send),
+    (send) => runPostsGeneration(userId, body.planId, send, req.signal),
     () => "Failed to generate posts",
   );
 }

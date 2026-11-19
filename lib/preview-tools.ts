@@ -7,6 +7,11 @@ import { SITE_URL } from "@/lib/site-url";
  * the "View pipeline" buttons, plus the live carousel progress modal. Useful
  * while watching a run on staging, and no business in front of a paying user.
  *
+ * It governs the WIRE as well as the screen. A prompt runs to several KB and
+ * is our own prompt engineering; streaming it to a production browser that
+ * will never render it is both waste and disclosure, and anyone could read it
+ * out of the network tab. See promptField() at the bottom of this file.
+ *
  * ── Why this is a runtime gate and not a branch ──────────────────────────────
  *
  * The obvious idea is to keep the code on `staging` and leave it out of `main`.
@@ -53,3 +58,16 @@ export const PREVIEW_TOOLS_ENABLED =
   process.env.NODE_ENV === "development" ||
   // Anything serving a host other than production: staging, previews, tunnels.
   SITE_URL.toLowerCase() !== PRODUCTION_SITE;
+
+/**
+ * Spread into a stream event to attach the model prompt only where something
+ * will actually show it:
+ *
+ *   send({ type: "write", status: "start", ...promptField(prompt) });
+ *
+ * On production this contributes nothing, so the event goes out exactly as it
+ * did before the pipeline existed.
+ */
+export function promptField(prompt: string | null | undefined): { prompt?: string } {
+  return PREVIEW_TOOLS_ENABLED && prompt ? { prompt } : {};
+}

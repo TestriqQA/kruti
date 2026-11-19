@@ -5,6 +5,8 @@ import { resolveImageCategory } from "@/lib/image-categories";
 import { checkActiveSubscription } from "@/lib/subscription-check";
 import { checkProfileReady } from "@/lib/profile-guard";
 import type { SendFn } from "@/lib/ndjson";
+import { stopIfCancelled } from "@/lib/ndjson";
+import { PREVIEW_TOOLS_ENABLED } from "@/lib/preview-tools";
 
 /**
  * The bulk image pipeline, shared by the website and the mobile API.
@@ -26,6 +28,8 @@ export async function runBulkImageGeneration(
   userId: string,
   postIds: string[] | undefined,
   send: SendFn,
+  /** The route's request.signal, so a user who cancels is not charged. */
+  signal?: AbortSignal,
 ): Promise<void> {
   // The caller has already authenticated. Emitted so the website client still
   // sees its "auth" pipeline step complete.
@@ -125,6 +129,11 @@ export async function runBulkImageGeneration(
     const post = posts[i];
     const base = { type: "post", index: i, id: post.id, title: post.title };
 
+    // Checked per post rather than once up front: a batch of ten runs for
+    // minutes, so this is what stops the rest of it. Images already saved
+    // above stay saved - they were delivered, and the user keeps them.
+    if (stopIfCancelled(signal, send)) return;
+
     try {
       const industry = post.plan.user.industry || "business";
       const userVisualProfile = {
@@ -164,7 +173,28 @@ export async function runBulkImageGeneration(
         // there are 10 palettes, so every image in a run differs.
         themeSeed: posts[0].id,
         themeOffset: i,
+        // Re-sends the rendering event once the prompt exists. It repeats the
+        // descriptive fields because the client recomputes the row's detail
+        // line from them; dropping them would blank the headline mid-render.
+        //
+        // Left off entirely in production, so no second event goes out at all.
+        onPrompt: PREVIEW_TOOLS_ENABLED
+          ? (prompt) =>
+              send({
+                ...base,
+                status: "rendering",
+                category: category.label,
+                headline: brief.headline || brief.bodyText || "",
+                visual: brief.visual,
+                renderer: "image-model",
+                prompt,
+              })
+          : undefined,
       });
+
+      // This post's image exists but has not been charged for yet, so a
+      // cancel landing here discards it rather than billing for it.
+      if (stopIfCancelled(signal, send)) return;
 
       if (imageUrl) {
         await prisma.post.update({
