@@ -101,3 +101,75 @@ export function scheduleNote(post: SchedulablePost, now: Date = new Date()): str
       return null;
   }
 }
+/**
+ * Everything that has to be true for the cron to publish a post, as a list the
+ * user can read and act on.
+ *
+ * These are not advice - they are the five conditions runAutoPost actually
+ * applies, in the order it applies them. Keeping them here, next to the rule
+ * itself, is what stops the screen drifting from the job again: a post sat in
+ * "Scheduled" for hours because the account's subscription said "canceled",
+ * and NOTHING anywhere said so. The cron filters that account out in SQL, so it
+ * never even reaches the line that logs a held-back post. The user saw a
+ * schedule, the logs showed an idle cron, and the two never met.
+ *
+ * profileComplete and entitled are passed in rather than computed, because
+ * both need the database and this module is imported by client components.
+ */
+export type AutoPublishRequirement = {
+  /** What is required, in the user's words. */
+  label: string;
+  met: boolean;
+  /** What to do about it when it is not met. Empty when it is. */
+  fix: string;
+  /** Where that is done, when it is somewhere other than this screen. */
+  href?: string;
+};
+
+export function autoPublishChecklist(
+  post: SchedulablePost,
+  opts: { profileComplete: boolean; entitled: boolean },
+  now: Date = new Date()
+): AutoPublishRequirement[] {
+  const kind = postScheduleKind(post, now);
+  const published = kind === "published";
+
+  return [
+    {
+      label: "Status is Ready",
+      met: published || kind !== "draft",
+      fix: "Set the status to Ready. Auto-publish never looks at drafts.",
+    },
+    {
+      label: "Has a date and time",
+      met: published || kind !== "unscheduled",
+      fix: "Pick a date and time above, then save.",
+    },
+    {
+      label: `Scheduled within the last ${AUTO_POST_STALE_HOURS} hours`,
+      met: kind !== "missed",
+      fix: `Its time passed more than ${AUTO_POST_STALE_HOURS} hours ago, so auto-publish has stopped looking at it. Choose a new date and time, then save.`,
+    },
+    {
+      label: "Your profile is complete",
+      met: opts.profileComplete,
+      fix: "Auto-publish holds posts back until your profile is finished.",
+      href: "/settings",
+    },
+    {
+      label: "Your subscription is active",
+      met: opts.entitled,
+      fix: "Auto-publish only runs for active, trialing or cancelling accounts. This post will not go out until the subscription is active again.",
+      href: "/subscribe",
+    },
+  ];
+}
+
+/** The requirements that are not met - empty when the post is good to go. */
+export function unmetRequirements(
+  post: SchedulablePost,
+  opts: { profileComplete: boolean; entitled: boolean },
+  now: Date = new Date()
+): AutoPublishRequirement[] {
+  return autoPublishChecklist(post, opts, now).filter((r) => !r.met);
+}

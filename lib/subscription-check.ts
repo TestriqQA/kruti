@@ -32,12 +32,30 @@ const LIFETIME_FREE_DOMAINS = ["testriq.com", "cinutedigital.com"];
  * cancel_pending belongs here because cancelling keeps access until the period
  * ends, which is what the user paid for.
  */
+/** Written once so the filter, the test below and the screen cannot drift. */
+export const ENTITLED_STATUSES = ["active", "trialing", "cancel_pending"] as const;
+
 export const ENTITLED_USER_FILTER = {
   OR: [
     { role: "admin" },
-    { subscription: { status: { in: ["active", "trialing", "cancel_pending"] } } },
+    { subscription: { status: { in: [...ENTITLED_STATUSES] } } },
   ],
 };
+
+/**
+ * The same question as ENTITLED_USER_FILTER, asked about a user already loaded.
+ *
+ * The screen needs it to tell someone WHY a post is not going out, which was
+ * the whole problem: the cron filtered the account away in SQL and nothing on
+ * any screen could say so.
+ */
+export function isEntitled(user: {
+  role?: string | null;
+  subscriptionStatus?: string | null;
+}): boolean {
+  if (user.role === "admin") return true;
+  return (ENTITLED_STATUSES as readonly string[]).includes(user.subscriptionStatus ?? "");
+}
 
 // ── Watermark ────────────────────────────────────────────────────────────────
 // Appended to every post for trial users and lifetime-free-domain users.
