@@ -14,6 +14,9 @@ import { PROFILE_SELECT } from "@/lib/profile-guard";
 // The window below and what the UI calls "missed" have to be the same number,
 // or a surface would promise a publish the cron has already given up on.
 import { AUTO_POST_STALE_MS } from "@/lib/post-schedule";
+// One rule for "may a job act for this account", shared with the request-time
+// check. Spelling the status list out in each job is what hid an admin's posts.
+import { ENTITLED_USER_FILTER } from "@/lib/subscription-check";
 
 // ─── Auto-Post Job ──────────────────────────────────────────────────────────
 // Finds posts with status "ready" that are due (past-due or within the next
@@ -51,11 +54,7 @@ export async function runAutoPost(): Promise<{
         lte: windowEnd,      // Include past-due posts + next 5 min
       },
       plan: {
-        user: {
-          subscription: {
-            status: { in: ["active", "trialing", "cancel_pending"] },
-          },
-        },
+        user: ENTITLED_USER_FILTER,
       },
     },
     include: { plan: { include: { user: { select: PROFILE_SELECT } } } },
@@ -154,9 +153,10 @@ export async function runNewsletterSend(): Promise<{ sent: number; failed: numbe
     where: {
       status: "scheduled",
       scheduledAt: { gte: now, lt: windowEnd },
-      user: {
-        subscription: { status: { in: ["active", "trialing"] } },
-      },
+      // Was ["active", "trialing"], which also dropped cancel_pending - so a
+      // user who cancelled kept getting posts published but silently stopped
+      // getting the newsletters they had paid through the period for.
+      user: ENTITLED_USER_FILTER,
     },
     include: {
       user: { select: { id: true, name: true, email: true } },
@@ -296,11 +296,7 @@ export async function runTokenRefresh(): Promise<{ refreshed: number; failed: nu
     where: {
       provider: "linkedin",
       access_token: { not: null },
-      user: {
-        subscription: {
-          status: { in: ["active", "trialing", "cancel_pending"] },
-        },
-      },
+      user: ENTITLED_USER_FILTER,
     },
     select: { userId: true, expires_at: true },
   });

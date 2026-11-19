@@ -6,6 +6,39 @@ import { startOfCycle } from "@/lib/post-quota";
 // subscription. They are never charged and never see subscription/trial prompts.
 const LIFETIME_FREE_DOMAINS = ["testriq.com", "cinutedigital.com"];
 
+/**
+ * Which accounts a background job may act on, as a Prisma `user` filter.
+ *
+ * This has to agree with checkActiveSubscription() below, and for a long time
+ * it did not. That function lets an admin through on its FIRST line, before it
+ * looks at any subscription - and it never creates a subscription row for them
+ * either. The cron jobs meanwhile filtered on the subscription alone. So an
+ * admin whose row said "canceled" used the product exactly as normal - posts
+ * generated, schedules armed, "Scheduled" badges everywhere - while every
+ * background job skipped them in SQL, before any other check could report it.
+ *
+ * Nothing said so. runAutoPost logs the posts held back by the profile gate
+ * and the posts retired by the 72-hour window, but an account filtered out
+ * here reaches neither line: the logs show an idle cron and the user sees
+ * posts sitting in "Scheduled" forever. It is the same gap in three jobs -
+ * unpublished posts, unsent newsletters, and the one that bites days later and
+ * looks unrelated: LinkedIn tokens that are never refreshed, which then breaks
+ * publishing for real.
+ *
+ * Lifetime-free domains need no clause of their own - ensureLifetimeSubscription
+ * gives them a real row with status "active", so the status test covers them.
+ * Admins are the only accounts with no row to test.
+ *
+ * cancel_pending belongs here because cancelling keeps access until the period
+ * ends, which is what the user paid for.
+ */
+export const ENTITLED_USER_FILTER = {
+  OR: [
+    { role: "admin" },
+    { subscription: { status: { in: ["active", "trialing", "cancel_pending"] } } },
+  ],
+};
+
 // ── Watermark ────────────────────────────────────────────────────────────────
 // Appended to every post for trial users and lifetime-free-domain users.
 // Paid subscribers and admins do NOT get the watermark.
