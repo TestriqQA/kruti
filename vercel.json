@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/auto-post",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/newsletter",
