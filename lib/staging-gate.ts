@@ -38,9 +38,32 @@ const PRODUCTION_HOSTS = new Set(["kruti.io", "www.kruti.io"]);
  * without a valid one, so they are exactly as protected as they were before
  * this gate existed; they are simply not behind the second lock. The website -
  * every page a person can actually look at - stays gated.
+ *
+ * Vercel Cron is the same one-header problem, and it was missed. The platform
+ * calls these routes itself with `Authorization: Bearer ${CRON_SECRET}` and
+ * there is no setting anywhere that makes it send Basic instead, so every one
+ * of the seven crons answered 401 at the middleware and the route never ran:
+ *
+ *   GET /api/cron/auto-post   401   vercel-cron/1.0   Middleware: 401   36ms
+ *
+ * Nothing scheduled happened on a locked deployment - posts did not publish at
+ * their time, newsletters did not send, trial reminders did not go out, and
+ * LinkedIn tokens stopped being refreshed, which then breaks publishing for
+ * real and long after anyone would connect it to a password prompt. The
+ * failure is also invisible: a 401 at the middleware writes no function log,
+ * so the logs show nothing at all rather than an error.
+ *
+ * Credentials cannot fix it. Give the gate what it wants and the header is
+ * spent, so the route's own CRON_SECRET check refuses the call instead - one
+ * lock or the other, never both. Every cron route verifies CRON_SECRET itself
+ * and answers 401 without it, exactly as it did before this gate existed.
  */
 function isExempt(pathname: string): boolean {
-  return pathname.startsWith("/api/webhooks/") || pathname.startsWith("/api/mobile/");
+  return (
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/mobile/") ||
+    pathname.startsWith("/api/cron/")
+  );
 }
 
 /**
