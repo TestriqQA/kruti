@@ -172,8 +172,10 @@ const plans: Plan[] = [
       "A content calendar you can edit anytime",
     ],
     missing: [
-      "Image and carousel generation",
-      "Photo and PDF uploads",
+      "Generate images and carousels",
+      "Upload photos and PDFs from your computer",
+      "Approve your strategy and ask Kruti to generate posts",
+      "Kruti adds suitable images or carousels for you",
     ],
     cta: "Start free",
     linkedinCta: true,
@@ -193,6 +195,7 @@ const plans: Plan[] = [
     missing: [
       "Approve your strategy and ask Kruti to generate posts",
       "Kruti adds suitable images or carousels for you",
+      "Posts are added to your calendar for automatic publishing",
     ],
     cta: "Choose Semi-Automatic",
     featured: true,
