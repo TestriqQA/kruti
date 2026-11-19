@@ -23,6 +23,58 @@ export interface LinkedInPostResult {
   linkedinPostId?: string;
   error?: string;
   requiresReauth?: boolean;
+  /** LinkedIn's own HTTP status, when LinkedIn is what refused. */
+  linkedinStatus?: number;
+  /** LinkedIn's own message, trimmed. Undefined when the failure is ours. */
+  linkedinMessage?: string;
+}
+
+/**
+ * Turn a LinkedIn error response into something worth showing a person.
+ *
+ * The status and body were always logged here and then thrown away, and the
+ * caller was handed one sentence - "Failed to post to LinkedIn. Please try
+ * again later." - for every cause there is. An expired token, a missing
+ * w_member_social scope, LinkedIn's own rate limit, duplicate content and
+ * LinkedIn being down all look identical from the outside, and they need
+ * different fixes, so whoever is looking at the screen cannot act on any of
+ * them.
+ *
+ * LinkedIn answers with JSON carrying a `message`, so that is preferred; the
+ * raw body is the fallback. Capped at 300 characters because the body can be a
+ * long trace, and collapsed to one line so it fits a toast.
+ */
+function describeLinkedInError(status: number, errText: string): {
+  error: string;
+  linkedinStatus: number;
+  linkedinMessage?: string;
+} {
+  let detail = (errText ?? "").trim();
+  try {
+    const parsed = JSON.parse(errText);
+    detail = parsed?.message ?? parsed?.error_description ?? parsed?.error ?? detail;
+  } catch {
+    /* not JSON - keep the raw text */
+  }
+  if (typeof detail !== "string") detail = String(detail);
+  detail = detail.replace(/\s+/g, " ").trim().slice(0, 300);
+
+  const prefix =
+    status === 429
+      ? "LinkedIn is rate limiting this account"
+      : status === 403
+        ? "LinkedIn refused the post"
+        : status >= 500
+          ? "LinkedIn is having trouble"
+          : "LinkedIn rejected the post";
+
+  return {
+    error: detail
+      ? `${prefix} (HTTP ${status}): ${detail}`
+      : `${prefix} (HTTP ${status}).`,
+    linkedinStatus: status,
+    linkedinMessage: detail || undefined,
+  };
 }
 
 export async function postToLinkedIn(
@@ -227,13 +279,11 @@ export async function postToLinkedIn(
         success: false,
         error: "LinkedIn token was revoked. Please sign out and sign in again.",
         requiresReauth: true,
+        linkedinStatus: 401,
       };
     }
 
-    return {
-      success: false,
-      error: "Failed to post to LinkedIn. Please try again later.",
-    };
+    return { success: false, ...describeLinkedInError(res.status, errText) };
   }
 
   const data = await res.json();
@@ -461,9 +511,10 @@ async function createDocumentPost(
         success: false,
         error: "LinkedIn token was revoked. Please sign out and sign in again.",
         requiresReauth: true,
+        linkedinStatus: 401,
       };
     }
-    return { success: false, error: "Failed to post the document to LinkedIn." };
+    return { success: false, ...describeLinkedInError(res.status, errText) };
   }
 
   // 201 Created - the post URN arrives in the x-restli-id response header. If it is
