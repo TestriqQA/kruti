@@ -45,6 +45,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { WATERMARK_TEXT } from "@/lib/subscription-check";
 import { parseImageHistory } from "@/lib/image-history";
 import { raiseProfileGate } from "@/lib/profile-gate";
+import { postScheduleKind, scheduleNote, needsAttention } from "@/lib/post-schedule";
 // The image-style PICKER was removed from this page: the category is chosen
 // by the model from the post content and read server-side by
 // /api/generate/image, so there is nothing here to set. It is still shown
@@ -195,6 +196,18 @@ export default function PostEditorClient({
     post.customSignature !== null ? (post.customSignature || "") : (postSignature || "")
   );
 
+  /**
+   * What the auto-post cron can see RIGHT NOW, which is the saved post and not
+   * the form: typing a new date arms nothing until Save. handleSave finishes
+   * with router.refresh(), so this prop is current again immediately after one.
+   *
+   * Until this existed, a post the 72-hour window had retired looked identical
+   * to a healthy one on every screen - still "Scheduled", still in the upcoming
+   * list - so nobody ever learned they had to reschedule it.
+   */
+  const scheduleKind = postScheduleKind(post);
+  const scheduleHint = scheduleNote(post);
+
   // Schedule date/time state - display in user's configured timezone
   const initDate = post.scheduledAt ? new Date(post.scheduledAt) : null;
   const [scheduledDate, setScheduledDate] = useState(
@@ -238,6 +251,20 @@ export default function PostEditorClient({
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
   const [postResult, setPostResult] = useState<{ success: boolean; error?: string } | null>(null);
+  /**
+   * Why the last save was refused, when it was.
+   *
+   * handleSave used to ignore the response completely. fetch does not throw on
+   * a 4xx, so a 403 fell straight through to "Post saved successfully": the
+   * user got a green toast, nothing was written, the post stayed a draft, and
+   * the cron never touched it because it only ever selects status "ready".
+   * Arming a schedule on an incomplete profile answers 403 with the exact
+   * gaps, and all of that was being thrown away.
+   */
+  const [saveError, setSaveError] = useState<{
+    message: string;
+    gaps: { label: string; hint: string }[];
+  } | null>(null);
   const [uploading, setUploading] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -283,7 +310,7 @@ export default function PostEditorClient({
         scheduledAt = fromZonedTime(localDate, userTimezone).toISOString();
       }
 
-      await fetch(`/api/content/${post.id}`, {
+      const res = await fetch(`/api/content/${post.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -296,6 +323,20 @@ export default function PostEditorClient({
           customSignature: signature === (postSignature || "") ? null : signature,
         }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSaveError({
+          message:
+            data.error ||
+            `The save was refused (HTTP ${res.status}). Nothing has been changed.`,
+          gaps: Array.isArray(data.gaps) ? data.gaps : [],
+        });
+        toast(data.error || "Could not save this post", "error");
+        return;
+      }
+
+      setSaveError(null);
       markSaved(); // Update auto-save's last-saved baseline
       setSaved(true);
       toast("Post saved successfully", "success");
@@ -537,6 +578,14 @@ export default function PostEditorClient({
         setPostResult({ success: true });
         setStatus("published");
         toast("Successfully posted to LinkedIn!", "success");
+        router.refresh();
+      } else if (data.alreadyPublished) {
+        // The post is live. Showing a red "Failed to post" for it was telling
+        // the user the opposite of the truth, and it is what most of the
+        // "publishing is broken" reports turned out to be.
+        setPostResult({ success: true });
+        setStatus("published");
+        toast("This post is already on LinkedIn.", "success");
         router.refresh();
       } else {
         setPostResult({ success: false, error: data.error });
@@ -1105,6 +1154,33 @@ export default function PostEditorClient({
       </div>
 
       {/* Post result alerts */}
+      {saveError && (
+        <div className="bg-bad-tint border border-bad/30 rounded-control p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-bad flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold text-bad">Not saved</p>
+            <p className="mt-1 text-bad">{saveError.message}</p>
+            {saveError.gaps.length > 0 && (
+              <>
+                <ul className="mt-2 space-y-1 text-bad">
+                  {saveError.gaps.map((g) => (
+                    <li key={g.label}>
+                      <span className="font-semibold">{g.label}</span> - {g.hint}
+                    </li>
+                  ))}
+                </ul>
+                <a
+                  href="/settings"
+                  className="ring-focus mt-2 inline-block font-semibold text-bad underline"
+                >
+                  Finish your profile in Settings
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {postResult && (
         <div className={cn("rounded-control p-4 flex items-start gap-3", postResult.success ? "bg-ok-tint border border-ok/30" : "bg-bad-tint border border-bad/30")}>
           {postResult.success ? (
@@ -1763,6 +1839,19 @@ export default function PostEditorClient({
                 <p className="text-xs text-warn mt-1 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
                   Weekend selected - posts may get less engagement
+                </p>
+              )}
+              {scheduleHint && (
+                <p
+                  className={cn(
+                    "mt-2 flex items-start gap-1.5 rounded-control px-2.5 py-2 text-[11px] leading-snug",
+                    needsAttention(scheduleKind)
+                      ? "bg-bad-tint text-bad"
+                      : "bg-card-muted text-text-2"
+                  )}
+                >
+                  <AlertCircle className="mt-px h-3 w-3 flex-shrink-0" />
+                  <span>{scheduleHint}</span>
                 </p>
               )}
             </div>

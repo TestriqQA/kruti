@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { cn, formatDate } from "@/lib/utils";
 import { StatCard, Pill, StatusBadge } from "@/components/dashboard/bits";
+import { postScheduleKind, needsAttention, type PostScheduleKind } from "@/lib/post-schedule";
 import PostImage from "@/components/PostImage";
 import GeneratePostsButton from "@/components/GeneratePostsButton";
 import { useGeneration } from "@/components/GenerationProvider";
@@ -253,7 +254,12 @@ export default function PostsClient({
       p.title.toLowerCase().includes(search.toLowerCase()) ||
       p.body.toLowerCase().includes(search.toLowerCase());
     const matchType = filterType === "all" || p.postType === filterType;
-    const matchStatus = filterStatus === "all" || p.status === filterStatus;
+    const matchStatus =
+      filterStatus === "all"
+        ? true
+        : filterStatus === "attention"
+          ? needsAttention(postScheduleKind(p))
+          : p.status === filterStatus;
     return matchSearch && matchType && matchStatus;
   });
 
@@ -405,19 +411,22 @@ export default function PostsClient({
   const readyPosts = posts.filter((p) => !p.postedToLinkedIn && p.status === "ready");
   const draftPosts = posts.filter((p) => !p.postedToLinkedIn && p.status === "draft");
   const publishedPosts = posts.filter((p) => p.postedToLinkedIn || p.status === "published");
+  // Posts the cron will never take by itself: either their time ran out or they
+  // have no time at all. Both are status "ready", which is exactly why the
+  // reading below counted them as queued and could name a date in the PAST as
+  // the next one going out.
+  const strandedPosts = posts.filter((p) => needsAttention(postScheduleKind(p)));
   const nextOut = [...readyPosts]
-    .filter((p) => p.scheduledAt)
+    .filter((p) => p.scheduledAt && !needsAttention(postScheduleKind(p)))
     .sort((a, b) => new Date(a.scheduledAt!).getTime() - new Date(b.scheduledAt!).getTime())[0];
   const weeksHeld = new Set(posts.map((p) => p.weekLabel)).size;
   const shortDate = (d: Date | string) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-  const statusOf = (p: Post): "scheduled" | "draft" | "published" =>
-    p.postedToLinkedIn || p.status === "published"
-      ? "published"
-      : p.status === "ready"
-        ? "scheduled"
-        : "draft";
+  // One rule, shared with the cron - see lib/post-schedule.ts. This was three
+  // byte-identical copies that could only say scheduled/draft/published, so a
+  // post stranded by the 72-hour window was indistinguishable from a healthy one.
+  const statusOf = (p: Post): PostScheduleKind => postScheduleKind(p);
 
 
   return (
@@ -452,9 +461,15 @@ export default function PostsClient({
         <StatCard
           label="Ready to post"
           value={readyPosts.length}
-          note={nextOut?.scheduledAt ? `next goes out ${shortDate(nextOut.scheduledAt)}` : "nothing queued"}
+          note={
+            strandedPosts.length > 0
+              ? `${strandedPosts.length} need${strandedPosts.length === 1 ? "s" : ""} a new date`
+              : nextOut?.scheduledAt
+                ? `next goes out ${shortDate(nextOut.scheduledAt)}`
+                : "nothing queued"
+          }
           icon={CheckCircle}
-          tone="ok"
+          tone={strandedPosts.length > 0 ? "warn" : "ok"}
           href="/posts"
         />
         <StatCard
@@ -568,6 +583,9 @@ export default function PostsClient({
                 <option value="draft">Draft</option>
                 <option value="ready">Ready</option>
                 <option value="published">Published</option>
+                {/* Not a Post.status value - see the filter below. Without it
+                    the only way to find a stranded post was to open each one. */}
+                <option value="attention">Needs attention</option>
               </select>
             </label>
 
