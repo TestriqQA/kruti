@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { cn } from "@/lib/utils";
@@ -27,18 +28,18 @@ const display = Plus_Jakarta_Sans({
  */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+  title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
   description:
-    "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+    "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
   alternates: {
     canonical: "/",
   },
   openGraph: {
     type: "website",
     siteName: "Kruti.io",
-    title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+    title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
     description:
-      "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+      "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
     url: "/",
     locale: "en_IN",
     // Absolute on purpose: a relative og:image resolved against the dev origin
@@ -50,9 +51,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AI LinkedIn Post Generator & Scheduler | Kruti.io",
+    title: "Free AI LinkedIn Post Generator & Scheduler | Kruti.io",
     description:
-      "Generate 30 LinkedIn posts, images and newsletters a month in your own voice. Schedule and publish via the official API. 7-day free trial.",
+      "Personalized content strategy, editable LinkedIn text posts, and automatic publishing. Free forever. Paid plans add images, carousels and full automation.",
     images: [absoluteUrl(OG_IMAGE_PATH)],
   },
   verification: {
@@ -63,6 +64,18 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className="scroll-smooth">
+      <head>
+        <Script async src="https://www.googletagmanager.com/gtag/js?id=G-S7N11CZFK4" strategy="afterInteractive" />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-S7N11CZFK4');
+          `}
+        </Script>
+      </head>
       <body className={cn(inter.className, inter.variable, display.variable, "bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-100")}>
         <Providers>{children}</Providers>
       </body>

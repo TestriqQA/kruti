@@ -56,7 +56,7 @@ export default function AdminSystemClient({
         <p className="text-gray-500 dark:text-gray-400 mt-1">Database records, errors, and environment info</p>
       </div>
 
-      {/* Environment Info */}
+      {/* Environment Info...  */}
       <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm p-5">
         <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
           <Server className="w-4 h-4 text-gray-400" />

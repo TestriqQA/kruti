@@ -23,8 +23,10 @@ export interface LinkedInPostResult {
   linkedinPostId?: string;
   error?: string;
   requiresReauth?: boolean;
-  /** LinkedIn's own HTTP status when it refused the post. */
+  /** LinkedIn's own HTTP status, when LinkedIn is what refused. */
   linkedinStatus?: number;
+  /** LinkedIn's own message, trimmed. Undefined when the failure is ours. */
+  linkedinMessage?: string;
   /**
    * Set when LinkedIn refused the post as a duplicate and named the share it
    * already has. That URN IS the post, so this is a recoverable refusal: the
@@ -34,29 +36,59 @@ export interface LinkedInPostResult {
 }
 
 /**
- * Turn LinkedIn's HTTP status into something the person reading the screen can
- * act on.
+ * Turn a LinkedIn error response into something worth showing a person.
  *
- * Every non-401 refusal used to come back as "Failed to post to LinkedIn.
- * Please try again later." - the same sentence for a missing permission, a
- * duplicate, LinkedIn rate limiting the account and LinkedIn being down. Four
- * different problems with four different answers, and the screen could not
- * tell them apart, so every report had to go to the server logs before anyone
- * could even start.
+ * The status and body were always logged here and then thrown away, and the
+ * caller was handed one sentence - "Failed to post to LinkedIn. Please try
+ * again later." - for every cause there is. An expired token, a missing
+ * w_member_social scope, LinkedIn's own rate limit, duplicate content and
+ * LinkedIn being down all look identical from the outside, and they need
+ * different fixes, so whoever is looking at the screen cannot act on any of
+ * them.
+ *
+ * LinkedIn answers with JSON carrying a `message`, so that is preferred; the
+ * raw body is the fallback. Capped at 300 characters because the body can be a
+ * long trace, and collapsed to one line so it fits a toast.
  */
-function linkedInErrorMessage(status: number, body: string): string {
-  if (status === 403)
-    return "LinkedIn refused the post. The posting permission is missing or was withdrawn - sign out and sign in again to grant it.";
-  if (status === 422)
-    return "This post is already on LinkedIn - LinkedIn refused it as a duplicate.";
-  if (status === 429)
-    return "LinkedIn is rate limiting this account. Wait a while before trying again.";
-  if (status >= 500)
-    return "LinkedIn is having trouble right now. Try again in a few minutes.";
-  // Anything else: carry the status and a short slice of LinkedIn's own words,
-  // because an unrecognised failure is exactly the one worth seeing verbatim.
-  const detail = (body || "").replace(/\s+/g, " ").trim().slice(0, 200);
-  return `LinkedIn refused the post (HTTP ${status})${detail ? `: ${detail}` : "."}`;
+function describeLinkedInError(status: number, errText: string): {
+  error: string;
+  linkedinStatus: number;
+  linkedinMessage?: string;
+} {
+  let detail = (errText ?? "").trim();
+  try {
+    const parsed = JSON.parse(errText);
+    detail = parsed?.message ?? parsed?.error_description ?? parsed?.error ?? detail;
+  } catch {
+    /* not JSON - keep the raw text */
+  }
+  if (typeof detail !== "string") detail = String(detail);
+  detail = detail.replace(/\s+/g, " ").trim().slice(0, 300);
+
+  // A prefix plus LinkedIn's own words tells the reader WHAT happened but
+  // never what to do about it, and the four causes below each need something
+  // different: a withdrawn permission needs signing in again, a duplicate
+  // needs the text changed, rate limiting needs waiting, and LinkedIn being
+  // down needs nothing at all. detail is still carried in linkedinMessage for
+  // whoever reads the logs.
+  const message =
+    status === 403
+      ? "LinkedIn refused the post. The posting permission is missing or was withdrawn - sign out and sign in again to grant it."
+      : status === 422
+        ? "This post is already on LinkedIn - LinkedIn refused it as a duplicate."
+        : status === 429
+          ? "LinkedIn is rate limiting this account. Wait a while before trying again."
+          : status >= 500
+            ? "LinkedIn is having trouble right now. Try again in a few minutes."
+            // Anything else: carry the status and LinkedIn's own words, because an
+            // unrecognised failure is exactly the one worth seeing verbatim.
+            : `LinkedIn refused the post (HTTP ${status})${detail ? `: ${detail}` : "."}`;
+
+  return {
+    error: message,
+    linkedinStatus: status,
+    linkedinMessage: detail || undefined,
+  };
 }
 
 export async function postToLinkedIn(
@@ -261,6 +293,7 @@ export async function postToLinkedIn(
         success: false,
         error: "LinkedIn token was revoked. Please sign out and sign in again.",
         requiresReauth: true,
+        linkedinStatus: 401,
       };
     }
 
@@ -273,14 +306,9 @@ export async function postToLinkedIn(
     // something that can never succeed - and it was those retries that got
     // the account blocked with a 429 "UGC action was blocked".
     const duplicateOf =
-      res.status === 422 ? errText.match(/urn:li:(?:share|ugcPost):\d+/)?.[0] : undefined;
+      res.status === 422 ? errText.match(/urn:li:(?:share|ugcPost):d+/)?.[0] : undefined;
 
-    return {
-      success: false,
-      linkedinStatus: res.status,
-      duplicateOf,
-      error: linkedInErrorMessage(res.status, errText),
-    };
+    return { success: false, duplicateOf, ...describeLinkedInError(res.status, errText) };
   }
 
   const data = await res.json();
@@ -508,9 +536,10 @@ async function createDocumentPost(
         success: false,
         error: "LinkedIn token was revoked. Please sign out and sign in again.",
         requiresReauth: true,
+        linkedinStatus: 401,
       };
     }
-    return { success: false, error: "Failed to post the document to LinkedIn." };
+    return { success: false, ...describeLinkedInError(res.status, errText) };
   }
 
   // 201 Created - the post URN arrives in the x-restli-id response header. If it is

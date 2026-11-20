@@ -114,12 +114,21 @@ export async function POST(
   });
 
   if (!live) {
+    // Logged with the post id so a failure reported from a device can actually
+    // be found in the server logs afterwards.
+    console.error(
+      `[publish:mobile] post ${post.id} user ${userId} failed:`,
+      result.linkedinStatus ?? "-",
+      result.error,
+    );
     return NextResponse.json(
       {
         success: false,
         error: result.error || "Failed to publish to LinkedIn.",
         linkedinStatus: result.linkedinStatus,
         requiresReauth: result.requiresReauth ?? false,
+        ...(result.linkedinStatus !== undefined && { linkedinStatus: result.linkedinStatus }),
+        ...(result.linkedinMessage !== undefined && { linkedinMessage: result.linkedinMessage }),
       },
       { status: 502 },
     );

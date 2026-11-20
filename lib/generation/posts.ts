@@ -245,6 +245,7 @@ export async function runPostsGeneration(
     postsInPlan
   );
 
+  
   const prompt = buildPostsPrompt(
     profileContext,
     strategy.weekTheme ?? "Professional Growth",
